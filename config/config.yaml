@@ -1,0 +1,58 @@
+openai:
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4o-mini
+  temperature: 0.7
+  max_tokens: 600
+  timeout: 30
+
+batch:
+  posts_per_batch: 5
+  max_revisions: 2
+  target_approval_rate: 0.3
+  max_total_attempts: 20
+  min_approvals_required: 2
+
+output:
+  output_dir: data/output
+  approved_posts_file: approved_posts.csv
+  revised_posts_file: revised_approved_posts.csv
+  rejected_posts_file: rejected_posts.csv
+  metrics_file: batch_metrics.json
+
+brand:
+  product_name: Jesse A. Eisenbalm
+  price: $8.99
+  tagline: The only business lip balm that keeps you human in an AI world
+  ritual: Stop. Breathe. Apply.
+  target_audience: LinkedIn professionals (24-34) dealing with AI workplace automation
+  voice_attributes:
+    - absurdist modern luxury
+    - wry
+    - human-first
+
+cultural_references:
+  tv_shows:
+    - The Office
+    - Mad Men
+    - Silicon Valley
+    - Succession
+    - Ted Lasso
+  workplace_themes:
+    - Zoom fatigue
+    - LinkedIn culture
+    - email disasters
+    - open office debates
+    - meeting overload
+    - Monday blues
+    - Friday energy
+    - coffee addiction
+  seasonal_themes:
+    - New Year productivity
+    - performance reviews
+    - networking events
+    - holiday parties
+    - summer Fridays
+    - back to office
+
+logging_level: INFO
+environment: development
