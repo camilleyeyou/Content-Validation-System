@@ -21,7 +21,7 @@ class ValidationScore(BaseModel):
     score: float = Field(ge=0, le=10)
     approved: bool
     feedback: Optional[str] = None
-    criteria_breakdown: Dict[str, float] = Field(default_factory=dict)
+    criteria_breakdown: Dict[str, Any] = Field(default_factory=dict)  # Changed from Dict[str, float] to Dict[str, Any]
     validated_at: datetime = Field(default_factory=datetime.utcnow)
     
     @validator('approved')
