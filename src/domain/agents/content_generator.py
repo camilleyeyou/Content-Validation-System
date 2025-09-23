@@ -110,11 +110,28 @@ Create {count} unique, engaging posts that make professionals stop and think abo
     def _parse_generation_response(self, response: Dict) -> List[Dict[str, Any]]:
         """Parse the AI response into post data"""
         try:
+            # Handle the response structure
             content = response.get("content", {})
-            if isinstance(content, str):
-                content = json.loads(content)
             
-            posts = content.get("posts", [])
+            # If content is a string, try to parse it as JSON
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except json.JSONDecodeError:
+                    self.logger.warning("Content is not valid JSON, treating as raw text")
+                    content = {}
+            
+            # Handle nested content structure (for mock client)
+            if isinstance(content, dict) and "posts" in content:
+                posts = content["posts"]
+            else:
+                # Try to find posts at the top level
+                posts = content.get("posts", []) if isinstance(content, dict) else []
+            
+            # If still no posts, return empty list
+            if not posts:
+                self.logger.warning("No posts found in response")
+                return []
             
             # Validate and clean each post
             cleaned_posts = []
@@ -128,13 +145,14 @@ Create {count} unique, engaging posts that make professionals stop and think abo
                 }
                 
                 # Process cultural reference
-                if "cultural_reference" in post:
+                if post.get("cultural_reference"):
                     ref = post["cultural_reference"]
-                    cleaned_post["cultural_reference"] = CulturalReference(
-                        category=ref.get("category", "workplace"),
-                        reference=ref.get("reference", ""),
-                        context=ref.get("context", "")
-                    )
+                    if ref:  # Check if not None
+                        cleaned_post["cultural_reference"] = CulturalReference(
+                            category=ref.get("category", "workplace"),
+                            reference=ref.get("reference", ""),
+                            context=ref.get("context", "")
+                        )
                 
                 cleaned_posts.append(cleaned_post)
             
