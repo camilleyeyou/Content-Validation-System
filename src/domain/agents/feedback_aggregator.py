@@ -1,5 +1,6 @@
 """
 Feedback Aggregator Agent - Analyzes validation failures and creates improvement instructions
+Fixed version with robust JSON handling
 """
 
 import json
@@ -19,9 +20,12 @@ class FeedbackAggregator(BaseAgent):
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_aggregation_prompt(post)
         
-        response = await self._call_ai(user_prompt, system_prompt)
-        
-        return self._parse_aggregation_response(response)
+        try:
+            response = await self._call_ai(user_prompt, system_prompt, response_format="json")
+            return self._parse_aggregation_response(response)
+        except Exception as e:
+            self.logger.error(f"Feedback aggregation failed: {e}")
+            return self._create_fallback_feedback(post)
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for feedback aggregation"""
@@ -45,7 +49,9 @@ FOCUS ON:
 - Specific phrases or sections to change
 - How to strengthen weak areas
 - What to keep (don't throw out what's working)
-- Concrete examples of improvements"""
+- Concrete examples of improvements
+
+IMPORTANT: Respond with valid JSON only."""
     
     def _build_aggregation_prompt(self, post: LinkedInPost) -> str:
         """Build the user prompt for feedback aggregation"""
@@ -56,7 +62,7 @@ FOCUS ON:
                 feedback_summary.append(f"""
 {score.agent_name} (Score: {score.score}/10):
 - Feedback: {score.feedback}
-- Breakdown: {json.dumps(score.criteria_breakdown, indent=2)}
+- Key Issues: {self._extract_key_issues(score.criteria_breakdown)}
 """)
         
         return f"""Analyze why this LinkedIn post failed validation and create improvement instructions:
@@ -69,48 +75,114 @@ TARGET AUDIENCE: {post.target_audience}
 VALIDATION FEEDBACK:
 {' '.join(feedback_summary)}
 
-Create specific improvement instructions:
+Create specific improvement instructions.
 
-OUTPUT FORMAT (JSON):
+CRITICAL: Return ONLY this JSON structure:
 {{
     "main_issues": [
-        "List of 2-3 core problems"
+        "List exactly 3 core problems"
     ],
     "specific_improvements": {{
-        "hook": "How to improve the opening line",
+        "hook": "Specific way to improve the opening line",
         "authenticity": "How to make it feel more genuine",
         "value_proposition": "How to better justify $8.99",
         "cultural_reference": "How to better integrate the reference",
         "call_to_action": "How to improve engagement"
     }},
     "keep_these_elements": [
-        "What's working and should be preserved"
+        "List 2-3 things that are working"
     ],
-    "revised_hook_suggestion": "Specific example of improved opening",
+    "revised_hook_suggestion": "Specific example of improved opening line",
     "tone_adjustment": "How to adjust the overall tone",
     "priority_fix": "The ONE thing to fix first"
-}}"""
+}}
+
+Return ONLY valid JSON."""
+    
+    def _extract_key_issues(self, criteria_breakdown: Dict) -> str:
+        """Extract key issues from criteria breakdown"""
+        issues = []
+        for key, value in criteria_breakdown.items():
+            if isinstance(value, (int, float)) and value < 5:
+                issues.append(f"{key}: {value}/10")
+        return ", ".join(issues) if issues else "No specific scores below 5"
     
     def _parse_aggregation_response(self, response: Dict) -> Dict[str, Any]:
-        """Parse the aggregation response"""
+        """Parse the aggregation response with robust error handling"""
         try:
             content = response.get("content", {})
-            if isinstance(content, str):
-                content = json.loads(content)
             
-            return {
-                "main_issues": content.get("main_issues", []),
+            # Ensure content is a dictionary
+            content = self._ensure_json_dict(content)
+            
+            if not content:
+                raise ValueError("Empty response content")
+            
+            # Validate and extract fields with defaults
+            result = {
+                "main_issues": content.get("main_issues", ["Post needs improvement"]),
                 "specific_improvements": content.get("specific_improvements", {}),
                 "keep_these_elements": content.get("keep_these_elements", []),
                 "revised_hook_suggestion": content.get("revised_hook_suggestion", ""),
                 "tone_adjustment": content.get("tone_adjustment", ""),
-                "priority_fix": content.get("priority_fix", "")
+                "priority_fix": content.get("priority_fix", "Improve overall clarity")
             }
             
-        except Exception as e:
-            self.logger.error("Failed to parse aggregation response", error=str(e))
-            return {
-                "main_issues": ["Failed to parse feedback"],
-                "specific_improvements": {},
-                "priority_fix": "Unable to generate improvements"
+            # Ensure specific_improvements has all required keys
+            default_improvements = {
+                "hook": "Make opening more attention-grabbing",
+                "authenticity": "Add more genuine personal touch",
+                "value_proposition": "Better explain the $8.99 value",
+                "cultural_reference": "Integrate reference more naturally",
+                "call_to_action": "Add clear engagement prompt"
             }
+            
+            for key, default_value in default_improvements.items():
+                if key not in result["specific_improvements"]:
+                    result["specific_improvements"][key] = default_value
+            
+            # Ensure lists are actually lists
+            if not isinstance(result["main_issues"], list):
+                result["main_issues"] = [str(result["main_issues"])]
+            
+            if not isinstance(result["keep_these_elements"], list):
+                result["keep_these_elements"] = [str(result["keep_these_elements"])]
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse aggregation response: {e}")
+            return self._create_fallback_feedback(None)
+    
+    def _create_fallback_feedback(self, post: LinkedInPost = None) -> Dict[str, Any]:
+        """Create fallback feedback when parsing fails"""
+        main_issues = ["Failed to parse feedback"]
+        
+        if post and post.validation_scores:
+            # Try to extract main issues from scores
+            low_scores = []
+            for score in post.validation_scores:
+                if score.score < 5:
+                    low_scores.append(f"{score.agent_name}: {score.score}/10")
+            
+            if low_scores:
+                main_issues = [
+                    f"Low scores from validators: {', '.join(low_scores)}",
+                    "Content needs stronger hook",
+                    "Brand positioning unclear"
+                ]
+        
+        return {
+            "main_issues": main_issues,
+            "specific_improvements": {
+                "hook": "Start with a compelling question or statement",
+                "authenticity": "Add personal experience or insight",
+                "value_proposition": "Clearly state why $8.99 is worth it",
+                "cultural_reference": "Make reference more relevant to audience",
+                "call_to_action": "End with clear engagement prompt"
+            },
+            "keep_these_elements": ["Brand mention", "Price point"],
+            "revised_hook_suggestion": "Start with: 'Ever notice how...' or 'That moment when...'",
+            "tone_adjustment": "Make more conversational and less sales-focused",
+            "priority_fix": "Improve the opening hook to grab attention"
+        }

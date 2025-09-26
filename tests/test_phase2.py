@@ -20,9 +20,9 @@ from src.domain.agents.base_agent import AgentConfig
 
 # Import agents
 from src.domain.agents.content_generator import ContentGenerator
-from src.domain.agents.validators.customer_validator import CustomerValidator
-from src.domain.agents.validators.business_validator import BusinessValidator
-from src.domain.agents.validators.social_validator import SocialMediaValidator
+from domain.agents.validators.sarah_chen_validator import CustomerValidator
+from domain.agents.validators.marcus_williams_validator import BusinessValidator
+from domain.agents.validators.jordan_park_validator import SocialMediaValidator
 from src.domain.agents.feedback_aggregator import FeedbackAggregator
 from src.domain.agents.revision_generator import RevisionGenerator
 

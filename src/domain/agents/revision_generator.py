@@ -1,5 +1,6 @@
 """
 Revision Generator Agent - Creates improved versions of posts based on feedback
+Fixed version with robust JSON handling
 """
 
 import json
@@ -21,12 +22,19 @@ class RevisionGenerator(BaseAgent):
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_revision_prompt(post, feedback)
         
-        response = await self._call_ai(user_prompt, system_prompt)
-        
-        revised_content = self._parse_revision_response(response)
-        
-        # Create a revised version of the post
-        post.create_revision(revised_content)
+        try:
+            response = await self._call_ai(user_prompt, system_prompt, response_format="json")
+            revised_content = self._parse_revision_response(response)
+            
+            if revised_content:
+                # Create a revised version of the post
+                post.create_revision(revised_content)
+            else:
+                self.logger.error("Failed to generate revision, keeping original")
+                
+        except Exception as e:
+            self.logger.error(f"Revision generation failed: {e}")
+            # Don't create a revision if generation fails
         
         return post
     
@@ -55,10 +63,19 @@ REVISION PRINCIPLES:
 5. Ensure the cultural reference lands naturally
 
 SUCCESS CRITERIA:
-The revised post should score 7+ with all validators while maintaining the original's core message."""
+The revised post should score 7+ with all validators while maintaining the original's core message.
+
+IMPORTANT: Respond with valid JSON only."""
     
     def _build_revision_prompt(self, post: LinkedInPost, feedback: Dict) -> str:
         """Build the user prompt for revision generation"""
+        # Extract specific improvements
+        improvements = feedback.get('specific_improvements', {})
+        improvement_list = []
+        for key, value in improvements.items():
+            if value:
+                improvement_list.append(f"- {key}: {value}")
+        
         return f"""Revise this LinkedIn post based on specific feedback:
 
 ORIGINAL POST:
@@ -66,21 +83,23 @@ ORIGINAL POST:
 
 TARGET AUDIENCE: {post.target_audience}
 
-FEEDBACK ANALYSIS:
-Main Issues: {', '.join(feedback.get('main_issues', []))}
-Priority Fix: {feedback.get('priority_fix', '')}
+MAIN ISSUES TO FIX:
+{chr(10).join('- ' + issue for issue in feedback.get('main_issues', []))}
+
+PRIORITY FIX:
+{feedback.get('priority_fix', 'Improve overall engagement')}
 
 SPECIFIC IMPROVEMENTS NEEDED:
-{json.dumps(feedback.get('specific_improvements', {}), indent=2)}
+{chr(10).join(improvement_list)}
 
 KEEP THESE ELEMENTS:
-{', '.join(feedback.get('keep_these_elements', []))}
+{', '.join(feedback.get('keep_these_elements', ['brand voice']))}
 
 SUGGESTED HOOK:
-{feedback.get('revised_hook_suggestion', '')}
+{feedback.get('revised_hook_suggestion', 'Create stronger opening')}
 
 TONE ADJUSTMENT:
-{feedback.get('tone_adjustment', '')}
+{feedback.get('tone_adjustment', 'Make more authentic')}
 
 Create a revised version that:
 1. Addresses all main issues
@@ -89,34 +108,50 @@ Create a revised version that:
 4. Includes "Stop. Breathe. Apply." ritual
 5. Ends with 3-5 hashtags
 
-OUTPUT FORMAT (JSON):
+CRITICAL: Return ONLY this JSON structure:
 {{
-    "revised_content": "The complete revised post with improvements...",
+    "revised_content": "The complete revised post with improvements and hashtags included...",
     "changes_made": [
-        "List of specific changes implemented"
+        "List 3-5 specific changes implemented"
     ],
     "hook": "The new opening line",
     "expected_improvement": "Why this version should score higher"
-}}"""
+}}
+
+Return ONLY valid JSON."""
     
     def _parse_revision_response(self, response: Dict) -> str:
-        """Parse the revision response"""
+        """Parse the revision response with robust error handling"""
         try:
             content = response.get("content", {})
-            if isinstance(content, str):
-                content = json.loads(content)
             
+            # Ensure content is a dictionary
+            content = self._ensure_json_dict(content)
+            
+            if not content:
+                raise ValueError("Empty response content")
+            
+            # Extract revised content
             revised_content = content.get("revised_content", "")
+            
+            if not revised_content:
+                self.logger.error("No revised content in response")
+                return ""
+            
+            # Validate the revised content
+            if len(revised_content) < 100:
+                self.logger.warning("Revised content too short, likely incomplete")
+                return ""
             
             # Log the changes made
             changes = content.get("changes_made", [])
-            self.logger.info("Post revised", 
-                           changes_count=len(changes),
-                           expected_improvement=content.get("expected_improvement", ""))
+            if changes:
+                self.logger.info("Post revised", 
+                               changes_count=len(changes),
+                               expected_improvement=content.get("expected_improvement", ""))
             
             return revised_content
             
         except Exception as e:
-            self.logger.error("Failed to parse revision response", error=str(e))
-            # Return original content if revision fails
+            self.logger.error(f"Failed to parse revision response: {e}")
             return ""

@@ -1,0 +1,54 @@
+{
+  "batch_id": "0de08e89-db62-4ff6-a783-37f65c3ec2c4",
+  "created_at": "2025-09-25T13:05:15.567227",
+  "completed_at": "2025-09-25T13:09:46.625019",
+  "status": "completed",
+  "metrics": {
+    "total_posts": 6,
+    "approved_posts": 3,
+    "rejected_posts": 3,
+    "revised_posts": 5,
+    "approval_rate": 0.5,
+    "revision_success_rate": 0.4,
+    "average_score": 6.927777777777778,
+    "average_processing_time": 39.47070654233297,
+    "total_tokens_used": 0,
+    "total_cost": 0.0
+  },
+  "cultural_reference_performance": {},
+  "posts_summary": {
+    "total": 6,
+    "approved": 3,
+    "rejected": 3,
+    "approval_rate": 0.5,
+    "average_score_approved": 6.927777777777778,
+    "average_revisions": 1.5,
+    "cultural_reference_performance": {
+      "The Office": {
+        "count": 2,
+        "avg_score": 6.783333333333333
+      },
+      "Mad Men": {
+        "count": 1,
+        "avg_score": 6.5
+      },
+      "Silicon Valley": {
+        "count": 1,
+        "avg_score": 6.733333333333333
+      },
+      "Zoom fatigue": {
+        "count": 1,
+        "avg_score": 6.816666666666667
+      },
+      "Performance reviews": {
+        "count": 1,
+        "avg_score": 6.916666666666667
+      }
+    },
+    "target_audience_breakdown": {
+      "Tech professionals": 4,
+      "Marketing professionals": 1,
+      "Remote workers": 1
+    }
+  }
+}

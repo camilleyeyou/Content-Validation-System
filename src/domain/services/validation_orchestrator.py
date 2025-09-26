@@ -1,5 +1,6 @@
 """
-Validation Orchestrator - Manages the complete validation workflow
+Validation Orchestrator - Updated to use persona-based validators
+Manages the complete validation workflow with Sarah, Marcus, and Jordan personas
 """
 
 import asyncio
@@ -11,10 +12,10 @@ import structlog
 from src.domain.models.post import LinkedInPost, PostStatus, ValidationScore
 from src.domain.models.batch import Batch, BatchMetrics
 from src.domain.agents.base_agent import BaseAgent
-from src.domain.agents.content_generator import ContentGenerator
-from src.domain.agents.validators.customer_validator import CustomerValidator
-from src.domain.agents.validators.business_validator import BusinessValidator
-from src.domain.agents.validators.social_validator import SocialMediaValidator
+from src.domain.agents.advanced_content_generator import AdvancedContentGenerator
+from src.domain.agents.validators.sarah_chen_validator import SarahChenValidator
+from src.domain.agents.validators.marcus_williams_validator import MarcusWilliamsValidator
+from src.domain.agents.validators.jordan_park_validator import JordanParkValidator
 from src.domain.agents.feedback_aggregator import FeedbackAggregator
 from src.domain.agents.revision_generator import RevisionGenerator
 from src.infrastructure.config.config_manager import AppConfig
@@ -22,10 +23,10 @@ from src.infrastructure.config.config_manager import AppConfig
 logger = structlog.get_logger()
 
 class ValidationOrchestrator:
-    """Orchestrates the validation workflow with parallel processing"""
+    """Orchestrates the validation workflow with persona-based parallel processing"""
     
     def __init__(self,
-                 content_generator: ContentGenerator,
+                 content_generator: AdvancedContentGenerator,
                  validators: List[BaseAgent],
                  feedback_aggregator: FeedbackAggregator,
                  revision_generator: RevisionGenerator,
@@ -42,6 +43,14 @@ class ValidationOrchestrator:
         self._total_approvals = 0
         self._total_revisions = 0
         self._total_rejections = 0
+        
+        # Track persona agreement patterns
+        self._persona_agreements = {
+            "all_three": 0,
+            "two_of_three": 0,
+            "one_of_three": 0,
+            "none": 0
+        }
     
     async def process_batch(self, batch_size: Optional[int] = None) -> Batch:
         """Process a batch of posts through the complete workflow"""
@@ -50,7 +59,8 @@ class ValidationOrchestrator:
         
         self.logger.info("batch_processing_started", 
                         batch_id=batch.id, 
-                        size=batch_size)
+                        size=batch_size,
+                        validators=["SarahChen", "MarcusWilliams", "JordanPark"])
         
         try:
             # Step 1: Generate initial posts
@@ -91,7 +101,8 @@ class ValidationOrchestrator:
                            batch_id=batch.id,
                            approved=batch.metrics.approved_posts,
                            rejected=batch.metrics.rejected_posts,
-                           approval_rate=batch.metrics.approval_rate)
+                           approval_rate=batch.metrics.approval_rate,
+                           persona_agreement_rate=self._calculate_persona_agreement_rate())
             
             return batch
             
@@ -104,7 +115,7 @@ class ValidationOrchestrator:
             raise
     
     async def _process_single_post(self, post: LinkedInPost) -> LinkedInPost:
-        """Process a single post through validation and potential revision"""
+        """Process a single post through validation with persona-based approval"""
         start_time = time.time()
         post.status = PostStatus.VALIDATING
         
@@ -114,7 +125,7 @@ class ValidationOrchestrator:
         
         # Keep trying until approved or max revisions reached
         while True:
-            # Step 1: Validate with all validators in parallel
+            # Step 1: Validate with all three personas in parallel
             validation_scores = await self._validate_post_parallel(post)
             
             # Clear old scores and add new ones
@@ -122,15 +133,22 @@ class ValidationOrchestrator:
             for score in validation_scores:
                 post.add_validation(score)
             
-            # Step 2: Check approval status
-            if post.is_approved(self.config.batch.min_approvals_required):
+            # Track persona agreement
+            self._track_persona_agreement(validation_scores)
+            
+            # Step 2: Check approval status (requires 2/3 personas to approve)
+            approved_count = sum(1 for score in validation_scores if score.approved)
+            post_approved = approved_count >= 2  # At least 2 out of 3 must approve
+            
+            if post_approved:
                 post.status = PostStatus.APPROVED
                 post.processing_time_seconds = time.time() - start_time
                 
                 self.logger.info("post_approved",
                                post_id=post.id,
-                               approval_count=post.approval_count,
-                               average_score=post.average_score)
+                               approval_count=approved_count,
+                               average_score=post.average_score,
+                               personas_approved=[s.agent_name for s in validation_scores if s.approved])
                 break
             
             # Step 3: Check if we can revise
@@ -138,10 +156,11 @@ class ValidationOrchestrator:
                 self.logger.info("post_revision_needed",
                                post_id=post.id,
                                revision_count=post.revision_count,
-                               average_score=post.average_score)
+                               average_score=post.average_score,
+                               lowest_scorer=min(validation_scores, key=lambda x: x.score).agent_name)
                 
-                # Aggregate feedback and generate revision
-                feedback = await self.feedback_aggregator.process(post)
+                # Aggregate feedback focusing on lowest scorer
+                feedback = await self._aggregate_persona_feedback(post, validation_scores)
                 revised_post = await self.revision_generator.process((post, feedback))
                 
                 # The revision generator modifies the post in-place
@@ -158,13 +177,14 @@ class ValidationOrchestrator:
                 self.logger.info("post_rejected",
                                post_id=post.id,
                                revision_count=post.revision_count,
-                               average_score=post.average_score)
+                               average_score=post.average_score,
+                               all_scores={s.agent_name: s.score for s in validation_scores})
                 break
         
         return post
     
     async def _validate_post_parallel(self, post: LinkedInPost) -> List[ValidationScore]:
-        """Validate a post with all validators in parallel"""
+        """Validate a post with all three personas in parallel"""
         validation_tasks = []
         
         for validator in self.validators:
@@ -176,9 +196,71 @@ class ValidationOrchestrator:
         
         self.logger.debug("parallel_validation_completed",
                          post_id=post.id,
-                         validator_count=len(validation_scores))
+                         scores={score.agent_name: score.score for score in validation_scores})
         
         return validation_scores
+    
+    async def _aggregate_persona_feedback(self, post: LinkedInPost, scores: List[ValidationScore]) -> Dict[str, Any]:
+        """Aggregate feedback with focus on persona-specific concerns"""
+        # Find the lowest scorer for targeted improvements
+        lowest_score = min(scores, key=lambda x: x.score)
+        
+        # Get standard aggregated feedback
+        base_feedback = await self.feedback_aggregator.process(post)
+        
+        # Add persona-specific guidance
+        persona_guidance = {
+            "lowest_scorer": lowest_score.agent_name,
+            "persona_specific_fixes": {}
+        }
+        
+        for score in scores:
+            if not score.approved:
+                if score.agent_name == "SarahChen":
+                    persona_guidance["persona_specific_fixes"]["sarah"] = {
+                        "focus": "authenticity and daily pain points",
+                        "fix": "Make it feel less like marketing, more like shared experience",
+                        "key_barrier": score.criteria_breakdown.get("barrier_addressed", "none")
+                    }
+                elif score.agent_name == "MarcusWilliams":
+                    persona_guidance["persona_specific_fixes"]["marcus"] = {
+                        "focus": "scalability and ROI",
+                        "fix": "Show how this becomes a campaign, not just a post",
+                        "key_concern": score.criteria_breakdown.get("risk_assessment", "neutral")
+                    }
+                elif score.agent_name == "JordanPark":
+                    persona_guidance["persona_specific_fixes"]["jordan"] = {
+                        "focus": "platform mechanics and virality",
+                        "fix": "Strengthen hook and add share trigger",
+                        "engagement_prediction": score.criteria_breakdown.get("engagement_prediction", "moderate")
+                    }
+        
+        # Merge with base feedback
+        base_feedback["persona_guidance"] = persona_guidance
+        
+        return base_feedback
+    
+    def _track_persona_agreement(self, scores: List[ValidationScore]) -> None:
+        """Track how often personas agree on content"""
+        approved_count = sum(1 for score in scores if score.approved)
+        
+        if approved_count == 3:
+            self._persona_agreements["all_three"] += 1
+        elif approved_count == 2:
+            self._persona_agreements["two_of_three"] += 1
+        elif approved_count == 1:
+            self._persona_agreements["one_of_three"] += 1
+        else:
+            self._persona_agreements["none"] += 1
+    
+    def _calculate_persona_agreement_rate(self) -> float:
+        """Calculate how often at least 2 personas agree"""
+        total = sum(self._persona_agreements.values())
+        if total == 0:
+            return 0.0
+        
+        agreements = self._persona_agreements["all_three"] + self._persona_agreements["two_of_three"]
+        return agreements / total
     
     async def _generate_initial_posts(self, batch_id: str, count: int) -> List[LinkedInPost]:
         """Generate initial batch of posts"""
@@ -215,14 +297,14 @@ class ValidationOrchestrator:
         return posts
     
     async def _handle_regeneration(self, batch: Batch, target_count: int) -> List[LinkedInPost]:
-        """Handle regeneration of posts based on failure patterns"""
+        """Handle regeneration with persona-specific failure analysis"""
         rejected_posts = batch.get_rejected_posts()
         
         if not rejected_posts:
             return []
         
-        # Analyze failure patterns
-        failure_patterns = self._analyze_failure_patterns(rejected_posts)
+        # Analyze failure patterns by persona
+        failure_patterns = self._analyze_persona_failures(rejected_posts)
         
         # Calculate how many more posts we need
         approved_count = len(batch.get_approved_posts())
@@ -263,41 +345,47 @@ class ValidationOrchestrator:
         
         return new_posts
     
-    def _analyze_failure_patterns(self, rejected_posts: List[LinkedInPost]) -> Dict[str, Any]:
-        """Analyze patterns in rejected posts"""
+    def _analyze_persona_failures(self, rejected_posts: List[LinkedInPost]) -> Dict[str, Any]:
+        """Analyze failure patterns by persona"""
         patterns = {
-            "common_issues": [],
-            "low_scoring_criteria": {},
+            "sarah_issues": [],
+            "marcus_issues": [],
+            "jordan_issues": [],
             "cultural_references_failed": [],
-            "target_audiences_failed": []
+            "common_feedback": []
         }
         
         for post in rejected_posts:
-            # Collect feedback messages
             for score in post.validation_scores:
-                if score.feedback and not score.approved:
-                    patterns["common_issues"].append(score.feedback)
-                
-                # Track low-scoring criteria
-                if hasattr(score, 'criteria_breakdown'):
-                    for criterion, value in score.criteria_breakdown.items():
-                        if isinstance(value, (int, float)) and value < 5:
-                            patterns["low_scoring_criteria"][criterion] = \
-                                patterns["low_scoring_criteria"].get(criterion, 0) + 1
+                if not score.approved:
+                    if score.agent_name == "SarahChen":
+                        if score.criteria_breakdown.get("barrier_addressed") == "expensive chapstick":
+                            patterns["sarah_issues"].append("price_justification")
+                        if score.criteria_breakdown.get("authenticity_score", 0) < 5:
+                            patterns["sarah_issues"].append("too_corporate")
+                    
+                    elif score.agent_name == "MarcusWilliams":
+                        if score.criteria_breakdown.get("scalability") == "one-off":
+                            patterns["marcus_issues"].append("not_scalable")
+                        if score.criteria_breakdown.get("risk_assessment") == "career-limiting":
+                            patterns["marcus_issues"].append("too_risky")
+                    
+                    elif score.agent_name == "JordanPark":
+                        if score.criteria_breakdown.get("hook_strength", 0) < 5:
+                            patterns["jordan_issues"].append("weak_hook")
+                        if score.criteria_breakdown.get("meme_timing") in ["dead", "late"]:
+                            patterns["jordan_issues"].append("outdated_references")
+                    
+                    patterns["common_feedback"].append(score.feedback)
             
             # Track failed cultural references
             if post.cultural_reference:
-                patterns["cultural_references_failed"].append(
-                    post.cultural_reference.reference
-                )
-            
-            # Track failed target audiences
-            patterns["target_audiences_failed"].append(post.target_audience)
+                patterns["cultural_references_failed"].append(post.cultural_reference.reference)
         
-        # Keep only unique values and most common issues
-        patterns["common_issues"] = list(set(patterns["common_issues"]))[:5]
-        patterns["cultural_references_failed"] = list(set(patterns["cultural_references_failed"]))
-        patterns["target_audiences_failed"] = list(set(patterns["target_audiences_failed"]))
+        # Keep only unique values
+        for key in patterns:
+            if isinstance(patterns[key], list):
+                patterns[key] = list(set(patterns[key]))[:3]  # Keep top 3
         
         return patterns
     
@@ -317,7 +405,7 @@ class ValidationOrchestrator:
         self._total_revisions += batch.metrics.revised_posts
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get orchestrator statistics"""
+        """Get orchestrator statistics including persona insights"""
         return {
             "total_posts_processed": self._total_posts_processed,
             "total_approvals": self._total_approvals,
@@ -326,5 +414,7 @@ class ValidationOrchestrator:
             "overall_approval_rate": self._total_approvals / self._total_posts_processed 
                 if self._total_posts_processed > 0 else 0,
             "revision_effectiveness": self._total_revisions / self._total_posts_processed
-                if self._total_posts_processed > 0 else 0
+                if self._total_posts_processed > 0 else 0,
+            "persona_agreement_patterns": self._persona_agreements,
+            "persona_agreement_rate": self._calculate_persona_agreement_rate()
         }

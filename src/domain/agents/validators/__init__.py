@@ -1,13 +1,13 @@
 """
-Validation Agents for LinkedIn Content
+Validator agents for content validation
 """
 
-from .customer_validator import CustomerValidator
-from .business_validator import BusinessValidator
-from .social_validator import SocialMediaValidator
+from .sarah_chen_validator import SarahChenValidator
+from .marcus_williams_validator import MarcusWilliamsValidator
+from .jordan_park_validator import JordanParkValidator
 
 __all__ = [
-    'CustomerValidator',
-    'BusinessValidator',
-    'SocialMediaValidator'
+    'SarahChenValidator',
+    'MarcusWilliamsValidator', 
+    'JordanParkValidator'
 ]

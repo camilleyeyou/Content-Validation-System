@@ -1,3 +1,7 @@
+"""
+Base Agent with improved JSON response handling
+"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Protocol
 import asyncio
@@ -13,6 +17,7 @@ class AIClientProtocol(Protocol):
     async def generate(self, 
                       prompt: str, 
                       system_prompt: Optional[str] = None,
+                      response_format: str = "json",
                       **kwargs) -> Dict[str, Any]:
         ...
 
@@ -31,7 +36,7 @@ class AgentConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 class BaseAgent(ABC):
-    """Abstract base class for all AI agents"""
+    """Abstract base class for all AI agents with improved error handling"""
     
     def __init__(self, 
                  name: str,
@@ -55,23 +60,48 @@ class BaseAgent(ABC):
     )
     async def _call_ai(self, 
                        prompt: str, 
-                       system_prompt: Optional[str] = None) -> Dict[str, Any]:
-        """Make AI call with retry logic and monitoring"""
+                       system_prompt: Optional[str] = None,
+                       response_format: str = "json") -> Dict[str, Any]:
+        """Make AI call with retry logic, monitoring, and JSON validation"""
         start_time = time.time()
         self._call_count += 1
         
         try:
             self.logger.info("ai_call_started", 
                            call_number=self._call_count,
-                           prompt_length=len(prompt))
+                           prompt_length=len(prompt),
+                           response_format=response_format)
             
             response = await self.ai_client.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 model=self.config.model,
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
+                max_tokens=self.config.max_tokens,
+                response_format=response_format  # Pass response format
             )
+            
+            # Validate response
+            if not response:
+                raise ValueError("Received null response from AI client")
+            
+            if not response.get("content"):
+                raise ValueError("Response missing content field")
+            
+            # For JSON responses, ensure we got valid JSON
+            if response_format == "json":
+                content = response.get("content")
+                if isinstance(content, str):
+                    # This shouldn't happen if OpenAIClient works correctly
+                    self.logger.warning("Received string instead of parsed JSON")
+                    import json
+                    try:
+                        response["content"] = json.loads(content)
+                    except json.JSONDecodeError as e:
+                        self.logger.error(f"Failed to parse JSON content: {e}")
+                        raise ValueError(f"Invalid JSON response: {e}")
+                elif not isinstance(content, dict):
+                    raise ValueError(f"Expected dict for JSON response, got {type(content)}")
             
             elapsed = time.time() - start_time
             tokens_used = response.get('usage', {}).get('total_tokens', 0)
@@ -80,15 +110,32 @@ class BaseAgent(ABC):
             self.logger.info("ai_call_completed",
                            duration=elapsed,
                            tokens_used=tokens_used,
-                           total_tokens=self._total_tokens)
+                           total_tokens=self._total_tokens,
+                           response_format=response_format)
             
             return response
             
         except Exception as e:
             self.logger.error("ai_call_failed",
                             error=str(e),
-                            call_number=self._call_count)
+                            call_number=self._call_count,
+                            response_format=response_format)
             raise
+    
+    def _ensure_json_dict(self, content: Any) -> Dict:
+        """Ensure content is a dictionary, parsing if necessary"""
+        if isinstance(content, dict):
+            return content
+        elif isinstance(content, str):
+            import json
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                self.logger.error(f"Failed to parse JSON string: {e}")
+                return {}
+        else:
+            self.logger.error(f"Unexpected content type: {type(content)}")
+            return {}
     
     def get_stats(self) -> Dict[str, Any]:
         """Get agent statistics"""

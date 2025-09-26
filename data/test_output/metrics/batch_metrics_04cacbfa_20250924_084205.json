@@ -1,0 +1,44 @@
+{
+  "batch_id": "04cacbfa-1ea9-458b-bda0-4aec7c904531",
+  "created_at": "2025-09-24T15:36:31.890641",
+  "completed_at": "2025-09-24T15:42:05.234116",
+  "status": "completed",
+  "metrics": {
+    "total_posts": 6,
+    "approved_posts": 0,
+    "rejected_posts": 6,
+    "revised_posts": 6,
+    "approval_rate": 0.0,
+    "revision_success_rate": 0.0,
+    "average_score": 0.0,
+    "average_processing_time": 50.904025514920555,
+    "total_tokens_used": 0,
+    "total_cost": 0.0
+  },
+  "cultural_reference_performance": {},
+  "posts_summary": {
+    "total": 6,
+    "approved": 0,
+    "rejected": 6,
+    "approval_rate": 0.0,
+    "average_score_approved": 0,
+    "average_revisions": 2.0,
+    "cultural_reference_performance": {
+      "The Office": {
+        "count": 2,
+        "avg_score": 3.0333333333333337
+      },
+      "Zoom fatigue": {
+        "count": 2,
+        "avg_score": 6.2
+      },
+      "Performance reviews": {
+        "count": 2,
+        "avg_score": 2.783333333333333
+      }
+    },
+    "target_audience_breakdown": {
+      "Tech professionals": 6
+    }
+  }
+}
