@@ -81,3 +81,6 @@ config/secrets/
 
 portal/frontend/node_modules/
 portal/frontend/.next/
+
+portal/frontend/node_modules/
+portal/frontend/.next/
