@@ -78,3 +78,6 @@ dmypy.json
 *apikey*
 config/secrets/
 !*secret*.example
+
+portal/frontend/node_modules/
+portal/frontend/.next/
