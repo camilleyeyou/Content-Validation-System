@@ -1,0 +1,56 @@
+{
+  "batch_id": "0cb7c9f4-9350-4b90-9955-859215f3185c",
+  "created_at": "2025-10-02T15:09:18.606032",
+  "completed_at": "2025-10-02T15:12:38.902952",
+  "status": "completed",
+  "metrics": {
+    "total_posts": 5,
+    "approved_posts": 4,
+    "rejected_posts": 1,
+    "revised_posts": 3,
+    "approval_rate": 0.8,
+    "revision_success_rate": 0.6666666666666666,
+    "average_score": 6.75,
+    "average_processing_time": 31.571558046340943,
+    "total_tokens_used": 0,
+    "total_cost": 0.0
+  },
+  "cultural_reference_performance": {},
+  "posts_summary": {
+    "total": 5,
+    "approved": 4,
+    "rejected": 1,
+    "approval_rate": 0.8,
+    "average_score_approved": 6.75,
+    "average_revisions": 0.8,
+    "cultural_reference_performance": {
+      "Earnings season": {
+        "count": 1,
+        "avg_score": 6.0
+      },
+      "Zoom meeting where I was muted": {
+        "count": 1,
+        "avg_score": 6.666666666666667
+      },
+      "Zoom fatigue": {
+        "count": 1,
+        "avg_score": 6.333333333333333
+      },
+      "trending AI tool for team collaboration": {
+        "count": 1,
+        "avg_score": 7.333333333333333
+      },
+      "the growing trend of AI tools in workplace meetings": {
+        "count": 1,
+        "avg_score": 6.666666666666667
+      }
+    },
+    "target_audience_breakdown": {
+      "Corporate professionals navigating stress": 1,
+      "professionals navigating remote work challenges": 1,
+      "corporate professionals and remote workers": 1,
+      "professionals navigating digital communication": 1,
+      "corporate professionals seeking balance": 1
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "batch_id": "7db1d643-4c14-4ed6-9001-d710469f4621",
+  "created_at": "2025-10-02T15:01:29.536271",
+  "completed_at": "2025-10-02T15:04:31.435298",
+  "status": "completed",
+  "metrics": {
+    "total_posts": 5,
+    "approved_posts": 5,
+    "rejected_posts": 0,
+    "revised_posts": 2,
+    "approval_rate": 1.0,
+    "revision_success_rate": 1.0,
+    "average_score": 7.4,
+    "average_processing_time": 25.321952724456786,
+    "total_tokens_used": 0,
+    "total_cost": 0.0
+  },
+  "cultural_reference_performance": {},
+  "posts_summary": {
+    "total": 5,
+    "approved": 5,
+    "rejected": 0,
+    "approval_rate": 1.0,
+    "average_score_approved": 7.4,
+    "average_revisions": 0.6,
+    "cultural_reference_performance": {
+      "a trending AI product this week": {
+        "count": 1,
+        "avg_score": 8.0
+      },
+      "Zoom meeting failures": {
+        "count": 1,
+        "avg_score": 8.0
+      },
+      "Gen Z vs Millennial workplace friction": {
+        "count": 1,
+        "avg_score": 6.333333333333333
+      },
+      "AI wrote my email": {
+        "count": 1,
+        "avg_score": 6.666666666666667
+      },
+      "AI workplace anxiety discussions": {
+        "count": 1,
+        "avg_score": 8.0
+      }
+    },
+    "target_audience_breakdown": {
+      "corporate professionals and tech enthusiasts": 1,
+      "professionals navigating remote work": 1,
+      "professionals navigating digital transformation": 1,
+      "Corporate professionals feeling overwhelmed by technology": 1,
+      "Corporate professionals and remote workers": 1
+    }
+  }
+}

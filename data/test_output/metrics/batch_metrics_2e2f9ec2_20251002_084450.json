@@ -1,0 +1,56 @@
+{
+  "batch_id": "2e2f9ec2-63ad-4396-b54e-caab285d3873",
+  "created_at": "2025-10-02T15:41:20.781278",
+  "completed_at": "2025-10-02T15:44:50.902737",
+  "status": "completed",
+  "metrics": {
+    "total_posts": 5,
+    "approved_posts": 5,
+    "rejected_posts": 0,
+    "revised_posts": 2,
+    "approval_rate": 1.0,
+    "revision_success_rate": 1.0,
+    "average_score": 6.933333333333333,
+    "average_processing_time": 30.304137563705446,
+    "total_tokens_used": 0,
+    "total_cost": 0.0
+  },
+  "cultural_reference_performance": {},
+  "posts_summary": {
+    "total": 5,
+    "approved": 5,
+    "rejected": 0,
+    "approval_rate": 1.0,
+    "average_score_approved": 6.933333333333333,
+    "average_revisions": 0.6,
+    "cultural_reference_performance": {
+      "Super Bowl advertising trends": {
+        "count": 1,
+        "avg_score": 6.333333333333333
+      },
+      "latest layoff tracker update": {
+        "count": 1,
+        "avg_score": 6.666666666666667
+      },
+      "AI capabilities outperforming human productivity": {
+        "count": 1,
+        "avg_score": 7.0
+      },
+      "VC prediction about AI replacing jobs": {
+        "count": 1,
+        "avg_score": 7.0
+      },
+      "recent engagement rate drop": {
+        "count": 1,
+        "avg_score": 7.666666666666667
+      }
+    },
+    "target_audience_breakdown": {
+      "marketing and creative professionals": 1,
+      "corporate professionals and tech industry workers": 1,
+      "professionals feeling overwhelmed by AI in the workplace": 1,
+      "professionals navigating the AI landscape": 1,
+      "Digital marketing professionals": 1
+    }
+  }
+}

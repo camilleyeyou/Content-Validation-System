@@ -13,6 +13,12 @@ type Approved = {
   created_at: string;
 };
 
+async function fetchJSON(url: string, opts: RequestInit = {}) {
+  const r = await fetch(url, { credentials: "include", ...opts });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
 export default function ApprovedPage() {
   const [rows, setRows] = useState<Approved[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -22,25 +28,12 @@ export default function ApprovedPage() {
   const [msg, setMsg] = useState("");
   const [orgs, setOrgs] = useState<any[]>([]);
 
-  async function fetchJSON(url: string, opts: any = {}) {
-    const r = await fetch(url, { credentials: "include", ...opts });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
-  }
-
-  async function load() {
-    const data = await fetchJSON(`${API}/api/approved`);
-    setRows(data);
-  }
-
-  async function loadOrgs() {
-    try {
-      const d = await fetchJSON(`${API}/api/orgs`);
-      setOrgs(d.orgs || []);
-    } catch {}
-  }
-
-  useEffect(() => { load(); loadOrgs(); }, []);
+  useEffect(() => {
+    (async () => {
+      try { setRows(await fetchJSON(`${API}/api/approved`)); } catch (e: any) { setMsg(e.message); }
+      try { const d = await fetchJSON(`${API}/api/orgs`); setOrgs(d.orgs || []); } catch {}
+    })();
+  }, []);
 
   function toggle(id: string) {
     setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
@@ -48,7 +41,7 @@ export default function ApprovedPage() {
 
   async function publishSelected() {
     if (selected.length === 0) { setMsg("Select at least one post"); return; }
-    setMsg("Publishing...");
+    setMsg("Publishing…");
     try {
       const payload: any = { ids: selected, target, publish_now: publishNow };
       if (target === "ORG" && orgId) payload.org_id = orgId;
@@ -59,17 +52,18 @@ export default function ApprovedPage() {
         body: JSON.stringify(payload)
       });
       const ok = res.successful || 0;
-      setMsg(`Published ${ok}/${selected.length} (as ${publishNow ? "LIVE" : "DRAFT"})`);
+      setMsg(`Published ${ok}/${selected.length} as ${publishNow ? "LIVE" : "DRAFT"}`);
       setSelected([]);
-      await load();
+      setRows(await fetchJSON(`${API}/api/approved`));
     } catch (e: any) {
       setMsg(e?.message || "Error");
     }
   }
 
   return (
-    <main style={{ padding: 24, display: "grid", gap: 16 }}>
-      <h1>Approved posts (ready to publish)</h1>
+    <main style={{ display: "grid", gap: 16 }}>
+      <h1>Approved posts</h1>
+
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <label>Target:</label>
         <select value={target} onChange={e => setTarget(e.target.value as any)}>
@@ -79,14 +73,12 @@ export default function ApprovedPage() {
         </select>
 
         {target === "ORG" && (
-          <>
-            <select value={orgId} onChange={e => setOrgId(e.target.value)}>
-              <option value="">-- select org --</option>
-              {orgs.map((o: any) => (
-                <option key={o.urn} value={o.id}>{o.id}</option>
-              ))}
-            </select>
-          </>
+          <select value={orgId} onChange={e => setOrgId(e.target.value)}>
+            <option value="">-- select org --</option>
+            {orgs.map((o: any) => (
+              <option key={o.urn} value={o.id}>{o.id}</option>
+            ))}
+          </select>
         )}
 
         <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -102,7 +94,7 @@ export default function ApprovedPage() {
       {msg && <div style={{ fontSize: 13 }}>{msg}</div>}
 
       <section style={{ display: "grid", gap: 12 }}>
-        {rows.length === 0 && <div>No approved posts stored yet. Run a batch from the Dashboard.</div>}
+        {rows.length === 0 && <div>No approved posts yet. Run a batch on the Dashboard.</div>}
         {rows.map(r => (
           <div key={r.id} style={{ border: "1px solid #ddd", padding: 12 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>

@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
 
 # --------------------------------------------------------------------------------------
-# Ensure repo root is on PYTHONPATH so `src/` is importable even if run from portal/backend
+# Ensure repo root is on PYTHONPATH so `src/` and root modules are importable
 # --------------------------------------------------------------------------------------
 from pathlib import Path
 import sys
@@ -33,17 +33,17 @@ from src.infrastructure.social.linkedin_publisher import LinkedInIntegrationServ
 # --------------------------------------------------------------------------------------
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")   # Next.js
 PORTAL_API_BASE = os.getenv("PORTAL_API_BASE", "http://localhost:8001")   # FastAPI self
-REDIRECT_URI     = os.getenv("LINKEDIN_REDIRECT_URI", f"{PORTAL_API_BASE}/auth/linkedin/callback")
+REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI", f"{PORTAL_API_BASE}/auth/linkedin/callback")
 
-LINKEDIN_CLIENT_ID     = os.getenv("LINKEDIN_CLIENT_ID", "")
+LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID", "")
 LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET", "")
-LI_VERSION             = os.getenv("LINKEDIN_VERSION", "202509")
+LI_VERSION = os.getenv("LINKEDIN_VERSION", "202509")
 
-AUTH_URL  = "https://www.linkedin.com/oauth/v2/authorization"
+AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-USERINFO  = "https://api.linkedin.com/v2/userinfo"
+USERINFO = "https://api.linkedin.com/v2/userinfo"
 POSTS_URL = "https://api.linkedin.com/rest/posts"
-ORGS_URL  = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: FINDER
+ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: FINDER
 
 # --------------------------------------------------------------------------------------
 # Instantiate integration service (reads env + token file if your code supports it)
@@ -124,6 +124,58 @@ def set_token_for_service(access_token: str):
             json.dump({"access_token": access_token}, f)
     except Exception:
         pass
+
+# ---- Robust importer for test_complete_system (Option B) ------------------------------
+def _import_run_full():
+    """
+    Robustly import the coroutine `test_complete_system` regardless of location.
+    Tries root file, alt name, tests package, src/tests, then direct file path.
+    """
+    # 1) common root filename
+    try:
+        from test_complete_system import test_complete_system as _run_full  # type: ignore
+        return _run_full
+    except ModuleNotFoundError:
+        pass
+
+    # 2) alt root name (if someone used tests_complete_system.py)
+    try:
+        from tests_complete_system import test_complete_system as _run_full  # type: ignore
+        return _run_full
+    except ModuleNotFoundError:
+        pass
+
+    # 3) in tests/ package
+    try:
+        from tests.test_complete_system import test_complete_system as _run_full  # type: ignore
+        return _run_full
+    except ModuleNotFoundError:
+        pass
+
+    # 4) under src/tests (fallback)
+    try:
+        from src.tests.test_complete_system import test_complete_system as _run_full  # type: ignore
+        return _run_full
+    except ModuleNotFoundError:
+        pass
+
+    # 5) last resort: load by file path
+    import importlib.util
+    candidates = [
+        REPO_ROOT / "test_complete_system.py",
+        REPO_ROOT / "tests_complete_system.py",
+        REPO_ROOT / "tests" / "test_complete_system.py",
+        REPO_ROOT / "src" / "tests" / "test_complete_system.py",
+    ]
+    for p in candidates:
+        if p.exists():
+            spec = importlib.util.spec_from_file_location("test_complete_system", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            assert spec and spec.loader
+            spec.loader.exec_module(mod)  # type: ignore
+            return mod.test_complete_system  # type: ignore
+
+    raise ModuleNotFoundError("Could not locate test_complete_system (root or tests/).")
 
 # --------------------------------------------------------------------------------------
 # Schemas
@@ -340,7 +392,7 @@ async def run_batch(user=Depends(get_user), publish: bool = False):
     """
     Runs your generation/validation pipeline and stores approved posts for manual publishing.
     """
-    from tests.test_complete_system import test_complete_system as run_full
+    run_full = _import_run_full()  # robustly import the coroutine
 
     token = DB["tokens"][user["sub"]]["access_token"]
     set_token_for_service(token)

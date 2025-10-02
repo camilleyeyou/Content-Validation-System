@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
 
-type PostRow = {
+type Row = {
   id: string;
   target_type: "MEMBER" | "ORG";
   lifecycle: string;
@@ -12,9 +12,12 @@ type PostRow = {
   error_message?: string;
 };
 
-async function fetchJSON(url: string, opts: any = {}) {
+async function fetchJSON(url: string, opts: RequestInit = {}) {
   const r = await fetch(url, { credentials: "include", ...opts });
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(text || `${r.status} ${r.statusText}`);
+  }
   return r.json();
 }
 
@@ -25,12 +28,12 @@ export default function Dashboard() {
   const [hashtags, setHashtags] = useState("MyBrand, Update");
   const [target, setTarget] = useState<"AUTO" | "MEMBER" | "ORG">("AUTO");
   const [orgId, setOrgId] = useState("");
-  const [rows, setRows] = useState<PostRow[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
     (async () => {
-      try { setMe(await fetchJSON(`${API}/api/me`)); } catch {}
+      try { setMe(await fetchJSON(`${API}/api/me`)); } catch (e: any) { setMsg(e.message || "Not connected"); }
       try { const d = await fetchJSON(`${API}/api/orgs`); setOrgs(d.orgs || []); } catch {}
       try { setRows(await fetchJSON(`${API}/api/posts`)); } catch {}
     })();
@@ -63,24 +66,20 @@ export default function Dashboard() {
     setMsg("Running batch…");
     try {
       const data = await fetchJSON(`${API}/api/run-batch`, { method: "POST" });
-      setMsg(`Batch ${data.batch_id || ""}: approved ${data.approved}, published ${data.published}`);
-      setRows(await fetchJSON(`${API}/api/posts`));
+      setMsg(`Stored ${data.approved_count} approved post(s). See the Approved page.`);
     } catch (e: any) {
       setMsg(e?.message || "Error");
     }
   }
 
   return (
-    <main style={{ padding: 24, display: "grid", gap: 16 }}>
+    <main style={{ display: "grid", gap: 16 }}>
       <h1>Dashboard</h1>
       <div style={{ fontSize: 14, color: "#444" }}>
-        {me ? <>Signed in as <b>{me.name || me.sub}</b></> : "Loading…"}
+        {me ? <>Signed in as <b>{me.name || me.sub}</b></> : "Not connected"}
       </div>
 
-      <div style={{ fontSize: 14 }}>
-        <a href="/approved">Go to Approved →</a>
-      </div>
-
+      <div style={{ fontSize: 14 }}><a href="/approved">Go to Approved →</a></div>
 
       <section style={{ display: "grid", gap: 8 }}>
         <h2>Compose</h2>
@@ -113,9 +112,6 @@ export default function Dashboard() {
                   <option key={o.urn} value={o.id}>{o.id}</option>
                 ))}
               </select>
-              <span style={{ fontSize: 12, color: "#666" }}>
-                Tip: set LINKEDIN_ORG_ID in .env to prefer this automatically
-              </span>
             </>
           )}
 
@@ -123,7 +119,7 @@ export default function Dashboard() {
             Publish
           </button>
           <button onClick={runBatch} style={{ padding: "8px 12px", background: "#111", color: "#fff", borderRadius: 8 }}>
-            Run Full Batch + Publish
+            Run Full Batch (store approved)
           </button>
         </div>
 
