@@ -1,4 +1,5 @@
 # portal/backend/app/main.py
+
 import os
 import json
 import time
@@ -10,7 +11,7 @@ from typing import Optional, List, Dict, Any
 import requests
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 # --------------------------------------------------------------------------------------
@@ -24,26 +25,68 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 # --------------------------------------------------------------------------------------
-# Load your LinkedIn integration service from the repo
+# LinkedIn service
 # --------------------------------------------------------------------------------------
 from src.infrastructure.social.linkedin_publisher import LinkedInIntegrationService
 
 # --------------------------------------------------------------------------------------
-# Environment / Config
+# Helpers: env handling and URL normalization
 # --------------------------------------------------------------------------------------
-PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")   # Next.js
-PORTAL_API_BASE = os.getenv("PORTAL_API_BASE", "http://localhost:8001")   # FastAPI self
-REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI", f"{PORTAL_API_BASE}/auth/linkedin/callback")
+def _env(name: str, default: str = "") -> str:
+    """Read env, strip whitespace/newlines and surrounding quotes."""
+    raw = os.getenv(name, default)
+    if raw is None:
+        return default
+    # strip whitespace and any accidental surrounding quotes
+    val = raw.strip().strip('"').strip("'")
+    return val
 
-LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID", "")
-LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET", "")
-LI_VERSION = os.getenv("LINKEDIN_VERSION", "202509")
+def _normalize_base(url: str) -> str:
+    """Normalize a base URL: strip, drop trailing slash, ensure scheme present."""
+    url = (url or "").strip()
+    # remove accidental newlines in middle
+    url = url.replace("\r", "").replace("\n", "")
+    if url.endswith("/"):
+        url = url[:-1]
+    return url
 
-AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
+def _join_url(base: str, path: str) -> str:
+    """Join base + path without creating double slashes."""
+    base = _normalize_base(base)
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}"
+
+def _build_redirect_uri() -> str:
+    """
+    If LINKEDIN_REDIRECT_URI is set, use it (sanitized). Otherwise build from PORTAL_API_BASE.
+    NEVER add a trailing slash unless explicitly present in the env override.
+    """
+    explicit = _env("LINKEDIN_REDIRECT_URI", "")
+    if explicit:
+        # sanitize but do not alter path semantics
+        uri = explicit.replace("\r", "").replace("\n", "").strip()
+        return uri
+    # default from API base
+    base = _normalize_base(_env("PORTAL_API_BASE", "http://localhost:8001"))
+    return _join_url(base, "/auth/linkedin/callback")
+
+# --------------------------------------------------------------------------------------
+# Environment / Config (sanitized)
+# --------------------------------------------------------------------------------------
+PORTAL_BASE_URL = _normalize_base(_env("PORTAL_BASE_URL", "http://localhost:3000"))   # Next.js
+PORTAL_API_BASE = _normalize_base(_env("PORTAL_API_BASE", "http://localhost:8001"))   # FastAPI (this app)
+REDIRECT_URI    = _build_redirect_uri()
+
+LINKEDIN_CLIENT_ID     = _env("LINKEDIN_CLIENT_ID", "")
+LINKEDIN_CLIENT_SECRET = _env("LINKEDIN_CLIENT_SECRET", "")
+LI_VERSION             = _env("LINKEDIN_VERSION", "202509")
+
+AUTH_URL  = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-USERINFO = "https://api.linkedin.com/v2/userinfo"
+USERINFO  = "https://api.linkedin.com/v2/userinfo"
 POSTS_URL = "https://api.linkedin.com/rest/posts"
-ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # REST endpoint
+ORGS_URL  = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: FINDER
 
 # --------------------------------------------------------------------------------------
 # Instantiate integration service (reads env + token file if your code supports it)
@@ -63,7 +106,7 @@ DB: Dict[str, Dict[str, Any]] = {
 # --------------------------------------------------------------------------------------
 # FastAPI app + CORS
 # --------------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API", version="0.2.1")
+app = FastAPI(title="Content Portal API", version="0.3.0")
 
 origins = [PORTAL_BASE_URL]
 if "localhost" in PORTAL_BASE_URL:
@@ -78,11 +121,26 @@ app.add_middleware(
 )
 
 # --------------------------------------------------------------------------------------
+# Middleware: collapse double slashes in path (//auth/...) -> (/auth/...)
+# --------------------------------------------------------------------------------------
+@app.middleware("http")
+async def collapse_double_slashes(request: Request, call_next):
+    path = request.url.path
+    if "//" in path:
+        # collapse and redirect (preserve query)
+        collapsed = "/".join([seg for seg in path.split("/") if seg != ""])
+        collapsed = "/" + collapsed
+        if collapsed != path:
+            target = str(request.url.replace(path=collapsed))
+            return RedirectResponse(target, status_code=307)
+    return await call_next(request)
+
+# --------------------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------------------
 def want_org_scopes() -> bool:
     """Ask for org scopes if an org is configured or EXTRA_SCOPES is set."""
-    return bool(os.getenv("LINKEDIN_ORG_ID") or os.getenv("EXTRA_SCOPES"))
+    return bool(_env("LINKEDIN_ORG_ID") or _env("EXTRA_SCOPES"))
 
 def scopes_for_auth(include_org: bool) -> str:
     scopes = ["openid", "profile", "email", "w_member_social"]
@@ -90,19 +148,18 @@ def scopes_for_auth(include_org: bool) -> str:
         for s in ["rw_organization_admin", "w_organization_social"]:
             if s not in scopes:
                 scopes.append(s)
-    extra = (os.getenv("EXTRA_SCOPES") or "").strip().split()
+    extra = (_env("EXTRA_SCOPES") or "").split()
     for s in extra:
         if s and s not in scopes:
             scopes.append(s)
     return " ".join(scopes)
 
 def rest_headers(token: str) -> Dict[str, str]:
-    # Note: LinkedIn REST requires LinkedIn-Version; X-Restli-Protocol-Version is 2.0.0
     return {
         "Authorization": f"Bearer {token}",
         "LinkedIn-Version": LI_VERSION,
         "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
+        "X-Restli-Protocol-Version": "2.0.0"
     }
 
 def get_user(request: Request) -> Dict[str, Any]:
@@ -132,35 +189,27 @@ def _import_run_full():
     Robustly import the coroutine `test_complete_system` regardless of location.
     Tries root file, alt name, tests package, src/tests, then direct file path.
     """
-    # 1) common root filename
     try:
         from test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-
-    # 2) alt root name (if someone used tests_complete_system.py)
     try:
         from tests_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-
-    # 3) in tests/ package
     try:
         from tests.test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-
-    # 4) under src/tests (fallback)
     try:
         from src.tests.test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
 
-    # 5) last resort: load by file path
     import importlib.util
     candidates = [
         REPO_ROOT / "test_complete_system.py",
@@ -186,13 +235,13 @@ class ComposeIn(BaseModel):
     hashtags: List[str] = []
     target: str = "AUTO"      # AUTO | MEMBER | ORG
     org_id: Optional[str] = None
-    publish_now: bool = True  # if False, create draft (when supported)
+    publish_now: bool = True  # if False, create local draft (no LinkedIn call)
 
 class PublishApprovedIn(BaseModel):
     ids: List[str]
     target: str = "AUTO"            # AUTO | MEMBER | ORG
     org_id: Optional[str] = None
-    publish_now: bool = False       # False = create DRAFTs
+    publish_now: bool = False       # False = create DRAFTs (local drafts, by design)
 
 # --------------------------------------------------------------------------------------
 # Basic routes
@@ -201,7 +250,9 @@ class PublishApprovedIn(BaseModel):
 def root():
     return {
         "ok": True,
-        "message": "Content Portal API – use /auth/linkedin/login or the UI at http://localhost:3000",
+        "message": "Content Portal API – use /auth/linkedin/login or the UI at PORTAL_BASE_URL",
+        "portal_base_url": PORTAL_BASE_URL,
+        "api_base": PORTAL_API_BASE,
     }
 
 @app.get("/healthz")
@@ -213,7 +264,10 @@ def debug_oauth():
     return {
         "redirect_uri": REDIRECT_URI,
         "client_id": LINKEDIN_CLIENT_ID,
-        "scopes": scopes_for_auth(want_org_scopes())
+        "scopes_default_with_org": scopes_for_auth(True),
+        "scopes_default_member_only": scopes_for_auth(False),
+        "portal_base_url": PORTAL_BASE_URL,
+        "api_base": PORTAL_API_BASE,
     }
 
 # --------------------------------------------------------------------------------------
@@ -221,6 +275,7 @@ def debug_oauth():
 # --------------------------------------------------------------------------------------
 @app.get("/auth/linkedin/login")
 def linkedin_login(include_org: bool = True):
+    # IMPORTANT: pass the exact REDIRECT_URI computed above
     params = {
         "response_type": "code",
         "client_id": LINKEDIN_CLIENT_ID,
@@ -248,7 +303,7 @@ def linkedin_callback(code: str, state: Optional[str] = None):
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": REDIRECT_URI,  # must match exactly what was used in /login and in LinkedIn App
         "client_id": LINKEDIN_CLIENT_ID,
         "client_secret": LINKEDIN_CLIENT_SECRET
     }
@@ -259,7 +314,16 @@ def linkedin_callback(code: str, state: Optional[str] = None):
         timeout=30
     )
     if not tok.ok:
-        return JSONResponse(status_code=tok.status_code, content={"error": tok.text})
+        # Make mismatches obvious
+        return JSONResponse(
+            status_code=tok.status_code,
+            content={
+                "error": "Token exchange failed",
+                "tip": "Ensure LinkedIn App Redirect URL EXACTLY matches `redirect_uri` below.",
+                "redirect_uri_we_sent": REDIRECT_URI,
+                "linkedin_response": tok.text
+            }
+        )
 
     access_token = tok.json()["access_token"]
 
@@ -274,13 +338,17 @@ def linkedin_callback(code: str, state: Optional[str] = None):
 
     # Save session user + token in memory
     DB["users"][sub] = {"sub": sub, "name": name, "email": email}
-    DB["tokens"][sub] = {"access_token": access_token, "version": LI_VERSION, "updated_at": datetime.utcnow().isoformat()+"Z"}
+    DB["tokens"][sub] = {
+        "access_token": access_token,
+        "version": LI_VERSION,
+        "updated_at": datetime.utcnow().isoformat() + "Z"
+    }
 
     # Expose token to service + persist to file used by CLI/tests
     set_token_for_service(access_token)
 
     # Set a readable cookie for the FE session (demo scope)
-    resp = RedirectResponse(url=f"{PORTAL_BASE_URL}/dashboard")
+    resp = RedirectResponse(url=_join_url(PORTAL_BASE_URL, "/dashboard"))
     resp.set_cookie("li_sub", sub, httponly=False, samesite="Lax")
     return resp
 
@@ -293,61 +361,50 @@ def me(user=Depends(get_user)):
         "sub": user["sub"],
         "name": user["name"],
         "email": user.get("email"),
-        "org_preferred": os.getenv("LINKEDIN_ORG_ID")
+        "org_preferred": _env("LINKEDIN_ORG_ID") or None
     }
 
 @app.get("/api/orgs")
 def list_orgs(user=Depends(get_user)):
-    """
-    Returns organizations where the **current token subject** has a role.
-    Uses REST; do NOT include 'assignee' (it's inferred from the bearer token).
-    """
     token = DB["tokens"][user["sub"]]["access_token"]
-    headers = rest_headers(token)  # sets LinkedIn-Version + X-Restli-Protocol-Version
-
-    # Valid REST query params: q=roleAssignee plus optional state, role, start, count
-    params = {
+    headers = rest_headers(token)
+    headers["X-RestLi-Method"] = "FINDER"
+    # Many accounts accept assignee; some sandbox configs reject it.
+    # Try with assignee first; fall back without it.
+    params_with = {
         "q": "roleAssignee",
+        "role": "ADMINISTRATOR",
         "state": "APPROVED",
-        "role": "ADMINISTRATOR",  # optional; remove to include all roles
-        "count": 50,
-        "start": 0,
+        "assignee": f"urn:li:person:{user['sub']}"
     }
-
-    r = requests.get(ORGS_URL, headers=headers, params=params, timeout=20)
+    r = requests.get(ORGS_URL, headers=headers, params=params_with, timeout=20)
+    if r.status_code == 400 and "QUERY_PARAM_NOT_ALLOWED" in r.text:
+        params_no = {
+            "q": "roleAssignee",
+            "role": "ADMINISTRATOR",
+            "state": "APPROVED",
+        }
+        r = requests.get(ORGS_URL, headers=headers, params=params_no, timeout=20)
     if not r.ok:
-        # bubble up LinkedIn error body for easier debugging
-        try:
-            return JSONResponse(status_code=r.status_code, content=r.json())
-        except Exception:
-            return JSONResponse(status_code=r.status_code, content={"error": r.text})
-
+        return JSONResponse(status_code=r.status_code, content={"error": r.text})
     data = r.json()
     orgs = []
     for el in data.get("elements", []):
         urn = el.get("organization")
         if urn and urn.startswith("urn:li:organization:"):
-            org_id = urn.rsplit(":", 1)[-1]
+            org_id = urn.split(":")[-1]
             orgs.append({"urn": urn, "id": org_id})
     return {"orgs": orgs}
 
 # --------------------------------------------------------------------------------------
-# Compose / Publish (immediate or draft)
+# Compose / Publish (immediate OR local draft)
 # --------------------------------------------------------------------------------------
-class ComposeIn(BaseModel):
-    commentary: str
-    hashtags: List[str] = []
-    target: str = "AUTO"      # AUTO | MEMBER | ORG
-    org_id: Optional[str] = None
-    publish_now: bool = True  # if False, create draft (when supported)
-
 @app.post("/api/posts")
 async def create_post(payload: ComposeIn, user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]
     set_token_for_service(token)
 
-    # Decide target
-    default_org = os.getenv("LINKEDIN_ORG_ID")
+    default_org = _env("LINKEDIN_ORG_ID") or None
     target_type = "MEMBER"
     target_urn = f"urn:li:person:{user['sub']}"
 
@@ -362,7 +419,7 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
                     publish_now=payload.publish_now
                 )
             except TypeError:
-                # fallback for older signature (always draft)
+                # fallback for older signature
                 res = await svc.publisher.create_company_draft_post(
                     content=payload.commentary,
                     hashtags=payload.hashtags,
@@ -393,7 +450,7 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
         "target_urn": target_urn,
         "commentary": payload.commentary,
         "hashtags": payload.hashtags,
-        "lifecycle": "PUBLISHED" if payload.publish_now else "DRAFT",
+        "lifecycle": "PUBLISHED" if payload.publish_now else "LOCAL_DRAFT",
         "li_post_id": li_id,
         "created_at": datetime.utcnow().isoformat() + "Z",
     }
@@ -407,12 +464,6 @@ def list_posts(user=Depends(get_user)):
 # --------------------------------------------------------------------------------------
 # Run pipeline: store approved (no auto publish)
 # --------------------------------------------------------------------------------------
-class PublishApprovedIn(BaseModel):
-    ids: List[str]
-    target: str = "AUTO"            # AUTO | MEMBER | ORG
-    org_id: Optional[str] = None
-    publish_now: bool = False       # False = create DRAFTs
-
 @app.post("/api/run-batch")
 async def run_batch(user=Depends(get_user), publish: bool = False):
     """
@@ -468,7 +519,7 @@ async def publish_approved(payload: PublishApprovedIn, user=Depends(get_user)):
     set_token_for_service(token)
 
     results = []
-    default_org = os.getenv("LINKEDIN_ORG_ID")
+    default_org = _env("LINKEDIN_ORG_ID") or None
 
     async def publish_one(rec: Dict[str, Any]) -> Dict[str, Any]:
         commentary = rec["content"]
@@ -507,7 +558,7 @@ async def publish_approved(payload: PublishApprovedIn, user=Depends(get_user)):
                 target_urn = f"urn:li:person:{user['sub']}"
 
             li_id = res.get("id") if isinstance(res, dict) else None
-            rec["status"] = "PUBLISHED" if payload.publish_now else "DRAFT_CREATED"
+            rec["status"] = "PUBLISHED" if payload.publish_now else "LOCAL_DRAFT"
             rec["li_post_id"] = li_id
             rec["error_message"] = None
 
@@ -518,7 +569,7 @@ async def publish_approved(payload: PublishApprovedIn, user=Depends(get_user)):
                 "target_urn": target_urn,
                 "commentary": commentary,
                 "hashtags": hashtags,
-                "lifecycle": "PUBLISHED" if payload.publish_now else "DRAFT",
+                "lifecycle": "PUBLISHED" if payload.publish_now else "LOCAL_DRAFT",
                 "li_post_id": li_id,
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
