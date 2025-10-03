@@ -14,7 +14,7 @@ import requests
 
 USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
 POSTS_URL    = "https://api.linkedin.com/rest/posts"
-API_VERSION  = os.getenv("LINKEDIN_VERSION", "202509")
+API_VERSION  = os.getenv("LINKEDIN_VERSION", "202509")  # YYYYMM (use current/past month)
 ORG_ID_ENV   = (os.getenv("LINKEDIN_ORG_ID") or "").strip()
 
 
@@ -56,6 +56,11 @@ class LinkedInPublisher:
             "X-Restli-Protocol-Version": "2.0.0",
             "LinkedIn-Version": API_VERSION,
         })
+
+    # ✅ expose a public setter so running processes can refresh the session headers
+    def set_access_token(self, token: str):
+        self.config.access_token = token
+        self._set_auth_headers(token)
 
     def _ensure_token(self):
         if not self.config.access_token:
@@ -132,8 +137,7 @@ class LinkedInPublisher:
         r = requests.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=30)
         r.raise_for_status()
         tok = r.json()
-        self.config.access_token = tok["access_token"]
-        self._set_auth_headers(self.config.access_token)
+        self.set_access_token(tok["access_token"])  # <- make sure session uses fresh token
         if self.logger:
             self.logger.info("Obtained LinkedIn access token")
         return tok
@@ -144,9 +148,11 @@ class LinkedInPublisher:
 
     # -------------- posting ------------------
     def _post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        r = self.session.post(POSTS_URL, data=json.dumps(payload), timeout=30)
+        # Use json= for correct header/body handling
+        r = self.session.post(POSTS_URL, json=payload, timeout=30)
         if r.status_code in (201, 202):
-            return r.json() if r.text else {"success": True}
+            # Some responses are empty on 202 ACCEPTED
+            return r.json() if r.content else {"success": True}
         if r.status_code == 400:
             raise RuntimeError(f"400 Bad Request from /rest/posts: {r.text}")
         if r.status_code == 401:
@@ -201,7 +207,8 @@ class LinkedInPublisher:
             "commentary": commentary,
             "visibility": "PUBLIC",
             "distribution": {"feedDistribution": "MAIN_FEED"},
-            "lifecycleState": "PUBLISHED"
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False
         }
         return self._post(payload)
 
@@ -239,7 +246,8 @@ class LinkedInPublisher:
             "commentary": commentary,
             "visibility": "PUBLIC",
             "distribution": {"feedDistribution": "MAIN_FEED"},
-            "lifecycleState": "PUBLISHED"
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False
         }
         return self._post(payload)
 
@@ -319,7 +327,6 @@ class LinkedInIntegrationService:
             self._save_token(tok["access_token"])
             _ = await self.publisher.get_profile_info()
             print("Successfully connected to LinkedIn (OIDC).")
-            # Friendly reminder if org is configured
             if self.config.organization_id:
                 print("Org posting is enabled (LINKEDIN_ORG_ID detected). "
                       "Make sure your app scopes include rw_organization_admin w_organization_social, "

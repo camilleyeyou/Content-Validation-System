@@ -1,5 +1,7 @@
-// portal/frontend/app/layout.tsx
-export const metadata = {
+import "./globals.css";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
   title: "LinkedIn Content Portal",
   description: "Validate, approve and publish LinkedIn content",
 };

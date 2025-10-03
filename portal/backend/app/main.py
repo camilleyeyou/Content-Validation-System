@@ -43,7 +43,7 @@ AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 USERINFO = "https://api.linkedin.com/v2/userinfo"
 POSTS_URL = "https://api.linkedin.com/rest/posts"
-ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: FINDER
+ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # REST endpoint
 
 # --------------------------------------------------------------------------------------
 # Instantiate integration service (reads env + token file if your code supports it)
@@ -63,7 +63,7 @@ DB: Dict[str, Dict[str, Any]] = {
 # --------------------------------------------------------------------------------------
 # FastAPI app + CORS
 # --------------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API", version="0.2.0")
+app = FastAPI(title="Content Portal API", version="0.2.1")
 
 origins = [PORTAL_BASE_URL]
 if "localhost" in PORTAL_BASE_URL:
@@ -97,11 +97,12 @@ def scopes_for_auth(include_org: bool) -> str:
     return " ".join(scopes)
 
 def rest_headers(token: str) -> Dict[str, str]:
+    # Note: LinkedIn REST requires LinkedIn-Version; X-Restli-Protocol-Version is 2.0.0
     return {
         "Authorization": f"Bearer {token}",
         "LinkedIn-Version": LI_VERSION,
         "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0"
+        "X-Restli-Protocol-Version": "2.0.0",
     }
 
 def get_user(request: Request) -> Dict[str, Any]:
@@ -297,30 +298,49 @@ def me(user=Depends(get_user)):
 
 @app.get("/api/orgs")
 def list_orgs(user=Depends(get_user)):
+    """
+    Returns organizations where the **current token subject** has a role.
+    Uses REST; do NOT include 'assignee' (it's inferred from the bearer token).
+    """
     token = DB["tokens"][user["sub"]]["access_token"]
-    headers = rest_headers(token)
-    headers["X-RestLi-Method"] = "FINDER"
+    headers = rest_headers(token)  # sets LinkedIn-Version + X-Restli-Protocol-Version
+
+    # Valid REST query params: q=roleAssignee plus optional state, role, start, count
     params = {
         "q": "roleAssignee",
-        "role": "ADMINISTRATOR",
         "state": "APPROVED",
-        "assignee": f"urn:li:person:{user['sub']}"
+        "role": "ADMINISTRATOR",  # optional; remove to include all roles
+        "count": 50,
+        "start": 0,
     }
+
     r = requests.get(ORGS_URL, headers=headers, params=params, timeout=20)
     if not r.ok:
-        return JSONResponse(status_code=r.status_code, content={"error": r.text})
+        # bubble up LinkedIn error body for easier debugging
+        try:
+            return JSONResponse(status_code=r.status_code, content=r.json())
+        except Exception:
+            return JSONResponse(status_code=r.status_code, content={"error": r.text})
+
     data = r.json()
     orgs = []
     for el in data.get("elements", []):
         urn = el.get("organization")
         if urn and urn.startswith("urn:li:organization:"):
-            org_id = urn.split(":")[-1]
+            org_id = urn.rsplit(":", 1)[-1]
             orgs.append({"urn": urn, "id": org_id})
     return {"orgs": orgs}
 
 # --------------------------------------------------------------------------------------
 # Compose / Publish (immediate or draft)
 # --------------------------------------------------------------------------------------
+class ComposeIn(BaseModel):
+    commentary: str
+    hashtags: List[str] = []
+    target: str = "AUTO"      # AUTO | MEMBER | ORG
+    org_id: Optional[str] = None
+    publish_now: bool = True  # if False, create draft (when supported)
+
 @app.post("/api/posts")
 async def create_post(payload: ComposeIn, user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]
@@ -387,6 +407,12 @@ def list_posts(user=Depends(get_user)):
 # --------------------------------------------------------------------------------------
 # Run pipeline: store approved (no auto publish)
 # --------------------------------------------------------------------------------------
+class PublishApprovedIn(BaseModel):
+    ids: List[str]
+    target: str = "AUTO"            # AUTO | MEMBER | ORG
+    org_id: Optional[str] = None
+    publish_now: bool = False       # False = create DRAFTs
+
 @app.post("/api/run-batch")
 async def run_batch(user=Depends(get_user), publish: bool = False):
     """
