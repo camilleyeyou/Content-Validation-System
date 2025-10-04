@@ -1,14 +1,18 @@
+# requirements.txt
 fastapi==0.115.5
 uvicorn[standard]==0.30.3
 requests==2.32.3
 pydantic==2.11.0
 python-dotenv==1.0.1
 
-# needed by your test_complete_system + logging
+# logging + analytics used by your system test
 structlog==25.4.0
 pandas==2.3.3
 openpyxl==3.1.5
 redis==6.4.0
-tenacity==9.1.2      # <-- was 9.1.0 (not available on PyPI)
+tenacity==9.1.2          # fixed pin
 tqdm==4.67.1
 PyYAML==6.0.3
+
+# >>> THIS is the missing dependency <<<
+openai==1.51.2

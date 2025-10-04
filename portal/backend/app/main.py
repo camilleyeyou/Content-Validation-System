@@ -1,9 +1,9 @@
 # portal/backend/app/main.py
 """
 Content Portal API (FastAPI) — Railway + Vercel
-- CORS: exact allowlist + cookie attributes for cross-site auth
-- OAuth normalization (no stray slashes/newlines in redirect URI)
-- /api/orgs dual-path: REST first, v2 fallback for compatibility
+- CORS allowlist + cross-site cookie for auth
+- OAuth redirect cleaning
+- /api/orgs: REST first, v2 fallback; returns [] + hint on 403
 """
 
 import os
@@ -66,7 +66,7 @@ DB: Dict[str, Dict[str, Any]] = {
     "approved": {}
 }
 
-app = FastAPI(title="Content Portal API", version="0.3.2")
+app = FastAPI(title="Content Portal API", version="0.3.3")
 
 # --- CORS config --------------------------------------------------------------
 def _compute_allowed_origins() -> List[str]:
@@ -296,6 +296,7 @@ def me(user=Depends(get_user)):
 def list_orgs(user=Depends(get_user)):
     """
     Try REST endpoint (organizationAcls). If 400/403, fallback to v2 (organizationalEntityAcls).
+    If both fail with 403, return [] plus a hint instead of propagating 403.
     """
     token = DB["tokens"][user["sub"]]["access_token"]
 
@@ -321,7 +322,7 @@ def list_orgs(user=Depends(get_user)):
                 org_ids.append(urn.split(":")[-1])
 
         if org_ids:
-            ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)  # <-- fixed
+            ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)
             r_bulk = requests.get(
                 ORGS_BULK_REST,
                 headers=rest_headers(token),
@@ -355,23 +356,38 @@ def list_orgs(user=Depends(get_user)):
         "projection": "(elements*(organizationalTarget~(id,localizedName)))"
     }
     r_v2 = requests.get(ORGS_ACLS_V2, headers=headers_v2, params=params_v2, timeout=20)
-    if not r_v2.ok:
-        return JSONResponse(status_code=r_v2.status_code, content={"error": r_v2.text})
+    if r_v2.ok:
+        data = r_v2.json()
+        for el in data.get("elements", []):
+            org_obj = el.get("organizationalTarget~") or {}
+            oid = ""
+            if "id" in org_obj:
+                if isinstance(org_obj["id"], int):
+                    oid = str(org_obj["id"])
+                elif isinstance(org_obj["id"], str) and org_obj["id"].startswith("urn:li:organization:"):
+                    oid = org_obj["id"].split(":")[-1]
+            name = org_obj.get("localizedName") or ""
+            if oid:
+                orgs.append({"id": oid, "name": name})
+        return {"orgs": orgs}
 
-    data = r_v2.json()
-    for el in data.get("elements", []):
-        org_obj = el.get("organizationalTarget~") or {}
-        oid = ""
-        if "id" in org_obj:
-            if isinstance(org_obj["id"], int):
-                oid = str(org_obj["id"])
-            elif isinstance(org_obj["id"], str) and org_obj["id"].startswith("urn:li:organization:"):
-                oid = org_obj["id"].split(":")[-1]
-        name = org_obj.get("localizedName") or ""
-        if oid:
-            orgs.append({"id": oid, "name": name})
+    # If both fail, see if one of them was 403 and return a friendly hint
+    if r_rest.status_code == 403 or r_v2.status_code == 403:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "orgs": [],
+                "hint": (
+                    "LinkedIn returned 403 for organization listing. "
+                    "Make sure your user is an Admin on the Page and that your token includes "
+                    "rw_organization_admin and w_organization_social scopes. "
+                    "If your app is in development, ensure the organization and user are permitted for the app."
+                ),
+            },
+        )
 
-    return {"orgs": orgs}
+    # Otherwise bubble up the original error
+    return JSONResponse(status_code=r_rest.status_code, content={"error": r_rest.text})
 
 # --- Compose / Publish --------------------------------------------------------
 class _ComposeIn(ComposeIn):  # just to keep type hints visible
