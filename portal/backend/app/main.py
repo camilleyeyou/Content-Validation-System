@@ -1,23 +1,9 @@
 # portal/backend/app/main.py
 """
-Content Portal API (FastAPI)
-- Proper CORS for Vercel <-> Railway
-- OAuth callback cookie fix (SameSite=None; Secure)
-- Robust env normalization (no trailing slashes or hidden newlines)
-- Debug endpoints for quick verification
-
-Required env (Railway):
-  PORTAL_BASE_URL=https://content-validation-system.vercel.app
-  PORTAL_API_BASE=https://content-validation-system-production.up.railway.app
-  LINKEDIN_REDIRECT_URI=https://content-validation-system-production.up.railway.app/auth/linkedin/callback
-  LINKEDIN_CLIENT_ID=...
-  LINKEDIN_CLIENT_SECRET=...
-  LINKEDIN_VERSION=202509
-  # Optional:
-  # EXTRA_SCOPES="rw_organization_admin w_organization_social"
-  # LINKEDIN_ORG_ID=123456789
-  # CORS_ALLOW_ORIGINS="https://content-validation-system.vercel.app,https://your-preview.vercel.app"
-  # CORS_ALLOW_ORIGIN_REGEX="^https://.*-content-validation-system.*\\.vercel\\.app$"
+Content Portal API (FastAPI) — Railway + Vercel
+- CORS: exact allowlist + cookie attributes for cross-site auth
+- OAuth normalization (no stray slashes/newlines in redirect URI)
+- /api/orgs dual-path: REST first, v2 fallback for compatibility
 """
 
 import os
@@ -34,30 +20,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
 
-# ------------------------------------------------------------------------------
-# Ensure repo root on PYTHONPATH so we can import from src/
-# ------------------------------------------------------------------------------
 from pathlib import Path
 import sys
 
+# --- PYTHONPATH: allow importing from repo root -------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# ------------------------------------------------------------------------------
-# LinkedIn service
-# ------------------------------------------------------------------------------
+# --- LinkedIn integration service --------------------------------------------
 from src.infrastructure.social.linkedin_publisher import LinkedInIntegrationService
 
-# ------------------------------------------------------------------------------
-# Env helpers / normalization
-# ------------------------------------------------------------------------------
+# --- Helpers -----------------------------------------------------------------
 def _clean(v: Optional[str]) -> Optional[str]:
     if v is None:
         return None
-    # strip whitespace and newlines (avoids "%0A" in redirect URL)
     v = v.strip()
-    # remove a single trailing slash on origins/bases
     if v.endswith("/") and ("http://" in v or "https://" in v):
         v = v[:-1]
     return v
@@ -73,57 +51,43 @@ LI_VERSION             = os.getenv("LINKEDIN_VERSION", "202509")
 AUTH_URL  = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 USERINFO  = "https://api.linkedin.com/v2/userinfo"
-ORGS_ACLS = "https://api.linkedin.com/rest/organizationAcls"
-ORGS_URL  = "https://api.linkedin.com/rest/organizations"
+# REST endpoints
+ORGS_ACLS_REST  = "https://api.linkedin.com/rest/organizationAcls"
+ORGS_BULK_REST  = "https://api.linkedin.com/rest/organizations"
+# v2 fallback
+ORGS_ACLS_V2    = "https://api.linkedin.com/v2/organizationalEntityAcls"
 
-# ------------------------------------------------------------------------------
-# Instantiate service
-# ------------------------------------------------------------------------------
 svc = LinkedInIntegrationService()
 
-# ------------------------------------------------------------------------------
-# Tiny in-memory store (MVP)
-# ------------------------------------------------------------------------------
 DB: Dict[str, Dict[str, Any]] = {
-    "users": {},     # sub -> {sub, name, email}
-    "tokens": {},    # sub -> {access_token, version, updated_at}
-    "posts": {},     # id  -> record sent to LI
-    "approved": {}   # id  -> staged for manual publish
+    "users": {},
+    "tokens": {},
+    "posts": {},
+    "approved": {}
 }
 
-# ------------------------------------------------------------------------------
-# FastAPI
-# ------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API", version="0.3.0")
+app = FastAPI(title="Content Portal API", version="0.3.1")
 
-# ----- CORS config -------------------------------------------------------------
+# --- CORS config --------------------------------------------------------------
 def _compute_allowed_origins() -> List[str]:
-    # Primary origin is your Vercel app
     origins = []
     if PORTAL_BASE_URL:
         origins.append(PORTAL_BASE_URL)
-
-    # Extra allow-list (comma-separated) if you want previews, etc.
     extra = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
     if extra:
         for o in extra.split(","):
             o = _clean(o)
             if o and o not in origins:
                 origins.append(o)
-
-    # Local dev convenience
     if PORTAL_BASE_URL and "localhost" in PORTAL_BASE_URL:
         alt = PORTAL_BASE_URL.replace("localhost", "127.0.0.1")
         if alt not in origins:
             origins.append(alt)
-
     return origins
 
 ALLOW_ORIGINS = _compute_allowed_origins()
 ALLOW_ORIGIN_REGEX = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "").strip() or None
 
-# If you need regex (e.g., Vercel previews), set CORS_ALLOW_ORIGIN_REGEX.
-# Otherwise, we use explicit allow_origins list.
 if ALLOW_ORIGIN_REGEX:
     app.add_middleware(
         CORSMiddleware,
@@ -145,9 +109,7 @@ else:
         max_age=86400,
     )
 
-# ------------------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------------------
+# --- Misc helpers -------------------------------------------------------------
 def want_org_scopes() -> bool:
     return bool(os.getenv("LINKEDIN_ORG_ID") or os.getenv("EXTRA_SCOPES"))
 
@@ -172,7 +134,6 @@ def rest_headers(token: str) -> Dict[str, str]:
     }
 
 def _is_secure_request(request: Request) -> bool:
-    # Works behind Railway proxy
     xfproto = request.headers.get("x-forwarded-proto", "").lower()
     if xfproto == "https":
         return True
@@ -197,9 +158,7 @@ def get_user(request: Request) -> Dict[str, Any]:
         raise HTTPException(401, "User not found")
     return user
 
-# ------------------------------------------------------------------------------
-# Schemas
-# ------------------------------------------------------------------------------
+# --- Schemas ------------------------------------------------------------------
 class ComposeIn(BaseModel):
     commentary: str
     hashtags: List[str] = []
@@ -213,9 +172,18 @@ class PublishApprovedIn(BaseModel):
     org_id: Optional[str] = None
     publish_now: bool = False
 
-# ------------------------------------------------------------------------------
-# Basic / Debug
-# ------------------------------------------------------------------------------
+class _ComposeResponse(BaseModel):
+    id: str
+    user_sub: str
+    target_type: str
+    target_urn: str
+    commentary: str
+    hashtags: List[str]
+    lifecycle: str
+    li_post_id: Optional[str]
+    created_at: str
+
+# --- Basic / Debug ------------------------------------------------------------
 @app.get("/")
 def root():
     return {
@@ -250,9 +218,7 @@ def debug_whoami(request: Request):
         "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
     }
 
-# ------------------------------------------------------------------------------
-# OAuth: login + callback
-# ------------------------------------------------------------------------------
+# --- OAuth --------------------------------------------------------------------
 @app.get("/auth/linkedin/login")
 def linkedin_login(include_org: bool = True):
     params = {
@@ -285,7 +251,7 @@ def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
         "client_secret": LINKEDIN_CLIENT_SECRET
     }
     tok = requests.post(
-        TOKEN_URL,
+        "https://www.linkedin.com/oauth/v2/accessToken",
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30
@@ -309,12 +275,11 @@ def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
     set_token_for_service(access_token)
 
     resp = RedirectResponse(url=f"{PORTAL_BASE_URL}/dashboard")
-    # Cross-site cookie: must be SameSite=None; Secure on HTTPS
-    secure = _is_secure_request(request)
+    secure = (request.headers.get("x-forwarded-proto", "").lower() == "https") or (request.url.scheme == "https")
     resp.set_cookie(
         "li_sub",
         sub,
-        httponly=False,         # FE needs to read it? If not, set True.
+        httponly=False,
         samesite="none" if secure else "lax",
         secure=secure,
         max_age=7 * 24 * 3600,
@@ -322,9 +287,7 @@ def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
     )
     return resp
 
-# ------------------------------------------------------------------------------
-# Me / Orgs
-# ------------------------------------------------------------------------------
+# --- Me / Orgs ----------------------------------------------------------------
 @app.get("/api/me")
 def me(user=Depends(get_user)):
     return {
@@ -336,66 +299,82 @@ def me(user=Depends(get_user)):
 
 @app.get("/api/orgs")
 def list_orgs(user=Depends(get_user)):
+    """
+    Try REST endpoint (organizationAcls). If 400/403, fallback to v2 (organizationalEntityAcls).
+    """
     token = DB["tokens"][user["sub"]]["access_token"]
+
+    # --- Attempt 1: REST organizationAcls (assignee=urn...)
     headers = rest_headers(token)
     headers["X-RestLi-Method"] = "FINDER"
-
-    # 1) org ACLs (what orgs does this member administer)
-    # per LinkedIn REST spec, you filter by role & state & assignee
-    params = {
+    params_rest = {
         "q": "roleAssignee",
         "role": "ADMINISTRATOR",
         "state": "APPROVED",
-        "assignee": f"urn:li:person:{user['sub']}"
+        "assignee": f"urn:li:person:{user['sub']}",
+        "count": 100,
     }
-    acls = requests.get(ORGS_ACLS, headers=headers, params=params, timeout=20)
-    if not acls.ok:
-        return JSONResponse(status_code=acls.status_code, content={"error": acls.text})
+    r_rest = requests.get(ORGS_ACLS_REST, headers=headers, params=params_rest, timeout=20)
 
-    org_ids = []
-    for el in acls.json().get("elements", []):
-        urn = el.get("organization")
-        if urn and urn.startswith("urn:li:organization:"):
-            org_ids.append(urn.split(":")[-1])
+    orgs: List[Dict[str, str]] = []
+    if r_rest.ok:
+        data = r_rest.json()
+        org_ids = []
+        for el in data.get("elements", []):
+            urn = el.get("organization")
+            if isinstance(urn, str) and urn.startswith("urn:li:organization:"):
+                org_ids.append(urn.split(":")[-1])
 
-    orgs = []
-    # 2) get basic org info by id (optional)
-    if org_ids:
-        ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)
-        org_resp = requests.get(ORGS_URL, headers=headers, params={"ids": ids_param}, timeout=20)
-        if org_resp.ok:
-            data = org_resp.json()
-            elements = data.get("elements") or []
-            for o in elements:
-                urn = o.get("id") or o.get("urn")
-                org_id = str(o.get("id") or "").split(":")[-1] if isinstance(o.get("id"), str) else None
-                # fallback: parse from urn if present
-                if not org_id and isinstance(urn, str) and urn.startswith("urn:li:organization:"):
-                    org_id = urn.split(":")[-1]
-                orgs.append({
-                    "id": org_id or "",
-                    "name": (o.get("localizedName") or o.get("name") or ""),
-                })
-        else:
-            # If that endpoint fails, return bare IDs
-            orgs = [{"id": oid, "name": ""} for oid in org_ids]
+        if org_ids:
+            ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)
+            r_bulk = requests.get(ORGS_BULK_REST, headers=rest_headers(token), params={"ids": ids_param}, timeout=20)
+            if r_bulk.ok:
+                for o in r_bulk.json().get("elements", []):
+                    # Try to pull id + localizedName
+                    oid = ""
+                    if "id" in o:
+                        if isinstance(o["id"], int):
+                            oid = str(o["id"])
+                        elif isinstance(o["id"], str) and o["id"].startswith("urn:li:organization:"):
+                            oid = o["id"].split(":")[-1]
+                    name = o.get("localizedName") or o.get("name") or ""
+                    orgs.append({"id": oid, "name": name})
+            else:
+                orgs = [{"id": oid, "name": ""} for oid in org_ids]
+
+        return {"orgs": orgs}
+
+    # --- Attempt 2: v2 organizationalEntityAcls (roleAssignee=urn..., projection for name)
+    headers_v2 = rest_headers(token)  # same headers
+    params_v2 = {
+        "q": "roleAssignee",
+        "roleAssignee": f"urn:li:person:{user['sub']}",
+        "role": "ADMINISTRATOR",
+        "state": "APPROVED",
+        "count": 100,
+        "projection": "(elements*(organizationalTarget~(id,localizedName)))"
+    }
+    r_v2 = requests.get(ORGS_ACLS_V2, headers=headers_v2, params=params_v2, timeout=20)
+    if not r_v2.ok:
+        # surface the most informative error
+        return JSONResponse(status_code=r_v2.status_code, content={"error": r_v2.text})
+
+    data = r_v2.json()
+    for el in data.get("elements", []):
+        org_obj = el.get("organizationalTarget~") or {}
+        oid = ""
+        if "id" in org_obj:
+            if isinstance(org_obj["id"], int):
+                oid = str(org_obj["id"])
+            elif isinstance(org_obj["id"], str) and org_obj["id"].startswith("urn:li:organization:"):
+                oid = org_obj["id"].split(":")[-1]
+        name = org_obj.get("localizedName") or ""
+        if oid:
+            orgs.append({"id": oid, "name": name})
 
     return {"orgs": orgs}
 
-# ------------------------------------------------------------------------------
-# Compose / Publish
-# ------------------------------------------------------------------------------
-class _ComposeResponse(BaseModel):
-    id: str
-    user_sub: str
-    target_type: str
-    target_urn: str
-    commentary: str
-    hashtags: List[str]
-    lifecycle: str
-    li_post_id: Optional[str]
-    created_at: str
-
+# --- Compose / Publish --------------------------------------------------------
 @app.post("/api/posts", response_model=_ComposeResponse)
 async def create_post(payload: ComposeIn, user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]
@@ -457,13 +436,8 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
 def list_posts(user=Depends(get_user)):
     return [p for p in DB["posts"].values() if p["user_sub"] == user["sub"]]
 
-# ------------------------------------------------------------------------------
-# Pipeline: run and stage approved
-# ------------------------------------------------------------------------------
+# --- Pipeline: run + stage approved ------------------------------------------
 def _import_run_full():
-    """
-    Robustly import the coroutine `test_complete_system` regardless of location.
-    """
     try:
         from test_complete_system import test_complete_system as _run_full
         return _run_full
@@ -541,9 +515,7 @@ async def run_batch(user=Depends(get_user), publish: bool = False):
         "approved_samples": [r["id"] for r in saved[:5]],
     }
 
-# ------------------------------------------------------------------------------
-# Approved queue: list / publish / clear
-# ------------------------------------------------------------------------------
+# --- Approved queue -----------------------------------------------------------
 @app.get("/api/approved")
 def list_approved(user=Depends(get_user)):
     return [r for r in DB["approved"].values() if r["user_sub"] == user["sub"]]

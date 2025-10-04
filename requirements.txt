@@ -1,5 +1,14 @@
-# requirements.txt  (repo root)
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
+fastapi==0.115.5
+uvicorn[standard]==0.30.3
 requests==2.32.3
+pydantic==2.11.0
 python-dotenv==1.0.1
+
+# your system deps already used by tests and services:
+structlog==25.4.0
+pandas==2.3.3
+openpyxl==3.1.5
+redis==6.4.0
+tenacity==9.1.0
+tqdm==4.67.1
+PyYAML==6.0.3
