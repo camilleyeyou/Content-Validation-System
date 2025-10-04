@@ -66,7 +66,7 @@ DB: Dict[str, Dict[str, Any]] = {
     "approved": {}
 }
 
-app = FastAPI(title="Content Portal API", version="0.3.1")
+app = FastAPI(title="Content Portal API", version="0.3.2")
 
 # --- CORS config --------------------------------------------------------------
 def _compute_allowed_origins() -> List[str]:
@@ -132,12 +132,6 @@ def rest_headers(token: str) -> Dict[str, str]:
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0"
     }
-
-def _is_secure_request(request: Request) -> bool:
-    xfproto = request.headers.get("x-forwarded-proto", "").lower()
-    if xfproto == "https":
-        return True
-    return request.url.scheme == "https"
 
 def set_token_for_service(access_token: str):
     os.environ["LINKEDIN_ACCESS_TOKEN"] = access_token
@@ -274,8 +268,9 @@ def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
 
     set_token_for_service(access_token)
 
-    resp = RedirectResponse(url=f"{PORTAL_BASE_URL}/dashboard")
+    # Cookie for FE (cross-site safe)
     secure = (request.headers.get("x-forwarded-proto", "").lower() == "https") or (request.url.scheme == "https")
+    resp = RedirectResponse(url=f"{PORTAL_BASE_URL}/dashboard")
     resp.set_cookie(
         "li_sub",
         sub,
@@ -326,11 +321,15 @@ def list_orgs(user=Depends(get_user)):
                 org_ids.append(urn.split(":")[-1])
 
         if org_ids:
-            ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)
-            r_bulk = requests.get(ORGS_BULK_REST, headers=rest_headers(token), params={"ids": ids_param}, timeout=20)
+            ids_param = ",".join(f"urn:li:organization:{oid}" for oid in org_ids)  # <-- fixed
+            r_bulk = requests.get(
+                ORGS_BULK_REST,
+                headers=rest_headers(token),
+                params={"ids": ids_param},
+                timeout=20
+            )
             if r_bulk.ok:
                 for o in r_bulk.json().get("elements", []):
-                    # Try to pull id + localizedName
                     oid = ""
                     if "id" in o:
                         if isinstance(o["id"], int):
@@ -338,14 +337,15 @@ def list_orgs(user=Depends(get_user)):
                         elif isinstance(o["id"], str) and o["id"].startswith("urn:li:organization:"):
                             oid = o["id"].split(":")[-1]
                     name = o.get("localizedName") or o.get("name") or ""
-                    orgs.append({"id": oid, "name": name})
+                    if oid:
+                        orgs.append({"id": oid, "name": name})
             else:
                 orgs = [{"id": oid, "name": ""} for oid in org_ids]
 
         return {"orgs": orgs}
 
     # --- Attempt 2: v2 organizationalEntityAcls (roleAssignee=urn..., projection for name)
-    headers_v2 = rest_headers(token)  # same headers
+    headers_v2 = rest_headers(token)
     params_v2 = {
         "q": "roleAssignee",
         "roleAssignee": f"urn:li:person:{user['sub']}",
@@ -356,7 +356,6 @@ def list_orgs(user=Depends(get_user)):
     }
     r_v2 = requests.get(ORGS_ACLS_V2, headers=headers_v2, params=params_v2, timeout=20)
     if not r_v2.ok:
-        # surface the most informative error
         return JSONResponse(status_code=r_v2.status_code, content={"error": r_v2.text})
 
     data = r_v2.json()
@@ -375,6 +374,9 @@ def list_orgs(user=Depends(get_user)):
     return {"orgs": orgs}
 
 # --- Compose / Publish --------------------------------------------------------
+class _ComposeIn(ComposeIn):  # just to keep type hints visible
+    pass
+
 @app.post("/api/posts", response_model=_ComposeResponse)
 async def create_post(payload: ComposeIn, user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]

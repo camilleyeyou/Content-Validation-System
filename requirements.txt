@@ -4,11 +4,11 @@ requests==2.32.3
 pydantic==2.11.0
 python-dotenv==1.0.1
 
-# your system deps already used by tests and services:
+# needed by your test_complete_system + logging
 structlog==25.4.0
 pandas==2.3.3
 openpyxl==3.1.5
 redis==6.4.0
-tenacity==9.1.0
+tenacity==9.1.2      # <-- was 9.1.0 (not available on PyPI)
 tqdm==4.67.1
 PyYAML==6.0.3
