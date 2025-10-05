@@ -1,161 +1,346 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
-import { Button } from "../../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import { Check, Rocket, AlertTriangle } from "lucide-react";
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 
 type Me = { sub: string; name: string; email?: string | null; org_preferred?: string | null };
-type Org = { id: string; urn: string };
-type Approved = { id: string; content: string; hashtags: string[]; created_at: string }[];
+type ApprovedRec = {
+  id: string;
+  content: string;
+  hashtags: string[];
+  status: string;
+  created_at: string;
+  li_post_id?: string | null;
+  error_message?: string | null;
+};
+type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
-export default function Dashboard() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [orgs, setOrgs] = useState<Org[]>([]);
-  const [approved, setApproved] = useState<Approved>([]);
-  const [loadingBatch, setLoadingBatch] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") || "http://localhost:8001";
 
-  async function refreshAll() {
+async function api<T>(
+  path: string,
+  init?: RequestInit & { parseJson?: boolean }
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    // try to extract error
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const j = await res.json();
+      msg = j.error || j.detail || msg;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
+  }
+  if (init?.method === "HEAD") return {} as T;
+  if (init?.parseJson === false) return (await res.text()) as unknown as T;
+  return (await res.json()) as T;
+}
+
+export default function DashboardPage() {
+  const [me, setMe] = React.useState<Me | null>(null);
+  const [orgs, setOrgs] = React.useState<{ id: string; urn: string }[]>([]);
+  const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
+  const [sel, setSel] = React.useState<Record<string, boolean>>({});
+  const [busy, setBusy] = React.useState<{ gen?: boolean; pub?: boolean }>({});
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const selectedIds = React.useMemo(
+    () => Object.entries(sel).filter(([, v]) => v).map(([k]) => k),
+    [sel]
+  );
+
+  const fetchAll = React.useCallback(async () => {
     setError(null);
     try {
-      const [meRes, orgsRes, apprRes] = await Promise.all([
+      const [meResp, approvedResp] = await Promise.all([
         api<Me>("/api/me"),
-        api<{ orgs: Org[] }>("/api/orgs"),
-        api<Approved>("/api/approved"),
+        api<ApprovedRec[]>("/api/approved"),
       ]);
-      setMe(meRes);
-      setOrgs(orgsRes.orgs ?? []);
-      setApproved(apprRes ?? []);
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to load data");
+      setMe(meResp);
+      setApproved(approvedResp);
+      try {
+        const o = await api<OrgsResp>("/api/orgs");
+        if ("orgs" in o) setOrgs(o.orgs || []);
+      } catch (e) {
+        // orgs may 400/403 if scopes not granted — ignore silently
+      }
+    } catch (e: any) {
+      setError(e?.message || "Failed to load");
     }
-  }
-
-  useEffect(() => {
-    refreshAll();
   }, []);
 
-  async function runBatch() {
-    setLoadingBatch(true);
+  React.useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  function clearSelection() {
+    setSel({});
+  }
+
+  async function onGenerateApproved() {
+    setBusy((b) => ({ ...b, gen: true }));
+    setNotice(null);
     setError(null);
-    setOk(null);
     try {
-      const res = await api<{ approved_count: number; batch_id?: string }>("/api/run-batch", {
-        method: "POST",
-      });
-      setOk(`Generated ${res.approved_count} approved posts${res.batch_id ? ` (batch ${res.batch_id.slice(0,8)})` : ""}.`);
-      await refreshAll();
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to run batch");
+      const res = await api<{ approved_count: number; batch_id?: string }>(
+        "/api/run-batch",
+        { method: "POST", body: JSON.stringify({}) }
+      );
+      setNotice(`Generated ${res.approved_count} approved post(s).`);
+      await fetchAll();
+    } catch (e: any) {
+      setError(`Generate failed: ${e?.message || e}`);
     } finally {
-      setLoadingBatch(false);
+      setBusy((b) => ({ ...b, gen: false }));
     }
   }
 
+  async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
+    if (selectedIds.length === 0) return;
+    setBusy((b) => ({ ...b, pub: true }));
+    setNotice(null);
+    setError(null);
+    try {
+      const payload: any = {
+        ids: selectedIds,
+        target,
+        publish_now: publishNow,
+      };
+      if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
+
+      const res = await api<{ successful: number; results: any[] }>(
+        "/api/approved/publish",
+        { method: "POST", body: JSON.stringify(payload) }
+      );
+      setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
+      clearSelection();
+      await fetchAll();
+    } catch (e: any) {
+      setError(`Publish failed: ${e?.message || e}`);
+    } finally {
+      setBusy((b) => ({ ...b, pub: false }));
+    }
+  }
+
+  function isSelected(id: string) {
+    return !!sel[id];
+  }
+
+  const linkedInLoginUrl = `${API_BASE}/auth/linkedin/login?include_org=true`;
+
   return (
-    <main className="grid gap-6 py-8 md:grid-cols-2">
-      <Card className="md:col-span-2">
-        <CardHeader className="flex items-center justify-between md:flex-row md:items-center">
-          <CardTitle>Dashboard</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button onClick={runBatch} loading={loadingBatch} className="min-w-48">
-              <Rocket className="mr-2 h-4 w-4" /> Generate Approved Posts
-            </Button>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-zinc-600">
+            Validate, approve, and publish LinkedIn content
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a href={linkedInLoginUrl}>
+            <Button variant="outline">Connect LinkedIn</Button>
+          </a>
+        </div>
+      </div>
+
+      {notice ? (
+        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
+          {notice}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Profile + Org card */}
+      <Card>
+        <CardHeader
+          title="Account"
+          description="LinkedIn identity and organization context"
+          actions={
+            <a href={linkedInLoginUrl}>
+              <Button variant="secondary">Re-connect</Button>
+            </a>
+          }
+        />
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <div className="text-sm text-zinc-500">Signed in as</div>
+            <div className="font-medium">{me?.name || "—"}</div>
+            {me?.email ? <div className="text-sm text-zinc-600">{me.email}</div> : null}
           </div>
-        </CardHeader>
-        <CardContent>
-          {!me && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                <span>You’re not connected. Click “Connect LinkedIn” in the header, then return here.</span>
-              </div>
+          <div>
+            <div className="text-sm text-zinc-500">Preferred Org ID</div>
+            <div className="font-medium">{me?.org_preferred || "—"}</div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex items-center gap-2">
+          {orgs.length > 0 ? (
+            <div className="text-sm text-zinc-600">
+              Organizations you can manage:{" "}
+              <span className="font-medium">
+                {orgs.map((o) => o.id).join(", ")}
+              </span>
+            </div>
+          ) : (
+            <div className="text-sm text-zinc-600">
+              No organizations found or missing scopes.
             </div>
           )}
+        </CardFooter>
+      </Card>
 
-          {me && (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                <div className="text-xs text-neutral-500">Signed in as</div>
-                <div className="mt-1 text-sm font-medium">{me.name}</div>
-                <div className="text-xs text-neutral-500">{me.email ?? ""}</div>
-              </div>
+      {/* Actions */}
+      <Card>
+        <CardHeader
+          title="Generate Approved Posts"
+          description="Run your validation pipeline and stash approved posts for manual publishing"
+          actions={
+            <Button onClick={onGenerateApproved} isLoading={busy.gen}>
+              Generate
+            </Button>
+          }
+        />
+        <CardContent className="space-y-4">
+          <div className="text-sm text-zinc-600">
+            Click <span className="font-medium">Generate</span> to run the
+            pipeline. Approved posts will appear below. Select items and publish
+            immediately or as drafts.
+          </div>
+        </CardContent>
+      </Card>
 
-              <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                <div className="text-xs text-neutral-500">Organizations</div>
-                <div className="mt-1 text-sm">
-                  {orgs.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {orgs.map((o) => (
-                        <span
-                          key={o.id}
-                          className="inline-flex items-center rounded-full bg-neutral-100 px-3 py-1 text-xs"
-                          title={o.urn}
-                        >
-                          {o.id}
-                        </span>
-                      ))}
+      {/* Approved queue */}
+      <Card>
+        <CardHeader
+          title="Approved Queue"
+          description={
+            approved.length
+              ? `${approved.length} ready`
+              : "No approved posts yet"
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => onPublish("MEMBER", false)}
+                disabled={busy.pub || selectedIds.length === 0}
+                isLoading={busy.pub}
+              >
+                Draft as Member
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => onPublish("MEMBER", true)}
+                disabled={busy.pub || selectedIds.length === 0}
+                isLoading={busy.pub}
+              >
+                Publish Now (Member)
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onPublish("ORG", false)}
+                disabled={busy.pub || selectedIds.length === 0 || orgs.length === 0}
+                isLoading={busy.pub}
+              >
+                Draft as Org
+              </Button>
+              <Button
+                onClick={() => onPublish("ORG", true)}
+                disabled={busy.pub || selectedIds.length === 0 || orgs.length === 0}
+                isLoading={busy.pub}
+              >
+                Publish Now (Org)
+              </Button>
+            </div>
+          }
+        />
+        <CardContent className="p-0">
+          {approved.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-zinc-600">Nothing here yet.</div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {approved.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected(p.id)}
+                    onChange={(e) =>
+                      setSel((s) => ({ ...s, [p.id]: e.target.checked }))
+                    }
+                    className="mt-1 h-4 w-4"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium truncate">
+                        {p.content.slice(0, 80)}
+                        {p.content.length > 80 ? "…" : ""}
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        {new Date(p.created_at).toLocaleString()}
+                      </div>
                     </div>
-                  ) : (
-                    <span className="text-neutral-500">None detected or missing scopes</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-neutral-200 bg-white p-4">
-                <div className="text-xs text-neutral-500">Approved queue</div>
-                <div className="mt-1 text-2xl font-semibold">{approved.length}</div>
-                <div className="text-xs text-neutral-500">ready to publish</div>
-              </div>
-            </div>
-          )}
-
-          {ok && (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4" />
-                <span>{ok}</span>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {error}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle>Latest Approved</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!approved.length && (
-            <div className="text-sm text-neutral-500">No approved posts yet. Click “Generate Approved Posts”.</div>
-          )}
-          <ul className="grid gap-4">
-            {approved.slice(0, 6).map((p) => (
-              <li key={p.id} className="rounded-xl border border-neutral-200 bg-white p-4">
-                <div className="text-sm whitespace-pre-wrap">{p.content}</div>
-                {!!p.hashtags?.length && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {p.hashtags.map((h, i) => (
-                      <span key={i} className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
-                        #{h.replace(/^#/, "")}
-                      </span>
-                    ))}
+                    {p.hashtags?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {p.hashtags.map((h, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
+                          >
+                            #{h.replace(/^#/, "")}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-zinc-600">
+                      Status: <span className="font-medium">{p.status}</span>
+                      {p.li_post_id ? (
+                        <>
+                          {" "}
+                          • LinkedIn ID:{" "}
+                          <span className="font-mono">{p.li_post_id}</span>
+                        </>
+                      ) : null}
+                      {p.error_message ? (
+                        <div className="text-red-600 mt-1">{p.error_message}</div>
+                      ) : null}
+                    </div>
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
+                </label>
+              ))}
+            </div>
+          )}
         </CardContent>
+        {approved.length > 0 ? (
+          <CardFooter className="flex items-center justify-between">
+            <div className="text-sm text-zinc-600">
+              Selected:{" "}
+              <span className="font-semibold">{selectedIds.length}</span>
+            </div>
+            <Button variant="ghost" onClick={clearSelection} disabled={!selectedIds.length}>
+              Clear selection
+            </Button>
+          </CardFooter>
+        ) : null}
       </Card>
-    </main>
+    </div>
   );
 }
