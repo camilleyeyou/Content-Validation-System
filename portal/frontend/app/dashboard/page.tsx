@@ -17,7 +17,7 @@ type ApprovedRec = {
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
 const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") || "http://localhost:8001";
+  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "");
 
 async function api<T>(
   path: string,
