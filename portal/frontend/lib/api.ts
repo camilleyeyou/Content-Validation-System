@@ -1,18 +1,25 @@
-// portal/frontend/lib/api.ts
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+const API_BASE = process.env.NEXT_PUBLIC_PORTAL_API_BASE ?? "http://localhost:8001";
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+export async function api<T = any>(
+  path: string,
+  init?: RequestInit & { parseAs?: "json" | "text" }
+): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include", // <— send cookies!
+    method: init?.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
-      ...(init?.headers || {}),
+      ...(init?.headers ?? {}),
     },
+    body: init?.body,
+    credentials: "include", // IMPORTANT for Railway cookie
+    cache: "no-store",
   });
+
+  const parseAs = init?.parseAs ?? "json";
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `HTTP ${res.status}`);
+    const txt = await res.text().catch(() => String(res.status));
+    throw new Error(txt || `HTTP ${res.status}`);
   }
-  return res.json();
+  // @ts-ignore
+  return parseAs === "json" ? res.json() : res.text();
 }

@@ -1,123 +1,183 @@
 "use client";
+
 import { useEffect, useState } from "react";
+import { api } from "../../lib/api";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Check, Send } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
-
-type Approved = {
+type ApprovedItem = {
   id: string;
   content: string;
   hashtags: string[];
-  status: "APPROVED" | "DRAFT_CREATED" | "PUBLISHED";
-  li_post_id?: string | null;
-  error_message?: string | null;
   created_at: string;
 };
 
-async function fetchJSON(url: string, opts: RequestInit = {}) {
-  const r = await fetch(url, { credentials: "include", ...opts });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
+type PublishPayload = {
+  ids: string[];
+  target: "AUTO" | "MEMBER" | "ORG";
+  org_id?: string;
+  publish_now: boolean;
+};
 
 export default function ApprovedPage() {
-  const [rows, setRows] = useState<Approved[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [items, setItems] = useState<ApprovedItem[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [target, setTarget] = useState<"AUTO" | "MEMBER" | "ORG">("AUTO");
-  const [orgId, setOrgId] = useState("");
   const [publishNow, setPublishNow] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgId, setOrgId] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [ok, setOk] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    setError(null);
+    try {
+      const res = await api<ApprovedItem[]>("/api/approved");
+      setItems(res ?? []);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load approved");
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      try { setRows(await fetchJSON(`${API}/api/approved`)); } catch (e: any) { setMsg(e.message); }
-      try { const d = await fetchJSON(`${API}/api/orgs`); setOrgs(d.orgs || []); } catch {}
-    })();
+    refresh();
   }, []);
 
   function toggle(id: string) {
-    setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   }
 
-  async function publishSelected() {
-    if (selected.length === 0) { setMsg("Select at least one post"); return; }
-    setMsg("Publishing…");
-    try {
-      const payload: any = { ids: selected, target, publish_now: publishNow };
-      if (target === "ORG" && orgId) payload.org_id = orgId;
+  async function publish() {
+    if (!selected.size) return;
+    setLoading(true);
+    setError(null);
+    setOk(null);
 
-      const res = await fetchJSON(`${API}/api/approved/publish`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const ok = res.successful || 0;
-      setMsg(`Published ${ok}/${selected.length} as ${publishNow ? "LIVE" : "DRAFT"}`);
-      setSelected([]);
-      setRows(await fetchJSON(`${API}/api/approved`));
+    const payload: PublishPayload = {
+      ids: Array.from(selected),
+      target,
+      org_id: target === "ORG" && orgId ? orgId : undefined,
+      publish_now: publishNow,
+    };
+
+    try {
+      const res = await api<{ successful: number; requested: number; results: any[] }>(
+        "/api/approved/publish",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+      setOk(`Published ${res.successful}/${res.requested} selections.`);
+      setSelected(new Set());
+      await refresh();
     } catch (e: any) {
-      setMsg(e?.message || "Error");
+      setError(e?.message ?? "Failed to publish");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main style={{ display: "grid", gap: 16 }}>
-      <h1>Approved posts</h1>
+    <main className="grid gap-6 py-8">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <CardTitle>Approved Queue</CardTitle>
+            <p className="mt-1 text-sm text-neutral-600">Select posts to publish to LinkedIn.</p>
+          </div>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <label>Target:</label>
-        <select value={target} onChange={e => setTarget(e.target.value as any)}>
-          <option value="AUTO">Auto (Org if configured)</option>
-          <option value="MEMBER">Personal Profile</option>
-          <option value="ORG">Company Page</option>
-        </select>
+          <div className="grid gap-2 md:grid-cols-4">
+            <select
+              value={target}
+              onChange={(e) => setTarget(e.target.value as any)}
+              className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+            >
+              <option value="AUTO">Auto (ORG if configured else MEMBER)</option>
+              <option value="MEMBER">Member Profile</option>
+              <option value="ORG">Organization Page</option>
+            </select>
 
-        {target === "ORG" && (
-          <select value={orgId} onChange={e => setOrgId(e.target.value)}>
-            <option value="">-- select org --</option>
-            {orgs.map((o: any) => (
-              <option key={o.urn} value={o.id}>{o.id}</option>
-            ))}
-          </select>
-        )}
+            <input
+              placeholder="Org ID (if target = ORG)"
+              className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              disabled={target !== "ORG"}
+            />
 
-        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="checkbox" checked={publishNow} onChange={e => setPublishNow(e.target.checked)} />
-          Publish as LIVE (unchecked = create drafts)
-        </label>
+            <label className="flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-3 text-sm">
+              <input
+                type="checkbox"
+                checked={publishNow}
+                onChange={(e) => setPublishNow(e.target.checked)}
+              />
+              Publish live (otherwise drafts)
+            </label>
 
-        <button onClick={publishSelected} style={{ padding: "8px 12px", background: "#0A66C2", color: "#fff", borderRadius: 8 }}>
-          Publish selected
-        </button>
-      </div>
+            <Button onClick={publish} loading={loading} disabled={!selected.size}>
+              <Send className="mr-2 h-4 w-4" />
+              Publish Selected ({selected.size})
+            </Button>
+          </div>
+        </CardHeader>
 
-      {msg && <div style={{ fontSize: 13 }}>{msg}</div>}
-
-      <section style={{ display: "grid", gap: 12 }}>
-        {rows.length === 0 && <div>No approved posts yet. Run a batch on the Dashboard.</div>}
-        {rows.map(r => (
-          <div key={r.id} style={{ border: "1px solid #ddd", padding: 12 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} />
-              <div style={{ fontSize: 12, color: "#666" }}>
-                {r.status} • {new Date(r.created_at).toLocaleString()}
-                {r.li_post_id ? ` • LI: ${r.li_post_id}` : ""}
+        <CardContent>
+          {ok && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                <span>{ok}</span>
               </div>
             </div>
-            <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{r.content}</div>
-            {r.hashtags?.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 12, color: "#444" }}>
-                Hashtags: {r.hashtags.join(", ")}
-              </div>
-            )}
-            {r.error_message && (
-              <div style={{ marginTop: 6, fontSize: 12, color: "#B00020" }}>
-                Error: {r.error_message}
-              </div>
-            )}
-          </div>
-        ))}
-      </section>
+          )}
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+              {error}
+            </div>
+          )}
+
+          {!items.length ? (
+            <div className="text-sm text-neutral-500">Nothing in the queue yet.</div>
+          ) : (
+            <ul className="grid gap-4">
+              {items.map((it) => (
+                <li
+                  key={it.id}
+                  className="flex gap-4 rounded-xl border border-neutral-200 bg-white p-4"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-5 w-5"
+                    checked={selected.has(it.id)}
+                    onChange={() => toggle(it.id)}
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm whitespace-pre-wrap">{it.content}</div>
+                    {!!it.hashtags?.length && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {it.hashtags.map((h, i) => (
+                          <span key={i} className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
+                            #{h.replace(/^#/, "")}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-neutral-500">
+                      Added {new Date(it.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
