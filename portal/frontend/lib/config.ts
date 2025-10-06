@@ -1,40 +1,68 @@
 // portal/frontend/lib/config.ts
 "use client";
 
-// Base API URL
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001").replace(/\/+$/, "");
+// Build the API base once
+export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001").replace(
+  /\/+$/,
+  ""
+);
 
-// Build LinkedIn login URL
+// Capture ?t=... on first load and stash it for future API calls
+(function captureToken() {
+  try {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const t = url.searchParams.get("t");
+    if (t) {
+      localStorage.setItem("portal_token", t);
+      url.searchParams.delete("t");
+      // Clean the URL without losing history
+      window.history.replaceState({}, "", url.toString());
+    }
+  } catch {}
+})();
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem("portal_token");
+  } catch {
+    return null;
+  }
+}
+
 export const linkedInLoginUrl = (includeOrg = true) =>
   `${API_BASE}/auth/linkedin/login${includeOrg ? "?include_org=true" : ""}`;
 
-// Simple fetch helpers
-export async function apiGet<T>(path: string): Promise<T> {
+// Shared fetch helpers
+async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include", // allows cookie if the browser permits it
     cache: "no-store",
     mode: "cors",
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(txt || `GET ${path} failed: ${res.status}`);
+    throw new Error(txt || `${init?.method || "GET"} ${path} failed: ${res.status}`);
   }
-  return res.json();
+  if (res.status === 204) return undefined as unknown as T;
+  return res.json() as Promise<T>;
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+export function apiGet<T>(path: string) {
+  return fetchJSON<T>(path);
+}
+
+export function apiPost<T>(path: string, body?: unknown) {
+  return fetchJSON<T>(path, {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-    mode: "cors",
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || `POST ${path} failed: ${res.status}`);
-  }
-  return res.json();
 }
