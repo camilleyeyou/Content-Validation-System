@@ -3,8 +3,15 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import LinkedInAppSettings from "@/components/LinkedInAppSettings";
 
-type Me = { sub: string; name: string; email?: string | null; org_preferred?: string | null };
+type Me = {
+  sub: string;
+  name: string;
+  email?: string | null;
+  org_preferred?: string | null;
+};
+
 type ApprovedRec = {
   id: string;
   content: string;
@@ -14,10 +21,12 @@ type ApprovedRec = {
   li_post_id?: string | null;
   error_message?: string | null;
 };
+
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
 const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") || "http://localhost:8001";
+  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") ||
+  "http://localhost:8001";
 
 async function api<T>(
   path: string,
@@ -71,7 +80,7 @@ export default function DashboardPage() {
         const o = await api<OrgsResp>("/api/orgs");
         if ("orgs" in o) setOrgs(o.orgs || []);
       } catch {
-        /* ignore org errors if missing scopes */
+        // orgs may 400/403 if scopes not granted — ignore silently
       }
     } catch (e: any) {
       setError(e?.message || "Failed to load");
@@ -105,23 +114,20 @@ export default function DashboardPage() {
   }
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
-    if (selectedIds.length === 0) return;
+    const ids = Object.entries(sel).filter(([, v]) => v).map(([k]) => k);
+    if (ids.length === 0) return;
     setBusy((b) => ({ ...b, pub: true }));
     setNotice(null);
     setError(null);
     try {
-      const payload: any = {
-        ids: selectedIds,
-        target,
-        publish_now: publishNow,
-      };
+      const payload: any = { ids, target, publish_now: publishNow };
       if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
 
       const res = await api<{ successful: number; results: any[] }>(
         "/api/approved/publish",
         { method: "POST", body: JSON.stringify(payload) }
       );
-      setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
+      setNotice(`Publish: ${res.successful}/${ids.length} succeeded.`);
       clearSelection();
       await fetchAll();
     } catch (e: any) {
@@ -131,18 +137,17 @@ export default function DashboardPage() {
     }
   }
 
-  function isSelected(id: string) {
-    return !!sel[id];
-  }
-
   const linkedInLoginUrl = `${API_BASE}/auth/linkedin/login?include_org=true`;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-zinc-600">Validate, approve, and publish LinkedIn content</p>
+          <p className="text-sm text-zinc-600">
+            Validate, approve, and publish LinkedIn content
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <a href={linkedInLoginUrl}>
@@ -151,17 +156,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* NEW: Bring-Your-Own LinkedIn App settings card */}
+      <LinkedInAppSettings />
+
       {notice ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
           {notice}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+        <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">
           {error}
         </div>
       ) : null}
 
+      {/* Profile + Org card */}
       <Card>
         <CardHeader
           title="Account"
@@ -187,28 +196,39 @@ export default function DashboardPage() {
           {orgs.length > 0 ? (
             <div className="text-sm text-zinc-600">
               Organizations you can manage:{" "}
-              <span className="font-medium">{orgs.map((o) => o.id).join(", ")}</span>
+              <span className="font-medium">
+                {orgs.map((o) => o.id).join(", ")}
+              </span>
             </div>
           ) : (
-            <div className="text-sm text-zinc-600">No organizations found or missing scopes.</div>
+            <div className="text-sm text-zinc-600">
+              No organizations found or missing scopes.
+            </div>
           )}
         </CardFooter>
       </Card>
 
+      {/* Actions */}
       <Card>
         <CardHeader
           title="Generate Approved Posts"
           description="Run your validation pipeline and stash approved posts for manual publishing"
-          actions={<Button onClick={onGenerateApproved} isLoading={busy.gen}>Generate</Button>}
+          actions={
+            <Button onClick={onGenerateApproved} isLoading={busy.gen}>
+              Generate
+            </Button>
+          }
         />
         <CardContent className="space-y-4">
           <div className="text-sm text-zinc-600">
-            Click <span className="font-medium">Generate</span> to run the pipeline. Approved posts will appear below. Select
-            items and publish immediately or as drafts.
+            Click <span className="font-medium">Generate</span> to run the
+            pipeline. Approved posts will appear below. Select items and publish
+            immediately or as drafts.
           </div>
         </CardContent>
       </Card>
 
+      {/* Approved queue */}
       <Card>
         <CardHeader
           title="Approved Queue"
@@ -257,12 +277,14 @@ export default function DashboardPage() {
               {approved.map((p) => (
                 <label
                   key={p.id}
-                  className="flex cursor-pointer items-start gap-3 px-6 py-4 hover:bg-zinc-50"
+                  className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    checked={isSelected(p.id)}
-                    onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
+                    checked={!!sel[p.id]}
+                    onChange={(e) =>
+                      setSel((s) => ({ ...s, [p.id]: e.target.checked }))
+                    }
                     className="mt-1 h-4 w-4"
                   />
                   <div className="min-w-0 flex-1">
@@ -292,11 +314,12 @@ export default function DashboardPage() {
                       {p.li_post_id ? (
                         <>
                           {" "}
-                          • LinkedIn ID: <span className="font-mono">{p.li_post_id}</span>
+                          • LinkedIn ID:{" "}
+                          <span className="font-mono">{p.li_post_id}</span>
                         </>
                       ) : null}
                       {p.error_message ? (
-                        <div className="mt-1 text-red-600">{p.error_message}</div>
+                        <div className="text-red-600 mt-1">{p.error_message}</div>
                       ) : null}
                     </div>
                   </div>
