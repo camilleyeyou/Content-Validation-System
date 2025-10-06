@@ -1,402 +1,191 @@
+# portal/backend/app/main.py
 from __future__ import annotations
 
 import os
 import json
-import secrets
-import urllib.parse
-from typing import Any, Dict, List, Optional
+import inspect
+from typing import Any, Callable, Optional
+from urllib.parse import urlencode
 
 import requests
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, PlainTextResponse
-from pydantic import BaseModel, ValidationError, AnyHttpUrl, TypeAdapter, field_validator
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-APP_NAME = "Content Portal API"
-LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
-LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
-LINKEDIN_USERINFO_URL = "https://api.linkedin.com/v2/userinfo"
-LINKEDIN_ACLS_URL = (
-    "https://api.linkedin.com/v2/organizationalEntityAcls"
-    "?q=roleAssignee&state=APPROVED&role=ADMINISTRATOR"
-    "&projection=(elements*(organizationalTarget~(id,localizedName,vanityName)))"
+app = FastAPI()
+
+# ----------------------------- CORS ---------------------------------
+# Configure which frontends are allowed to call this API
+CORS_ORIGINS = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    "https://content-validation-system.vercel.app,http://localhost:3000",
 )
-
-class LinkedInSettings(BaseModel):
-    client_id: str
-    client_secret: str
-    redirect_uri: str
-    scopes: Optional[List[str]] = None
-
-    @field_validator("redirect_uri")
-    @classmethod
-    def validate_redirect_uri(cls, v: str) -> str:
-        TypeAdapter(AnyHttpUrl).validate_python(v)  # validate
-        return str(v)  # store as plain string
-
-class LinkedInSettingsPublic(BaseModel):
-    client_id: str
-    redirect_uri: str
-    scopes: Optional[List[str]] = None
-
-class MeResponse(BaseModel):
-    sub: str
-    name: str
-    email: Optional[str] = None
-    org_preferred: Optional[str] = None
-
-class ApprovedRec(BaseModel):
-    id: str
-    content: str
-    hashtags: List[str] = []
-    status: str
-    created_at: str
-    li_post_id: Optional[str] = None
-    error_message: Optional[str] = None
-    user_sub: Optional[str] = None
-
-app = FastAPI(title=APP_NAME)
-
-DEFAULT_ALLOWED_ORIGINS = [
-    "https://content-validation-system.vercel.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.getenv("ALLOWED_ORIGINS", ",".join(DEFAULT_ALLOWED_ORIGINS)).split(",")
-    if o.strip()
-]
+allowed_origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     max_age=600,
 )
 
-# IMPORTANT: cross-site cookie for frontend (vercel.app) calling API (railway.app)
-SESSION_SECRET = os.getenv("SESSION_SECRET") or secrets.token_urlsafe(32)
+# --------------------------- Sessions --------------------------------
 app.add_middleware(
     SessionMiddleware,
-    secret_key=SESSION_SECRET,
-    same_site="none",     # <— allow cross-site XHR with credentials
-    https_only=True,      # <— Secure
+    secret_key=os.getenv("SESSION_SECRET", "dev-secret-change-me"),
+    # SameSite/Lax works for OAuth redirect flows
 )
 
-app.state.linkedin_settings: Optional[LinkedInSettings] = None
+# ------------------------ Settings storage ---------------------------
+class LinkedInSettings(BaseModel):
+    client_id: str
+    client_secret: str
+    redirect_uri: str  # full https URL back to this API: /auth/linkedin/callback
 
-def _prime_linkedin_settings_from_env() -> None:
-    cid = os.getenv("LI_CLIENT_ID")
-    cs = os.getenv("LI_CLIENT_SECRET")
-    ru = os.getenv("LI_REDIRECT_URI")
-    scopes = os.getenv("LI_SCOPES")
-    if cid and cs and ru:
-        try:
-            app.state.linkedin_settings = LinkedInSettings(
-                client_id=cid,
-                client_secret=cs,
-                redirect_uri=ru,
-                scopes=scopes.split() if scopes else None,
-            )
-        except ValidationError:
-            pass
+SETTINGS_KEY = "LINKEDIN_SETTINGS_JSON"
 
-_prime_linkedin_settings_from_env()
+def get_settings() -> Optional[LinkedInSettings]:
+    raw = os.getenv(SETTINGS_KEY)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return LinkedInSettings(**data)
+    except Exception:
+        return None
 
-def _get_runtime_linkedin() -> LinkedInSettings:
-    cfg = app.state.linkedin_settings
-    if not cfg or not cfg.client_id or not cfg.client_secret or not cfg.redirect_uri:
-        raise HTTPException(status_code=400, detail="LinkedIn settings are missing")
-    return cfg
+def save_settings_to_env(s: LinkedInSettings) -> None:
+    os.environ[SETTINGS_KEY] = json.dumps(s.model_dump())
 
-def _get_portal_base_url() -> str:
-    return os.getenv("PORTAL_BASE_URL") or os.getenv("NEXT_PUBLIC_SITE_URL") or "http://localhost:3000"
-
-def _get_api_base_url() -> str:
-    return os.getenv("API_BASE_URL") or "http://localhost:8001"
-
-@app.get("/")
-def root() -> Dict[str, Any]:
-    cfg = app.state.linkedin_settings
-    return {
-        "ok": True,
-        "message": f"{APP_NAME} – use /auth/linkedin/login or the UI",
-        "portal_base_url": _get_portal_base_url(),
-        "api_base": _get_api_base_url(),
-        "redirect_uri": cfg.redirect_uri if cfg else None,
-    }
-
-@app.get("/favicon.ico")
-def favicon():
-    return PlainTextResponse("", status_code=204)
-
+# CORS preflight convenience (middleware already handles it, 200 is fine)
 @app.options("/api/settings/linkedin")
-def options_settings() -> Response:
+def options_settings() -> PlainTextResponse:
     return PlainTextResponse("ok", status_code=200)
 
 @app.get("/api/settings/linkedin")
-def get_settings() -> Dict[str, Any]:
-    cfg = app.state.linkedin_settings
-    if not cfg:
-        return {"exists": False}
-    pub = LinkedInSettingsPublic(
-        client_id=cfg.client_id,
-        redirect_uri=cfg.redirect_uri,
-        scopes=cfg.scopes,
-    )
-    return {"exists": True, "settings": json.loads(pub.model_dump_json())}
+def get_settings_endpoint() -> dict:
+    return {"ok": True, "settings_present": bool(get_settings())}
 
 @app.post("/api/settings/linkedin")
-def set_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
-    try:
-        cfg = LinkedInSettings(**payload)
-    except ValidationError as ve:
-        raise HTTPException(status_code=400, detail=f"Invalid settings: {ve}") from ve
+def set_settings_endpoint(payload: LinkedInSettings) -> dict:
+    save_settings_to_env(payload)
+    return {"ok": True}
 
-    app.state.linkedin_settings = cfg
-    pub = LinkedInSettingsPublic(
-        client_id=cfg.client_id, redirect_uri=cfg.redirect_uri, scopes=cfg.scopes
-    )
-    return {"ok": True, "settings": json.loads(pub.model_dump_json())}
-
-def _build_state(include_org: bool, sid: Optional[str]) -> str:
-    parts = []
-    if sid:
-        parts.append(f"sid:{sid}")
-    parts.append(f"include_org:{'1' if include_org else '0'}")
-    return ":".join(parts)
-
-def _parse_state(state: str) -> Dict[str, str]:
-    result: Dict[str, str] = {}
-    try:
-        for part in state.split(":"):
-            if not part:
-                continue
-            if part.startswith("sid"):
-                _, val = part.split(":", 1)
-                result["sid"] = val
-            elif part.startswith("include_org"):
-                _, val = part.split(":", 1)
-                result["include_org"] = val
-    except Exception:
-        pass
-    return result
-
+# ------------------------------ OAuth --------------------------------
 @app.get("/auth/linkedin/login")
-def linkedin_login(request: Request, include_org: bool = True, sid: Optional[str] = None):
-    cfg = _get_runtime_linkedin()
+def linkedin_login(include_org: bool = True):
+    s = get_settings()
+    if not s:
+        raise HTTPException(status_code=400, detail="LinkedIn settings are missing")
 
-    scopes = cfg.scopes or [
-        "openid", "profile", "email",
-        "w_member_social", "rw_organization_admin", "w_organization_social",
-    ]
+    scope = "openid profile email w_member_social rw_organization_admin w_organization_social"
+    state = f"include_org:{1 if include_org else 0}"
 
     params = {
         "response_type": "code",
-        "client_id": str(cfg.client_id),
-        "redirect_uri": str(cfg.redirect_uri),
-        "scope": " ".join(scopes),
-        "state": _build_state(include_org, sid),
+        "client_id": s.client_id,
+        "redirect_uri": s.redirect_uri,  # must exactly match in LinkedIn app
+        "scope": scope,
+        "state": state,
     }
-    url = f"{LINKEDIN_AUTH_URL}?{urllib.parse.urlencode(params)}"
+    url = f"https://www.linkedin.com/oauth/v2/authorization?{urlencode(params)}"
     return RedirectResponse(url, status_code=307)
 
 @app.get("/auth/linkedin/callback")
-def linkedin_callback(request: Request, code: str, state: str):
-    cfg = _get_runtime_linkedin()
-    data = {
+def linkedin_callback(code: str, state: str, request: Request):
+    s = get_settings()
+    if not s:
+        raise HTTPException(status_code=400, detail="LinkedIn settings are missing")
+
+    token_url = "https://www.linkedin.com/oauth/v2/accessToken"
+    form = {
         "grant_type": "authorization_code",
-        "code": str(code),
-        "redirect_uri": str(cfg.redirect_uri),
-        "client_id": str(cfg.client_id),
-        "client_secret": str(cfg.client_secret),
+        "code": code,
+        "redirect_uri": str(s.redirect_uri),  # ensure plain str (avoid AnyHttpUrl issues)
+        "client_id": s.client_id,
+        "client_secret": s.client_secret,
     }
-
-    try:
-        r = requests.post(LINKEDIN_TOKEN_URL, data=data, timeout=20)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LinkedIn token request failed: {e}")
-
+    r = requests.post(token_url, data=form, timeout=20)
     if r.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"LinkedIn token error: {r.status_code} {r.text}")
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {r.text}")
 
-    token_json = r.json()
-    access_token = token_json.get("access_token")
-    id_token = token_json.get("id_token")
-    if not access_token:
-        raise HTTPException(status_code=502, detail=f"LinkedIn token missing access_token: {token_json}")
+    tokens = r.json()  # access_token, refresh_token?, expires_in, etc.
 
-    request.session["li_access_token"] = str(access_token)
-    request.session["li_id_token"] = str(id_token) if id_token else None
+    # Mark session as signed-in (extend with profile info as needed)
+    request.session["li_auth"] = True
+    request.session["li_access_token"] = tokens.get("access_token")
 
-    parsed = _parse_state(state or "")
-    request.session["include_org"] = parsed.get("include_org") == "1"
-    if parsed.get("sid"):
-        request.session["sid"] = parsed["sid"]
+    # back to your UI (adjust if you want to go to a specific page)
+    return RedirectResponse(url="/", status_code=307)
 
-    return RedirectResponse(_get_portal_base_url(), status_code=307)
-
-def _bearer_headers(access_token: str) -> Dict[str, str]:
-    return {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
-
-def _get_access_token_from_session(request: Request) -> str:
-    tok = request.session.get("li_access_token")
-    if not tok:
-        raise HTTPException(status_code=401, detail="Not signed in")
-    return str(tok)
-
-@app.options("/api/me")
-def options_me() -> Response:
-    return PlainTextResponse("ok", status_code=200)
-
-@app.get("/api/me")
-def api_me(request: Request) -> MeResponse:
-    access = _get_access_token_from_session(request)
-
-    resp = requests.get(LINKEDIN_USERINFO_URL, headers=_bearer_headers(access), timeout=20)
-    if resp.status_code == 200:
-        u = resp.json()
-        return MeResponse(
-            sub=str(u.get("sub") or ""),
-            name=u.get("name") or (f"{u.get('given_name','')} {u.get('family_name','')}".strip() or "LinkedIn User"),
-            email=u.get("email"),
-            org_preferred=request.session.get("org_preferred"),
-        )
-
-    me_r = requests.get("https://api.linkedin.com/v2/me", headers=_bearer_headers(access), timeout=20)
-    if me_r.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"LinkedIn /me failed: {me_r.status_code} {me_r.text}")
-
-    me = me_r.json()
-    name = (
-        (me.get("localizedFirstName") or "")
-        + (" " if me.get("localizedLastName") else "")
-        + (me.get("localizedLastName") or "")
-    ).strip() or "LinkedIn User"
-    return MeResponse(sub=str(me.get("id") or ""), name=name, email=None, org_preferred=request.session.get("org_preferred"))
-
-@app.options("/api/orgs")
-def options_orgs() -> Response:
-    return PlainTextResponse("ok", status_code=200)
-
-@app.get("/api/orgs")
-def api_orgs(request: Request) -> Dict[str, Any]:
-    access = _get_access_token_from_session(request)
-    r = requests.get(LINKEDIN_ACLS_URL, headers=_bearer_headers(access), timeout=20)
-    if r.status_code == 403:
-        return JSONResponse({"error": "missing_org_scopes"}, status_code=403)
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"LinkedIn org ACLs failed: {r.status_code} {r.text}")
-
-    data = r.json()
-    orgs: List[Dict[str, str]] = []
-    for el in data.get("elements", []):
-        tgt = el.get("organizationalTarget~") or {}
-        if "id" in tgt:
-            orgs.append({"id": str(tgt.get("id")), "urn": f"urn:li:organization:{tgt.get('id')}"})
-    return {"orgs": orgs}
-
-def _import_run_full():
+# --------------------- Batch runner (sync/async safe) ----------------
+def _import_run_full() -> Callable[..., Any]:
+    """
+    Try to import your pipeline function. Return a callable that may be sync or async.
+    """
     try:
-        import importlib.util
-        spec = importlib.util.find_spec("test_complete_system")
-        if spec and spec.loader:
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)  # type: ignore[attr-defined]
-            return getattr(mod, "test_complete_system", None) or getattr(mod, "run_full", None)
+        from src.pipeline.run_full import run_full as fn  # type: ignore
+        return fn
     except Exception:
         pass
-    return None
 
-if not hasattr(app.state, "approved_store"):
-    app.state.approved_store: List[ApprovedRec] = []
-
-@app.options("/api/approved")
-def options_approved() -> Response:
-    return PlainTextResponse("ok", status_code=200)
-
-@app.get("/api/approved")
-def get_approved(request: Request) -> List[ApprovedRec]:
-    return list(app.state.approved_store)
-
-class PublishPayload(BaseModel):
-    ids: List[str]
-    target: str
-    publish_now: bool
-    org_id: Optional[str] = None
-
-@app.post("/api/approved/publish")
-def publish_approved(request: Request, payload: PublishPayload) -> Dict[str, Any]:
-    success = 0
-    results = []
-    for rec in app.state.approved_store:
-        if rec.id in payload.ids:
-            rec.status = "published"
-            success += 1
-            results.append({"id": rec.id, "ok": True})
-    return {"successful": success, "results": results}
-
-@app.post("/api/approved/clear")
-def clear_approved(request: Request) -> Dict[str, Any]:
-    n = len(app.state.approved_store)
-    app.state.approved_store = []
-    return {"deleted": n}
-
-@app.options("/api/run-batch")
-def options_run_batch() -> Response:
-    return PlainTextResponse("ok", status_code=200)
+    try:
+        # test harness fallback (often async)
+        from test_complete_system import test_complete_system as fn  # type: ignore
+        return fn
+    except Exception as e:
+        raise RuntimeError(f"Unable to import batch function: {e}")
 
 @app.post("/api/run-batch")
-async def run_batch(request: Request) -> Dict[str, Any]:
-    _ = _get_access_token_from_session(request)
+async def run_batch():
+    fn = _import_run_full()
+    try:
+        if inspect.iscoroutinefunction(fn):
+            result = await fn()
+        else:
+            maybe = fn()
+            if inspect.isawaitable(maybe):
+                result = await maybe
+            else:
+                result = maybe
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"run-batch failed: {e}")
 
-    run_full = _import_run_full()
-    if run_full:
-        try:
-            result = run_full()
-            if isinstance(result, dict):
-                items = result.get("approved", [])
-                for it in items:
-                    try:
-                        app.state.approved_store.append(ApprovedRec(**it))
-                    except Exception:
-                        pass
-            return {"ok": True, "approved_count": len(app.state.approved_store)}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Batch error: {e}")
+    payload: dict[str, Any] = {}
+    if isinstance(result, dict):
+        payload = result
 
-    import datetime, uuid
-    now = datetime.datetime.utcnow().isoformat() + "Z"
-    new_items = [
-        ApprovedRec(
-            id=str(uuid.uuid4()),
-            content="Sample approved post about product launch.",
-            hashtags=["Launch", "Product", "Update"],
-            status="approved",
-            created_at=now,
-        ),
-        ApprovedRec(
-            id=str(uuid.uuid4()),
-            content="Another approved post with insights and tips.",
-            hashtags=["Tips", "Insights"],
-            status="approved",
-            created_at=now,
-        ),
-        ApprovedRec(
-            id=str(uuid.uuid4()),
-            content="Approved content ready for scheduling.",
-            hashtags=["Scheduling"],
-            status="approved",
-            created_at=now,
-        ),
-    ]
-    app.state.approved_store.extend(new_items)
-    return {"ok": True, "approved_count": len(new_items), "batch_id": secrets.token_hex(8)}
+    return JSONResponse({"ok": True, "approved_count": payload.get("approved_count")})
 
-@app.get("/healthz")
-def health() -> Dict[str, Any]:
-    return {"ok": True}
+# ---------------------- Minimal API stubs for UI ---------------------
+@app.get("/api/me")
+def api_me(request: Request):
+    if not request.session.get("li_auth"):
+        raise HTTPException(status_code=401, detail="Not signed in")
+    return {"sub": "me", "name": "LinkedIn User", "email": None, "org_preferred": None}
+
+@app.get("/api/approved")
+def api_approved(request: Request):
+    if not request.session.get("li_auth"):
+        # your UI handles 401; return 401 to hide items when not signed in
+        raise HTTPException(status_code=401, detail="Not signed in")
+    # TODO: replace with your real queue
+    return []
+
+@app.get("/api/orgs")
+def api_orgs(request: Request):
+    if not request.session.get("li_auth"):
+        raise HTTPException(status_code=401, detail="Not signed in")
+    # TODO: replace with real managed org IDs
+    return {"orgs": []}
+
+@app.get("/")
+def root():
+    return {
+        "ok": True,
+        "message": "Content Portal API – use /auth/linkedin/login or the UI",
+    }
