@@ -1,68 +1,68 @@
 // portal/frontend/lib/config.ts
 "use client";
 
-// Build the API base once
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001").replace(
-  /\/+$/,
-  ""
-);
-
-// Capture ?t=... on first load and stash it for future API calls
-(function captureToken() {
-  try {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    const t = url.searchParams.get("t");
-    if (t) {
-      localStorage.setItem("portal_token", t);
-      url.searchParams.delete("t");
-      // Clean the URL without losing history
-      window.history.replaceState({}, "", url.toString());
-    }
-  } catch {}
-})();
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage.getItem("portal_token");
-  } catch {
-    return null;
-  }
-}
+export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001").replace(/\/+$/, "");
 
 export const linkedInLoginUrl = (includeOrg = true) =>
   `${API_BASE}/auth/linkedin/login${includeOrg ? "?include_org=true" : ""}`;
 
-// Shared fetch helpers
-async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
+const TOKEN_KEY = "portal_token";
+
+export function getToken(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return localStorage.getItem(TOKEN_KEY) || undefined;
+}
+
+export function setToken(token?: string) {
+  if (typeof window === "undefined") return;
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export function syncTokenFromUrl() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  const t = url.searchParams.get("t");
+  if (t) {
+    setToken(t);
+    url.searchParams.delete("t");
+    window.history.replaceState({}, "", url.toString());
+  }
+}
+
+function authHeaders() {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const t = getToken();
+  if (t) headers["Authorization"] = `Bearer ${t}`;
+  return headers;
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    credentials: "include", // allows cookie if the browser permits it
+    credentials: "include",
+    headers: authHeaders(),
     cache: "no-store",
     mode: "cors",
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(txt || `${init?.method || "GET"} ${path} failed: ${res.status}`);
+    throw new Error(txt || `GET ${path} failed: ${res.status}`);
   }
-  if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
+  return res.json();
 }
 
-export function apiGet<T>(path: string) {
-  return fetchJSON<T>(path);
-}
-
-export function apiPost<T>(path: string, body?: unknown) {
-  return fetchJSON<T>(path, {
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    credentials: "include",
+    headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+    mode: "cors",
   });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(txt || `POST ${path} failed: ${res.status}`);
+  }
+  return res.json();
 }

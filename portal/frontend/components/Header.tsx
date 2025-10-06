@@ -4,36 +4,15 @@
 import Link from "next/link";
 import { linkedInLoginUrl } from "@/lib/config";
 import { Button } from "@/components/ui/button";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 export default function Header() {
-  const pathname = usePathname();
-  const nav = [
-    { href: "/", label: "Home" },
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/approved", label: "Approved" },
-  ];
-
   return (
     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-zinc-100">
       <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
         <nav className="flex items-center gap-6">
-          <Link href="/" className="font-semibold">
-            Content Portal
-          </Link>
-          {nav.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={cn(
-                "text-sm text-zinc-600 hover:text-zinc-900",
-                pathname === n.href && "text-zinc-900 font-medium"
-              )}
-            >
-              {n.label}
-            </Link>
-          ))}
+          <Link href="/" className="font-semibold hover:opacity-80">Home</Link>
+          <Link href="/dashboard" className="hover:opacity-80">Dashboard</Link>
+          <Link href="/approved" className="hover:opacity-80">Approved</Link>
         </nav>
         <a href={linkedInLoginUrl(true)}>
           <Button variant="outline">Connect LinkedIn</Button>

@@ -16,7 +16,6 @@ type ApprovedRec = {
   error_message?: string | null;
   user_sub?: string;
 };
-
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
 export default function ApprovedPage() {
@@ -60,15 +59,11 @@ export default function ApprovedPage() {
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
     if (selectedIds.length === 0) return;
-    setBusy((b) => ({ ...b, publishing: true })); // <-- fixed here
+    setBusy((b) => ({ ...b, publishing: true })); // <-- fixed
     setNotice(null);
     setError(null);
     try {
-      const payload: any = {
-        ids: selectedIds,
-        target,
-        publish_now: publishNow,
-      };
+      const payload: any = { ids: selectedIds, target, publish_now: publishNow };
       if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
 
       const res = await apiPost<{ successful: number; results: any[] }>(
@@ -178,18 +173,14 @@ export default function ApprovedPage() {
                 <Button
                   variant="outline"
                   onClick={() => onPublish("ORG", false)}
-                  disabled={
-                    busy.publishing || selectedIds.length === 0 || orgs.length === 0
-                  }
+                  disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0}
                   isLoading={busy.publishing}
                 >
                   Draft as Org
                 </Button>
                 <Button
                   onClick={() => onPublish("ORG", true)}
-                  disabled={
-                    busy.publishing || selectedIds.length === 0 || orgs.length === 0
-                  }
+                  disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0}
                   isLoading={busy.publishing}
                 >
                   Publish Now (Org)
@@ -207,18 +198,14 @@ export default function ApprovedPage() {
                     <input
                       type="checkbox"
                       className="h-4 w-4"
-                      checked={
-                        approved.length > 0 && approved.every((p) => sel[p.id])
-                      }
+                      checked={approved.length > 0 && approved.every((p) => sel[p.id])}
                       onChange={(e) => toggleAll(e.target.checked)}
                     />
                     <span>Select all</span>
                   </label>
                   <div className="text-zinc-500">
                     Org access:{" "}
-                    <span className="font-medium">
-                      {orgs.length > 0 ? "available" : "none"}
-                    </span>
+                    <span className="font-medium">{orgs.length > 0 ? "available" : "none"}</span>
                   </div>
                 </div>
                 {approved.map((p) => (
@@ -230,9 +217,7 @@ export default function ApprovedPage() {
                       type="checkbox"
                       className="mt-1 h-4 w-4"
                       checked={!!sel[p.id]}
-                      onChange={(e) =>
-                        setSel((s) => ({ ...s, [p.id]: e.target.checked }))
-                      }
+                      onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3">
@@ -261,8 +246,7 @@ export default function ApprovedPage() {
                         {p.li_post_id ? (
                           <>
                             {" "}
-                            • LinkedIn ID:{" "}
-                            <span className="font-mono">{p.li_post_id}</span>
+                            • LinkedIn ID: <span className="font-mono">{p.li_post_id}</span>
                           </>
                         ) : null}
                         {p.error_message ? (
@@ -278,22 +262,13 @@ export default function ApprovedPage() {
           {approved.length > 0 ? (
             <CardFooter className="flex items-center justify-between">
               <div className="text-sm text-zinc-600">
-                Selected:{" "}
-                <span className="font-semibold">{selectedIds.length}</span>
+                Selected: <span className="font-semibold">{selectedIds.length}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => setSel({})}
-                  disabled={!selectedIds.length}
-                >
+                <Button variant="ghost" onClick={() => setSel({})} disabled={!selectedIds.length}>
                   Clear selection
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={onClear}
-                  isLoading={busy.clearing}
-                >
+                <Button variant="outline" onClick={onClear} isLoading={busy.clearing}>
                   Clear queue
                 </Button>
               </div>

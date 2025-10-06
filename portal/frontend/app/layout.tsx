@@ -2,7 +2,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import Header from "@/components/Header";
-import TokenCatcher from "@/components/TokenCatcher";
+import TokenSync from "@/components/TokenSync";
 
 export const metadata: Metadata = {
   title: "LinkedIn Content Portal",
@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-        <TokenCatcher />
+        <TokenSync />
         <Header />
         <div className="mx-auto max-w-5xl p-4">{children}</div>
       </body>
