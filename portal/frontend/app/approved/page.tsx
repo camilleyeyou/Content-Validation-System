@@ -1,8 +1,10 @@
+// portal/frontend/app/approved/page.tsx
 "use client";
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { apiGet, apiPost, linkedInLoginUrl } from "@/lib/config";
 
 type ApprovedRec = {
   id: string;
@@ -17,34 +19,6 @@ type ApprovedRec = {
 
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") ||
-  "http://localhost:8001";
-
-async function api<T>(
-  path: string,
-  init?: RequestInit & { parseJson?: boolean }
-): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try {
-      const j = await res.json();
-      msg = j.error || j.detail || msg;
-    } catch {}
-    throw new Error(msg);
-  }
-  if (init?.parseJson === false) return (await res.text()) as unknown as T;
-  return (await res.json()) as T;
-}
-
 export default function ApprovedPage() {
   const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
   const [orgs, setOrgs] = React.useState<{ id: string; urn: string }[]>([]);
@@ -58,17 +32,15 @@ export default function ApprovedPage() {
     [sel]
   );
 
-  const loginUrl = `${API_BASE}/auth/linkedin/login?include_org=true`;
+  const loginUrl = linkedInLoginUrl(true);
 
   const load = React.useCallback(async () => {
     setError(null);
     try {
-      const [list] = await Promise.all([
-        api<ApprovedRec[]>("/api/approved"),
-      ]);
+      const list = await apiGet<ApprovedRec[]>("/api/approved");
       setApproved(list);
       try {
-        const o = await api<OrgsResp>("/api/orgs");
+        const o = await apiGet<OrgsResp>("/api/orgs");
         if ("orgs" in o) setOrgs(o.orgs || []);
       } catch {}
     } catch (e: any) {
@@ -88,7 +60,7 @@ export default function ApprovedPage() {
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
     if (selectedIds.length === 0) return;
-    setBusy((b) => ({ ...b, publishing: true }));
+    setBusy((b) => ({ ...b, publishing: true })); // <-- fixed here
     setNotice(null);
     setError(null);
     try {
@@ -99,9 +71,9 @@ export default function ApprovedPage() {
       };
       if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
 
-      const res = await api<{ successful: number; results: any[] }>(
+      const res = await apiPost<{ successful: number; results: any[] }>(
         "/api/approved/publish",
-        { method: "POST", body: JSON.stringify(payload) }
+        payload
       );
       setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
       setSel({});
@@ -118,10 +90,7 @@ export default function ApprovedPage() {
     setNotice(null);
     setError(null);
     try {
-      const r = await api<{ deleted: number }>("/api/approved/clear", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
+      const r = await apiPost<{ deleted: number }>("/api/approved/clear", {});
       setNotice(`Cleared ${r.deleted} item(s).`);
       setSel({});
       await load();
@@ -135,7 +104,7 @@ export default function ApprovedPage() {
   const unauthorized = error?.startsWith("401");
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Approved Queue</h1>
@@ -152,7 +121,7 @@ export default function ApprovedPage() {
       </div>
 
       {notice ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-green-800">
+        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
           {notice}
         </div>
       ) : null}
@@ -255,7 +224,7 @@ export default function ApprovedPage() {
                 {approved.map((p) => (
                   <label
                     key={p.id}
-                    className="flex cursor-pointer items-start gap-3 px-6 py-4 hover:bg-zinc-50"
+                    className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -266,12 +235,10 @@ export default function ApprovedPage() {
                       }
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium text-zinc-700">
-                          {/* FULL content (no truncation) */}
-                          <pre className="whitespace-pre-wrap break-words text-sm text-zinc-900">
-                            {p.content}
-                          </pre>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium truncate">
+                          {p.content.slice(0, 90)}
+                          {p.content.length > 90 ? "…" : ""}
                         </div>
                         <div className="text-xs text-zinc-500">
                           {new Date(p.created_at).toLocaleString()}
@@ -299,7 +266,7 @@ export default function ApprovedPage() {
                           </>
                         ) : null}
                         {p.error_message ? (
-                          <div className="mt-1 text-red-600">{p.error_message}</div>
+                          <div className="text-red-600 mt-1">{p.error_message}</div>
                         ) : null}
                       </div>
                     </div>
@@ -311,7 +278,8 @@ export default function ApprovedPage() {
           {approved.length > 0 ? (
             <CardFooter className="flex items-center justify-between">
               <div className="text-sm text-zinc-600">
-                Selected: <span className="font-semibold">{selectedIds.length}</span>
+                Selected:{" "}
+                <span className="font-semibold">{selectedIds.length}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button

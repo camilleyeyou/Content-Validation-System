@@ -1,17 +1,11 @@
+// portal/frontend/components/ui/card.tsx
 "use client";
 
 import * as React from "react";
-import { cn } from "./button"; // reuse cn
+import { cn } from "@/lib/utils";
 
-export function Card({
-  className,
-  children,
-}: React.PropsWithChildren<{ className?: string }>) {
-  return (
-    <div className={cn("rounded-2xl border border-zinc-200 bg-white", className)}>
-      {children}
-    </div>
-  );
+export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("rounded-2xl border border-zinc-200 bg-white", className)} {...props} />;
 }
 
 export function CardHeader({
@@ -19,33 +13,27 @@ export function CardHeader({
   description,
   actions,
   className,
+  ...props
 }: {
   title?: React.ReactNode;
   description?: React.ReactNode;
   actions?: React.ReactNode;
-  className?: string;
-}) {
+} & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 border-b border-zinc-200 p-4", className)}>
-      <div>
-        {title ? <div className="text-sm font-medium">{title}</div> : null}
-        {description ? <div className="text-xs text-zinc-600">{description}</div> : null}
+    <div className={cn("flex items-start justify-between gap-3 px-6 py-4 border-b border-zinc-100", className)} {...props}>
+      <div className="min-w-0">
+        {title ? <div className="font-medium truncate">{title}</div> : null}
+        {description ? <div className="text-sm text-zinc-600">{description}</div> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex-shrink-0">{actions}</div> : null}
     </div>
   );
 }
 
-export function CardContent({
-  className,
-  children,
-}: React.PropsWithChildren<{ className?: string }>) {
-  return <div className={cn("p-4", className)}>{children}</div>;
+export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("px-6 py-4", className)} {...props} />;
 }
 
-export function CardFooter({
-  className,
-  children,
-}: React.PropsWithChildren<{ className?: string }>) {
-  return <div className={cn("border-t border-zinc-200 p-4", className)}>{children}</div>;
+export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("px-6 py-4 border-t border-zinc-100", className)} {...props} />;
 }

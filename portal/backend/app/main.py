@@ -10,40 +10,39 @@ from typing import Optional, List, Dict, Any
 import requests
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse, Response
+from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
+
+from pathlib import Path
+import sys
 
 # --------------------------------------------------------------------------------------
 # Ensure repo root is on PYTHONPATH so `src/` and root modules are importable
 # --------------------------------------------------------------------------------------
-from pathlib import Path
-import sys
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # .../Content-Validation-System
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 # --------------------------------------------------------------------------------------
-# Load your LinkedIn integration service from the repo
+# LinkedIn Publisher import
 # --------------------------------------------------------------------------------------
 from src.infrastructure.social.linkedin_publisher import LinkedInIntegrationService
 
 # --------------------------------------------------------------------------------------
-# Environment / Config
+# Environment / Defaults
 # --------------------------------------------------------------------------------------
-PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")  # Next.js
-PORTAL_API_BASE = os.getenv("PORTAL_API_BASE", "http://localhost:8001")  # FastAPI self
-REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI", f"{PORTAL_API_BASE}/auth/linkedin/callback")
+PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")   # Next.js
+PORTAL_API_BASE = os.getenv("PORTAL_API_BASE", "http://localhost:8001")   # FastAPI self
+DEFAULT_REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI", f"{PORTAL_API_BASE}/auth/linkedin/callback")
 
-LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID", "")
-LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET", "")
 LI_VERSION = os.getenv("LINKEDIN_VERSION", "202509")
 
 AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
 TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 USERINFO = "https://api.linkedin.com/v2/userinfo"
 POSTS_URL = "https://api.linkedin.com/rest/posts"
-ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: FINDER
+ORGS_URL_REST = "https://api.linkedin.com/rest/organizationAcls"  # preferred
+ORGS_URL_V2 = "https://api.linkedin.com/v2/organizationAcls"      # fallback
 
 # --------------------------------------------------------------------------------------
 # Instantiate integration service (reads env + token file if your code supports it)
@@ -51,78 +50,106 @@ ORGS_URL = "https://api.linkedin.com/rest/organizationAcls"  # X-RestLi-Method: 
 svc = LinkedInIntegrationService()
 
 # --------------------------------------------------------------------------------------
-# In-memory DB (simple for MVP)
+# In-memory DB (simple for MVP). We can persist to file/DB later.
 # --------------------------------------------------------------------------------------
 DB: Dict[str, Dict[str, Any]] = {
-    "users": {},     # key = li_sub -> {sub, name, email}
-    "tokens": {},    # key = li_sub -> {access_token, version, updated_at}
-    "posts": {},     # key = internal id -> posts ledger (already sent to LI as draft/live)
-    "approved": {},  # key = internal id -> approved by pipeline, not yet sent to LI
-    "settings": {},  # key = li_sub -> BYO LinkedIn app settings
+    "users": {},      # key = li_sub -> {sub, name, email}
+    "tokens": {},     # key = li_sub -> {access_token, version, updated_at}
+    "posts": {},      # key = internal id -> posts ledger
+    "approved": {},   # key = internal id -> approved by pipeline, not yet sent
+    "app_settings": {  # LinkedIn app settings stored via public endpoints
+        "linkedin": {}
+    },
 }
+
+# --------------------------------------------------------------------------------------
+# Persisted settings file
+# --------------------------------------------------------------------------------------
+SETTINGS_FILE = Path("config/app_settings.json")
+SETTINGS_FILE.parent.mkdir(exist_ok=True)
+
+def _load_settings_from_disk() -> Dict[str, Any]:
+    if SETTINGS_FILE.exists():
+        try:
+            return json.loads(SETTINGS_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+def _save_settings_to_disk(data: Dict[str, Any]) -> None:
+    SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+
+def get_linkedin_settings() -> Dict[str, Any]:
+    on_disk = _load_settings_from_disk() or {}
+    li_disk = on_disk.get("linkedin") or {}
+    li_mem = DB.get("app_settings", {}).get("linkedin") or {}
+    # memory overrides nothing, just merge
+    li = {**li_disk, **li_mem}
+    return li
+
+def set_linkedin_settings(newvals: Dict[str, Any]) -> Dict[str, Any]:
+    all_settings = _load_settings_from_disk() or {}
+    li = all_settings.get("linkedin") or {}
+    # only update provided keys
+    li.update({k: v for k, v in newvals.items() if v is not None})
+    all_settings["linkedin"] = li
+    _save_settings_to_disk(all_settings)
+    DB["app_settings"]["linkedin"] = li
+
+    # Mirror to environment for any code that reads env
+    if "client_id" in li:
+        os.environ["LINKEDIN_CLIENT_ID"] = li["client_id"]
+    if "client_secret" in li:
+        os.environ["LINKEDIN_CLIENT_SECRET"] = li["client_secret"]
+    if "redirect_uri" in li:
+        os.environ["LINKEDIN_REDIRECT_URI"] = li["redirect_uri"]
+    if "version" in li:
+        os.environ["LINKEDIN_VERSION"] = li["version"]
+    if "org_id" in li:
+        os.environ["LINKEDIN_ORG_ID"] = li["org_id"]
+
+    # keep publisher config aligned
+    try:
+        svc.publisher.config.client_id = os.getenv("LINKEDIN_CLIENT_ID", "")
+        svc.publisher.config.client_secret = os.getenv("LINKEDIN_CLIENT_SECRET", "")
+        svc.publisher.config.redirect_uri = os.getenv("LINKEDIN_REDIRECT_URI", DEFAULT_REDIRECT_URI)
+        svc.publisher.config.organization_id = os.getenv("LINKEDIN_ORG_ID", None)
+    except Exception:
+        pass
+
+    return li
 
 # --------------------------------------------------------------------------------------
 # FastAPI app + CORS
 # --------------------------------------------------------------------------------------
-def _origin_from_url(url: str) -> str:
-    """
-    Reduce 'https://host:port/path' -> 'https://host:port'
-    Strip trailing slash. Return empty string if malformed.
-    """
-    try:
-        p = urllib.parse.urlparse(url.strip())
-        if not p.scheme or not p.netloc:
-            return ""
-        origin = f"{p.scheme}://{p.netloc}"
-        return origin.rstrip("/")
-    except Exception:
-        return ""
-
-front_origin = _origin_from_url(PORTAL_BASE_URL)
-origins = []
-if front_origin:
-    origins.append(front_origin)
-
-# Helpful dev aliases if using localhost
-if "localhost" in front_origin or "127.0.0.1" in front_origin:
-    # Keep whatever port you actually use
-    dev_ports = ["3000", "5173"]
-    for host in ["localhost", "127.0.0.1"]:
-        for port in dev_ports:
-            o = f"http://{host}:{port}"
-            if o not in origins:
-                origins.append(o)
-
-# Allow a comma-separated list via env if you want to add more
-EXTRA_CORS = os.getenv("EXTRA_ALLOWED_ORIGINS", "")
-for part in (EXTRA_CORS.split(",") if EXTRA_CORS else []):
-    o = _origin_from_url(part)
-    if o and o not in origins:
-        origins.append(o)
-
-# Create app
 app = FastAPI(title="Content Portal API", version="0.3.0")
 
-# Add CORS (explicit list + Vercel wildcard via regex)
+origins = [PORTAL_BASE_URL]
+if "localhost" in PORTAL_BASE_URL:
+    origins.append(PORTAL_BASE_URL.replace("localhost", "127.0.0.1"))
+
+# Always also allow the Vercel preview/prod domain if present via env
+extra_cors = os.getenv("EXTRA_CORS_ORIGINS", "")
+for o in extra_cors.split(","):
+    o = o.strip()
+    if o:
+        origins.append(o)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_origins=list(set(origins)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Generic OPTIONS handler so preflights never hit your business routes
-@app.options("/{rest_of_path:path}")
-async def any_options_handler(rest_of_path: str, request: Request):
-    return Response(status_code=204)
-
 # --------------------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------------------
 def want_org_scopes() -> bool:
-    """Ask for org scopes if an org is configured or EXTRA_SCOPES is set."""
+    s = get_linkedin_settings()
+    if isinstance(s.get("include_org_scopes"), bool):
+        return bool(s["include_org_scopes"])
     return bool(os.getenv("LINKEDIN_ORG_ID") or os.getenv("EXTRA_SCOPES"))
 
 def scopes_for_auth(include_org: bool) -> str:
@@ -131,18 +158,30 @@ def scopes_for_auth(include_org: bool) -> str:
         for s in ["rw_organization_admin", "w_organization_social"]:
             if s not in scopes:
                 scopes.append(s)
-    extra = (os.getenv("EXTRA_SCOPES") or "").strip().split()
+    extra = (get_linkedin_settings().get("extra_scopes") or os.getenv("EXTRA_SCOPES") or "").strip().split()
     for s in extra:
         if s and s not in scopes:
             scopes.append(s)
     return " ".join(scopes)
+
+def _effective_client_id() -> str:
+    s = get_linkedin_settings()
+    return (s.get("client_id") or os.getenv("LINKEDIN_CLIENT_ID", "")).strip()
+
+def _effective_client_secret() -> str:
+    s = get_linkedin_settings()
+    return (s.get("client_secret") or os.getenv("LINKEDIN_CLIENT_SECRET", "")).strip()
+
+def _effective_redirect_uri() -> str:
+    s = get_linkedin_settings()
+    return (s.get("redirect_uri") or os.getenv("LINKEDIN_REDIRECT_URI", DEFAULT_REDIRECT_URI)).strip()
 
 def rest_headers(token: str) -> Dict[str, str]:
     return {
         "Authorization": f"Bearer {token}",
         "LinkedIn-Version": LI_VERSION,
         "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
+        "X-Restli-Protocol-Version": "2.0.0"
     }
 
 def get_user(request: Request) -> Dict[str, Any]:
@@ -155,7 +194,6 @@ def get_user(request: Request) -> Dict[str, Any]:
     return user
 
 def set_token_for_service(access_token: str):
-    """Expose token to the integration service and env. Persist to shared file for CLI/tests."""
     os.environ["LINKEDIN_ACCESS_TOKEN"] = access_token
     try:
         svc.publisher.config.access_token = access_token
@@ -167,31 +205,30 @@ def set_token_for_service(access_token: str):
 
 # ---- Robust importer for test_complete_system (Option B) ------------------------------
 def _import_run_full():
-    # 1) common root filename
+    """
+    Robustly import the coroutine `test_complete_system` regardless of location.
+    """
     try:
         from test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-    # 2) alt root name
     try:
         from tests_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-    # 3) in tests/ package
     try:
         from tests.test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-    # 4) under src/tests
     try:
         from src.tests.test_complete_system import test_complete_system as _run_full  # type: ignore
         return _run_full
     except ModuleNotFoundError:
         pass
-    # 5) last resort: load by file path
+
     import importlib.util
     candidates = [
         REPO_ROOT / "test_complete_system.py",
@@ -225,11 +262,6 @@ class PublishApprovedIn(BaseModel):
     org_id: Optional[str] = None
     publish_now: bool = False       # False = create DRAFTs
 
-class LinkedinAppSettingsIn(BaseModel):
-    client_id: str
-    client_secret: str
-    redirect_uri: Optional[str] = None
-
 # --------------------------------------------------------------------------------------
 # Basic routes
 # --------------------------------------------------------------------------------------
@@ -238,9 +270,9 @@ def root():
     return {
         "ok": True,
         "message": "Content Portal API – use /auth/linkedin/login or the UI",
-        "portal_base_url": PORTAL_BASE_URL,
-        "api_base": PORTAL_API_BASE,
-        "redirect_uri": REDIRECT_URI,
+        "portal_base_url": os.getenv("PORTAL_BASE_URL", PORTAL_BASE_URL),
+        "api_base": os.getenv("PORTAL_API_BASE", PORTAL_API_BASE),
+        "redirect_uri": _effective_redirect_uri(),
     }
 
 @app.get("/healthz")
@@ -250,111 +282,118 @@ def health():
 @app.get("/debug/oauth")
 def debug_oauth():
     return {
-        "redirect_uri": REDIRECT_URI,
-        "client_id": LINKEDIN_CLIENT_ID,
-        "scopes": scopes_for_auth(want_org_scopes()),
-        "allow_origins": origins,
+        "redirect_uri": _effective_redirect_uri(),
+        "client_id": _effective_client_id(),
+        "scopes": scopes_for_auth(want_org_scopes())
     }
 
 # --------------------------------------------------------------------------------------
-# BYO LinkedIn App Settings (per-user)
+# Public LinkedIn settings endpoints (no auth required, optional admin key)
 # --------------------------------------------------------------------------------------
+@app.options("/api/settings/linkedin")
+def options_settings_linkedin():
+    return JSONResponse({"ok": True})
+
 @app.get("/api/settings/linkedin")
-def get_linkedin_settings(user=Depends(get_user)):
-    st = DB["settings"].get(user["sub"]) or {}
-    return {
-        "client_id": st.get("client_id") or LINKEDIN_CLIENT_ID,
-        "redirect_uri": st.get("redirect_uri") or REDIRECT_URI,
-        "has_secret": bool(st.get("client_secret")),
-    }
+def get_settings_linkedin():
+    s = get_linkedin_settings() or {}
+    masked = s.copy()
+    if masked.get("client_secret"):
+        masked["client_secret"] = "********"
+    return {"linkedin": masked}
 
 @app.post("/api/settings/linkedin")
-def set_linkedin_settings(payload: LinkedinAppSettingsIn, user=Depends(get_user)):
-    if not payload.client_id or not payload.client_secret:
-        raise HTTPException(400, "client_id and client_secret are required")
-    DB["settings"][user["sub"]] = {
-        "client_id": payload.client_id,
-        "client_secret": payload.client_secret,
-        "redirect_uri": payload.redirect_uri or REDIRECT_URI,
+def post_settings_linkedin(payload: Dict[str, Any]):
+    """
+    Accepts JSON like:
+    {
+      "client_id": "...",
+      "client_secret": "...",
+      "redirect_uri": "https://.../auth/linkedin/callback",
+      "version": "202509",
+      "org_id": "123456",
+      "extra_scopes": "rw_organization_admin w_organization_social",
+      "include_org_scopes": true,
+      "admin_key": "optional if SETTINGS_ADMIN_KEY is set"
     }
-    return {"ok": True}
+    """
+    admin_key = os.getenv("SETTINGS_ADMIN_KEY", "")
+    if admin_key and payload.get("admin_key") != admin_key:
+        raise HTTPException(401, "Unauthorized: invalid setup key")
 
-def _effective_li_creds(user_sub: Optional[str]) -> Dict[str, str]:
-    """
-    Resolve LinkedIn app credentials per-user if provided via /api/settings/linkedin,
-    otherwise fall back to server env values.
-    """
-    if user_sub and user_sub in DB["settings"]:
-        s = DB["settings"][user_sub]
-        return {
-            "client_id": s.get("client_id") or LINKEDIN_CLIENT_ID,
-            "client_secret": s.get("client_secret") or LINKEDIN_CLIENT_SECRET,
-            "redirect_uri": s.get("redirect_uri") or REDIRECT_URI,
-        }
-    return {
-        "client_id": LINKEDIN_CLIENT_ID,
-        "client_secret": LINKEDIN_CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
-    }
+    saved = set_linkedin_settings({
+        "client_id": payload.get("client_id"),
+        "client_secret": payload.get("client_secret"),
+        "redirect_uri": payload.get("redirect_uri"),
+        "version": payload.get("version"),
+        "org_id": payload.get("org_id"),
+        "extra_scopes": payload.get("extra_scopes"),
+        "include_org_scopes": payload.get("include_org_scopes"),
+    })
+    out = saved.copy()
+    if out.get("client_secret"):
+        out["client_secret"] = "********"
+    return {"saved": out}
 
 # --------------------------------------------------------------------------------------
-# OAuth: login + callback
+# OAuth: login + callback (use saved settings first)
 # --------------------------------------------------------------------------------------
 @app.get("/auth/linkedin/login")
-def linkedin_login(request: Request, include_org: bool = True):
-    # use per-user settings if we already have a cookie, else env
-    li_sub = request.cookies.get("li_sub")
-    creds = _effective_li_creds(li_sub)
-
+def linkedin_login(include_org: bool = True):
+    client_id = _effective_client_id()
+    redirect_uri = _effective_redirect_uri()
+    if not client_id or not redirect_uri:
+        raise HTTPException(400, "LinkedIn client settings missing. Save them at /api/settings/linkedin first.")
     params = {
         "response_type": "code",
-        "client_id": creds["client_id"],
-        "redirect_uri": creds["redirect_uri"],
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
         "scope": scopes_for_auth(include_org and want_org_scopes()),
-        "state": str(int(time.time())),
+        "state": str(int(time.time()))
     }
     return RedirectResponse(f"{AUTH_URL}?{urllib.parse.urlencode(params)}")
 
-# Optional: HEAD support so `curl -I` shows a redirect instead of 405
 @app.head("/auth/linkedin/login")
-def linkedin_login_head(request: Request, include_org: bool = True):
-    li_sub = request.cookies.get("li_sub")
-    creds = _effective_li_creds(li_sub)
+def linkedin_login_head(include_org: bool = True):
+    client_id = _effective_client_id()
+    redirect_uri = _effective_redirect_uri()
+    if not client_id or not redirect_uri:
+        return JSONResponse(status_code=400, content={"error": "LinkedIn client settings missing"})
     params = {
         "response_type": "code",
-        "client_id": creds["client_id"],
-        "redirect_uri": creds["redirect_uri"],
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
         "scope": scopes_for_auth(include_org and want_org_scopes()),
-        "state": str(int(time.time())),
+        "state": str(int(time.time()))
     }
     return RedirectResponse(f"{AUTH_URL}?{urllib.parse.urlencode(params)}")
 
 @app.get("/auth/linkedin/callback")
-def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
-    # figure whose creds to use: if user has saved settings, use them, else env
-    li_sub_cookie = request.cookies.get("li_sub")
-    creds = _effective_li_creds(li_sub_cookie)
+def linkedin_callback(code: str, state: Optional[str] = None):
+    client_id = _effective_client_id()
+    client_secret = _effective_client_secret()
+    redirect_uri = _effective_redirect_uri()
+    if not client_id or not client_secret or not redirect_uri:
+        return JSONResponse(status_code=400, content={"error": "LinkedIn client settings missing"})
 
-    # Exchange code for access token
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": creds["redirect_uri"],
-        "client_id": creds["client_id"],
-        "client_secret": creds["client_secret"],
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "client_secret": client_secret
     }
     tok = requests.post(
         TOKEN_URL,
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=30,
+        timeout=30
     )
     if not tok.ok:
         return JSONResponse(status_code=tok.status_code, content={"error": tok.text})
 
     access_token = tok.json()["access_token"]
 
-    # Verify identity (OIDC)
     ui = requests.get(USERINFO, headers={"Authorization": f"Bearer {access_token}"}, timeout=20)
     if not ui.ok:
         return JSONResponse(status_code=ui.status_code, content={"error": ui.text})
@@ -363,28 +402,16 @@ def linkedin_callback(request: Request, code: str, state: Optional[str] = None):
     name = info.get("name") or f"{info.get('given_name','')} {info.get('family_name','')}".strip()
     email = info.get("email")
 
-    # Save session user + token in memory
     DB["users"][sub] = {"sub": sub, "name": name, "email": email}
-    DB["tokens"][sub] = {
-        "access_token": access_token,
-        "version": LI_VERSION,
-        "updated_at": datetime.utcnow().isoformat() + "Z",
-    }
+    DB["tokens"][sub] = {"access_token": access_token, "version": LI_VERSION, "updated_at": datetime.utcnow().isoformat()+"Z"}
 
-    # Expose token to service + persist to file used by CLI/tests
     set_token_for_service(access_token)
 
-    # Redirect back to the FE and set session cookie.
-    # IMPORTANT: cross-site fetch requires SameSite=None; Secure
-    resp = RedirectResponse(url=f"{PORTAL_BASE_URL.rstrip('/')}/dashboard")
-    is_prod = PORTAL_BASE_URL.startswith("https://")
-    resp.set_cookie(
-        "li_sub",
-        sub,
-        httponly=False,
-        samesite="none" if is_prod else "lax",
-        secure=is_prod,
-    )
+    # Send the user back to the Vercel UI if configured
+    portal_url = os.getenv("PORTAL_BASE_URL", PORTAL_BASE_URL)
+    resp = RedirectResponse(url=f"{portal_url}/dashboard")
+    # IMPORTANT: cross-site fetch needs SameSite=None; Secure
+    resp.set_cookie("li_sub", sub, httponly=False, samesite="None", secure=True)
     return resp
 
 # --------------------------------------------------------------------------------------
@@ -396,21 +423,56 @@ def me(user=Depends(get_user)):
         "sub": user["sub"],
         "name": user["name"],
         "email": user.get("email"),
-        "org_preferred": os.getenv("LINKEDIN_ORG_ID"),
+        "org_preferred": os.getenv("LINKEDIN_ORG_ID")
     }
 
 @app.get("/api/orgs")
 def list_orgs(user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]
     headers = rest_headers(token)
-    headers["X-RestLi-Method"] = "FINDER"
-    # NOTE: LinkedIn finder 'roleAssignee' does not accept 'assignee' in query string in all versions,
-    # we pass person via headers using the OAuth token identity and just filter elements.
-    params = {"q": "roleAssignee", "role": "ADMINISTRATOR", "state": "APPROVED"}
-    r = requests.get(ORGS_URL, headers=headers, params=params, timeout=20)
-    if not r.ok:
-        return JSONResponse(status_code=r.status_code, content={"error": r.text})
-    data = r.json()
+
+    # Try REST first (finder variants differ across tenants—try both shapes)
+    def _rest_try(params: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        h = headers.copy()
+        h["X-RestLi-Method"] = "FINDER"
+        r = requests.get(ORGS_URL_REST, headers=h, params=params, timeout=20)
+        if r.ok:
+            return r.json()
+        # 400s vary; return None to try the other shape
+        return None
+
+    data = None
+    # shape A (older docs)
+    params_a = {
+        "q": "roleAssignee",
+        "role": "ADMINISTRATOR",
+        "state": "APPROVED",
+        "assignee": f"urn:li:person:{user['sub']}",
+    }
+    data = _rest_try(params_a)
+    if data is None:
+        # shape B (newer param key)
+        params_b = {
+            "q": "roleAssignee",
+            "role": "ADMINISTRATOR",
+            "state": "APPROVED",
+            "roleAssignee": f"urn:li:person:{user['sub']}",
+        }
+        data = _rest_try(params_b)
+
+    # fallback to v2 if REST could not be used
+    if data is None:
+        params_v2 = {
+            "q": "roleAssignee",
+            "role": "ADMINISTRATOR",
+            "state": "APPROVED",
+            "assignee": f"urn:li:person:{user['sub']}"
+        }
+        r2 = requests.get(ORGS_URL_V2, headers={"Authorization": f"Bearer {token}"}, params=params_v2, timeout=20)
+        if not r2.ok:
+            return JSONResponse(status_code=r2.status_code, content={"error": r2.text})
+        data = r2.json()
+
     orgs = []
     for el in data.get("elements", []):
         urn = el.get("organization")
@@ -434,6 +496,7 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
     token = DB["tokens"][user["sub"]]["access_token"]
     set_token_for_service(token)
 
+    # Decide target
     default_org = os.getenv("LINKEDIN_ORG_ID")
     target_type = "MEMBER"
     target_urn = f"urn:li:person:{user['sub']}"
@@ -446,13 +509,13 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
                     content=payload.commentary,
                     hashtags=payload.hashtags,
                     organization_id=org_id,
-                    publish_now=payload.publish_now,
+                    publish_now=payload.publish_now
                 )
             except TypeError:
                 res = await svc.publisher.create_company_draft_post(
                     content=payload.commentary,
                     hashtags=payload.hashtags,
-                    organization_id=org_id,
+                    organization_id=org_id
                 )
             target_type = "ORG"
             target_urn = f"urn:li:organization:{org_id}"
@@ -461,12 +524,12 @@ async def create_post(payload: ComposeIn, user=Depends(get_user)):
                 res = await svc.publisher.create_draft_post(
                     content=payload.commentary,
                     hashtags=payload.hashtags,
-                    publish_now=payload.publish_now,
+                    publish_now=payload.publish_now
                 )
             except TypeError:
                 res = await svc.publisher.create_draft_post(
                     content=payload.commentary,
-                    hashtags=payload.hashtags,
+                    hashtags=payload.hashtags
                 )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -496,11 +559,10 @@ def list_posts(user=Depends(get_user)):
 @app.post("/api/run-batch")
 async def run_batch(user=Depends(get_user), publish: bool = False):
     run_full = _import_run_full()
-
     token = DB["tokens"][user["sub"]]["access_token"]
     set_token_for_service(token)
 
-    batch = await run_full()
+    batch = await run_full()  # your test returns a Batch-like object
     approved = batch.get_approved_posts() if batch else []
     saved = []
 
@@ -564,13 +626,13 @@ async def publish_approved(payload: PublishApprovedIn, user=Depends(get_user)):
                         content=commentary,
                         hashtags=hashtags,
                         organization_id=org_id,
-                        publish_now=payload.publish_now,
+                        publish_now=payload.publish_now
                     )
                 except TypeError:
                     res = await svc.publisher.create_company_draft_post(
                         content=commentary,
                         hashtags=hashtags,
-                        organization_id=org_id,
+                        organization_id=org_id
                     )
                 target_type = "ORG"
                 target_urn = f"urn:li:organization:{org_id}"
@@ -579,12 +641,12 @@ async def publish_approved(payload: PublishApprovedIn, user=Depends(get_user)):
                     res = await svc.publisher.create_draft_post(
                         content=commentary,
                         hashtags=hashtags,
-                        publish_now=payload.publish_now,
+                        publish_now=payload.publish_now
                     )
                 except TypeError:
                     res = await svc.publisher.create_draft_post(
                         content=commentary,
-                        hashtags=hashtags,
+                        hashtags=hashtags
                     )
                 target_type = "MEMBER"
                 target_urn = f"urn:li:person:{user['sub']}"

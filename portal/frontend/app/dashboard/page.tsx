@@ -1,17 +1,13 @@
+// portal/frontend/app/dashboard/page.tsx
 "use client";
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { apiGet, apiPost, linkedInLoginUrl } from "@/lib/config";
 import LinkedInAppSettings from "@/components/LinkedInAppSettings";
 
-type Me = {
-  sub: string;
-  name: string;
-  email?: string | null;
-  org_preferred?: string | null;
-};
-
+type Me = { sub: string; name: string; email?: string | null; org_preferred?: string | null };
 type ApprovedRec = {
   id: string;
   content: string;
@@ -21,37 +17,7 @@ type ApprovedRec = {
   li_post_id?: string | null;
   error_message?: string | null;
 };
-
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
-
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") ||
-  "http://localhost:8001";
-
-async function api<T>(
-  path: string,
-  init?: RequestInit & { parseJson?: boolean }
-): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try {
-      const j = await res.json();
-      msg = j.error || j.detail || msg;
-    } catch {}
-    throw new Error(msg);
-  }
-  if (init?.method === "HEAD") return {} as T;
-  if (init?.parseJson === false) return (await res.text()) as unknown as T;
-  return (await res.json()) as T;
-}
 
 export default function DashboardPage() {
   const [me, setMe] = React.useState<Me | null>(null);
@@ -71,16 +37,16 @@ export default function DashboardPage() {
     setError(null);
     try {
       const [meResp, approvedResp] = await Promise.all([
-        api<Me>("/api/me"),
-        api<ApprovedRec[]>("/api/approved"),
+        apiGet<Me>("/api/me"),
+        apiGet<ApprovedRec[]>("/api/approved"),
       ]);
       setMe(meResp);
       setApproved(approvedResp);
       try {
-        const o = await api<OrgsResp>("/api/orgs");
+        const o = await apiGet<OrgsResp>("/api/orgs");
         if ("orgs" in o) setOrgs(o.orgs || []);
       } catch {
-        // orgs may 400/403 if scopes not granted — ignore silently
+        /* ignore org errors */
       }
     } catch (e: any) {
       setError(e?.message || "Failed to load");
@@ -100,9 +66,9 @@ export default function DashboardPage() {
     setNotice(null);
     setError(null);
     try {
-      const res = await api<{ approved_count: number; batch_id?: string }>(
+      const res = await apiPost<{ approved_count: number; batch_id?: string }>(
         "/api/run-batch",
-        { method: "POST", body: JSON.stringify({}) }
+        {}
       );
       setNotice(`Generated ${res.approved_count} approved post(s).`);
       await fetchAll();
@@ -114,20 +80,23 @@ export default function DashboardPage() {
   }
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
-    const ids = Object.entries(sel).filter(([, v]) => v).map(([k]) => k);
-    if (ids.length === 0) return;
+    if (selectedIds.length === 0) return;
     setBusy((b) => ({ ...b, pub: true }));
     setNotice(null);
     setError(null);
     try {
-      const payload: any = { ids, target, publish_now: publishNow };
+      const payload: any = {
+        ids: selectedIds,
+        target,
+        publish_now: publishNow,
+      };
       if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
 
-      const res = await api<{ successful: number; results: any[] }>(
+      const res = await apiPost<{ successful: number; results: any[] }>(
         "/api/approved/publish",
-        { method: "POST", body: JSON.stringify(payload) }
+        payload
       );
-      setNotice(`Publish: ${res.successful}/${ids.length} succeeded.`);
+      setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
       clearSelection();
       await fetchAll();
     } catch (e: any) {
@@ -137,11 +106,13 @@ export default function DashboardPage() {
     }
   }
 
-  const linkedInLoginUrl = `${API_BASE}/auth/linkedin/login?include_org=true`;
+  function isSelected(id: string) {
+    return !!sel[id];
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
+      {/* Top section */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
@@ -150,13 +121,13 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a href={linkedInLoginUrl}>
+          <a href={linkedInLoginUrl(true)}>
             <Button variant="outline">Connect LinkedIn</Button>
           </a>
         </div>
       </div>
 
-      {/* NEW: Bring-Your-Own LinkedIn App settings card */}
+      {/* Settings widget near the top */}
       <LinkedInAppSettings />
 
       {notice ? (
@@ -176,7 +147,7 @@ export default function DashboardPage() {
           title="Account"
           description="LinkedIn identity and organization context"
           actions={
-            <a href={linkedInLoginUrl}>
+            <a href={linkedInLoginUrl(true)}>
               <Button variant="secondary">Re-connect</Button>
             </a>
           }
@@ -232,7 +203,11 @@ export default function DashboardPage() {
       <Card>
         <CardHeader
           title="Approved Queue"
-          description={approved.length ? `${approved.length} ready` : "No approved posts yet"}
+          description={
+            approved.length
+              ? `${approved.length} ready`
+              : "No approved posts yet"
+          }
           actions={
             <div className="flex items-center gap-2">
               <Button
@@ -281,7 +256,7 @@ export default function DashboardPage() {
                 >
                   <input
                     type="checkbox"
-                    checked={!!sel[p.id]}
+                    checked={isSelected(p.id)}
                     onChange={(e) =>
                       setSel((s) => ({ ...s, [p.id]: e.target.checked }))
                     }
@@ -331,7 +306,8 @@ export default function DashboardPage() {
         {approved.length > 0 ? (
           <CardFooter className="flex items-center justify-between">
             <div className="text-sm text-zinc-600">
-              Selected: <span className="font-semibold">{selectedIds.length}</span>
+              Selected:{" "}
+              <span className="font-semibold">{selectedIds.length}</span>
             </div>
             <Button variant="ghost" onClick={clearSelection} disabled={!selectedIds.length}>
               Clear selection
