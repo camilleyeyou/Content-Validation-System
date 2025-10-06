@@ -1,9 +1,10 @@
-// app/components/ConnectButton.tsx
+// portal/frontend/app/components/ConnectButton.tsx
 "use client";
 
+import { API_BASE } from "@/lib/config";
+
 export default function ConnectButton() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE!;
-  const href = `${apiBase}/auth/linkedin/login?include_org=true`;
+  const href = `${API_BASE}/auth/linkedin/login?include_org=true`;
 
   return (
     <a

@@ -1,339 +1,150 @@
+// portal/frontend/app/approved/page.tsx
 "use client";
 
-import * as React from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { apiGet, apiPost } from "@/lib/api";
 
-type ApprovedRec = {
+type Approved = {
   id: string;
   content: string;
   hashtags: string[];
   status: string;
-  created_at: string;
-  li_post_id?: string | null;
   error_message?: string | null;
-  user_sub?: string;
 };
 
-type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
-
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "") ||
-  "http://localhost:8001";
-
-async function api<T>(
-  path: string,
-  init?: RequestInit & { parseJson?: boolean }
-): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    let msg = `${res.status} ${res.statusText}`;
-    try {
-      const j = await res.json();
-      msg = j.error || j.detail || msg;
-    } catch {}
-    throw new Error(msg);
-  }
-  if (init?.parseJson === false) return (await res.text()) as unknown as T;
-  return (await res.json()) as T;
-}
-
 export default function ApprovedPage() {
-  const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
-  const [orgs, setOrgs] = React.useState<{ id: string; urn: string }[]>([]);
-  const [sel, setSel] = React.useState<Record<string, boolean>>({});
-  const [busy, setBusy] = React.useState<{ publishing?: boolean; clearing?: boolean }>({});
-  const [notice, setNotice] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const [rows, setRows] = useState<Approved[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [published, setPublished] = useState<string[]>([]);
 
-  const selectedIds = React.useMemo(
-    () => Object.entries(sel).filter(([, v]) => v).map(([k]) => k),
-    [sel]
-  );
-
-  const loginUrl = `${API_BASE}/auth/linkedin/login?include_org=true`;
-
-  const load = React.useCallback(async () => {
-    setError(null);
+  const load = async () => {
+    setErr(null);
     try {
-      const [list] = await Promise.all([
-        api<ApprovedRec[]>("/api/approved"),
-      ]);
-      setApproved(list);
-      // orgs may fail if scopes missing; ignore silently
-      try {
-        const o = await api<OrgsResp>("/api/orgs");
-        if ("orgs" in o) setOrgs(o.orgs || []);
-      } catch {}
+      const data = await apiGet<Approved[]>("/api/approved");
+      setRows(data);
     } catch (e: any) {
-      setError(e?.message || "Failed to load");
+      setErr(e.message || "Failed to load approved posts");
     }
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
-  React.useEffect(() => {
-    load();
-  }, [load]);
+  const publishSelected = async () => {
+    const ids = Object.entries(selected)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (ids.length === 0) return;
 
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {};
-    for (const p of approved) next[p.id] = checked;
-    setSel(next);
-  }
-
-  async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
-    if (selectedIds.length === 0) return;
-    setBusy((b) => ({ ...b, publishing: true }));
-    setNotice(null);
-    setError(null);
+    setLoading(true);
+    setErr(null);
     try {
-      const payload: any = {
-        ids: selectedIds,
-        target,
-        publish_now: publishNow,
-      };
-      if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
-
-      const res = await api<{ successful: number; results: any[] }>(
+      const res = await apiPost<{ successful: number; results: any[] }>(
         "/api/approved/publish",
-        { method: "POST", body: JSON.stringify(payload) }
+        { ids, target: "AUTO", publish_now: true }
       );
-      setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
-      setSel({});
+      setPublished(ids);
+      alert(`Published ${res.successful} posts.`);
       await load();
     } catch (e: any) {
-      setError(e?.message || "Publish failed");
+      setErr(e.message || "Failed to publish");
     } finally {
-      setBusy((b) => ({ ...b, publishing: false }));
+      setLoading(false);
     }
-  }
+  };
 
-  async function onClear() {
-    setBusy((b) => ({ ...b, clearing: true }));
-    setNotice(null);
-    setError(null);
+  const clearAll = async () => {
+    setLoading(true);
+    setErr(null);
     try {
-      const r = await api<{ deleted: number }>("/api/approved/clear", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      setNotice(`Cleared ${r.deleted} item(s).`);
-      setSel({});
+      await apiPost("/api/approved/clear");
+      setSelected({});
       await load();
     } catch (e: any) {
-      setError(e?.message || "Clear failed");
+      setErr(e.message || "Failed to clear");
     } finally {
-      setBusy((b) => ({ ...b, clearing: false }));
+      setLoading(false);
     }
-  }
-
-  const unauthorized = error?.startsWith("401");
+  };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Approved Queue</h1>
-          <p className="text-sm text-zinc-600">
-            Select items and publish as member or organization.
-          </p>
-        </div>
+    <div className="mx-auto max-w-4xl p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Approved queue</h2>
         <div className="flex items-center gap-2">
-          <a href={loginUrl}>
-            <Button variant="outline">Connect LinkedIn</Button>
-          </a>
-          <Button variant="ghost" onClick={load}>Refresh</Button>
+          <button
+            onClick={publishSelected}
+            disabled={loading}
+            className="inline-flex items-center rounded-lg bg-black px-4 py-2 text-white disabled:opacity-50"
+          >
+            {loading ? "Publishing…" : "Publish selected"}
+          </button>
+          <button
+            onClick={clearAll}
+            disabled={loading}
+            className="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 hover:bg-zinc-50 disabled:opacity-50"
+          >
+            Clear all
+          </button>
         </div>
       </div>
 
-      {notice ? (
-        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
-          {notice}
-        </div>
-      ) : null}
-      {error && !unauthorized ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
-          {error}
-        </div>
-      ) : null}
+      {err && <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
 
-      {unauthorized ? (
-        <Card>
-          <CardHeader
-            title="You're not signed in"
-            description="Connect LinkedIn to view and publish approved content."
-            actions={
-              <a href={loginUrl}>
-                <Button>Connect LinkedIn</Button>
-              </a>
-            }
-          />
-          <CardContent>
-            <p className="text-sm text-zinc-600">
-              After connecting, you’ll be redirected back here automatically.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader
-            title={
-              approved.length
-                ? `${approved.length} item${approved.length > 1 ? "s" : ""}`
-                : "No approved posts yet"
-            }
-            description="These items passed your pipeline and are ready to publish."
-            actions={
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => onPublish("MEMBER", false)}
-                  disabled={busy.publishing || selectedIds.length === 0}
-                  isLoading={busy.publishing}
-                >
-                  Draft as Member
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => onPublish("MEMBER", true)}
-                  disabled={busy.publishing || selectedIds.length === 0}
-                  isLoading={busy.publishing}
-                >
-                  Publish Now (Member)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onPublish("ORG", false)}
-                  disabled={
-                    busy.publishing || selectedIds.length === 0 || orgs.length === 0
+      <div className="grid gap-4">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border border-zinc-200 bg-white p-6 text-zinc-600">
+            Nothing here yet. Run a batch from the Dashboard.
+          </div>
+        ) : (
+          rows.map((r) => (
+            <label
+              key={r.id}
+              className={`block rounded-xl border p-4 ${
+                selected[r.id] ? "border-black bg-zinc-50" : "border-zinc-200 bg-white"
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm text-zinc-500">{r.status}</div>
+                <input
+                  type="checkbox"
+                  checked={!!selected[r.id]}
+                  onChange={(e) =>
+                    setSelected((prev) => ({ ...prev, [r.id]: e.target.checked }))
                   }
-                  isLoading={busy.publishing}
-                >
-                  Draft as Org
-                </Button>
-                <Button
-                  onClick={() => onPublish("ORG", true)}
-                  disabled={
-                    busy.publishing || selectedIds.length === 0 || orgs.length === 0
-                  }
-                  isLoading={busy.publishing}
-                >
-                  Publish Now (Org)
-                </Button>
+                />
               </div>
-            }
-          />
-          <CardContent className="p-0">
-            {approved.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-zinc-600">Nothing here yet.</div>
-            ) : (
-              <div className="divide-y divide-zinc-100">
-                <div className="flex items-center justify-between px-6 py-3 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={
-                        approved.length > 0 &&
-                        approved.every((p) => sel[p.id])
-                      }
-                      onChange={(e) => toggleAll(e.target.checked)}
-                    />
-                    <span>Select all</span>
-                  </label>
-                  <div className="text-zinc-500">
-                    Org access:{" "}
-                    <span className="font-medium">
-                      {orgs.length > 0 ? "available" : "none"}
+
+              <div className="whitespace-pre-wrap">{r.content}</div>
+
+              {r.hashtags?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {r.hashtags.map((h) => (
+                    <span key={h} className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700">
+                      #{h}
                     </span>
-                  </div>
+                  ))}
                 </div>
-                {approved.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4"
-                      checked={!!sel[p.id]}
-                      onChange={(e) =>
-                        setSel((s) => ({ ...s, [p.id]: e.target.checked }))
-                      }
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium truncate">
-                          {p.content.slice(0, 90)}
-                          {p.content.length > 90 ? "…" : ""}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          {new Date(p.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                      {p.hashtags?.length ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {p.hashtags.map((h, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
-                            >
-                              #{h.replace(/^#/, "")}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                      <div className="mt-2 text-xs text-zinc-600">
-                        Status: <span className="font-medium">{p.status}</span>
-                        {p.li_post_id ? (
-                          <>
-                            {" "}
-                            • LinkedIn ID:{" "}
-                            <span className="font-mono">{p.li_post_id}</span>
-                          </>
-                        ) : null}
-                        {p.error_message ? (
-                          <div className="text-red-600 mt-1">{p.error_message}</div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </CardContent>
-          {approved.length > 0 ? (
-            <CardFooter className="flex items-center justify-between">
-              <div className="text-sm text-zinc-600">
-                Selected:{" "}
-                <span className="font-semibold">{selectedIds.length}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => setSel({})}
-                  disabled={!selectedIds.length}
-                >
-                  Clear selection
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={onClear}
-                  isLoading={busy.clearing}
-                >
-                  Clear queue
-                </Button>
-              </div>
-            </CardFooter>
-          ) : null}
-        </Card>
-      )}
+              )}
+
+              {r.error_message && (
+                <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                  {r.error_message}
+                </div>
+              )}
+
+              {published.includes(r.id) && (
+                <div className="mt-2 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-xs text-emerald-900">
+                  Published
+                </div>
+              )}
+            </label>
+          ))
+        )}
+      </div>
     </div>
   );
 }
