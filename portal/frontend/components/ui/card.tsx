@@ -1,15 +1,14 @@
-import * as React from "react";
+"use client";
 
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
+import * as React from "react";
+import { cn } from "./button"; // reuse cn
 
 export function Card({
   className,
   children,
 }: React.PropsWithChildren<{ className?: string }>) {
   return (
-    <div className={cn("rounded-2xl bg-white border border-zinc-100 shadow-md", className)}>
+    <div className={cn("rounded-2xl border border-zinc-200 bg-white", className)}>
       {children}
     </div>
   );
@@ -27,17 +26,10 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 px-6 pt-5 pb-3 border-b border-zinc-100",
-        className
-      )}
-    >
+    <div className={cn("flex items-center justify-between gap-3 border-b border-zinc-200 p-4", className)}>
       <div>
-        {title ? <h3 className="text-base font-semibold">{title}</h3> : null}
-        {description ? (
-          <p className="text-sm text-zinc-600">{description}</p>
-        ) : null}
+        {title ? <div className="text-sm font-medium">{title}</div> : null}
+        {description ? <div className="text-xs text-zinc-600">{description}</div> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
@@ -48,16 +40,12 @@ export function CardContent({
   className,
   children,
 }: React.PropsWithChildren<{ className?: string }>) {
-  return <div className={cn("px-6 py-5", className)}>{children}</div>;
+  return <div className={cn("p-4", className)}>{children}</div>;
 }
 
 export function CardFooter({
   className,
   children,
 }: React.PropsWithChildren<{ className?: string }>) {
-  return (
-    <div className={cn("px-6 pt-3 pb-5 border-t border-zinc-100", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("border-t border-zinc-200 p-4", className)}>{children}</div>;
 }
