@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { apiGet, apiPost, linkedInLoginUrl, getLoginSid } from "@/lib/config";
+import { apiGet, apiPost, linkedInLoginUrl } from "@/lib/config";
 
 type ApprovedRec = {
   id: string;
@@ -15,6 +15,7 @@ type ApprovedRec = {
   error_message?: string | null;
   user_sub?: string;
 };
+
 type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
 
 export default function ApprovedPage() {
@@ -30,8 +31,7 @@ export default function ApprovedPage() {
     [sel]
   );
 
-  const sid = React.useMemo(() => getLoginSid(), []);
-  const loginUrl = linkedInLoginUrl(true, sid);
+  const loginUrl = linkedInLoginUrl(true);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -47,7 +47,9 @@ export default function ApprovedPage() {
     }
   }, []);
 
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    load();
+  }, [load]);
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {};
@@ -57,7 +59,7 @@ export default function ApprovedPage() {
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
     if (selectedIds.length === 0) return;
-    setBusy((b) => ({ ...b, publishing: true }));  // <-- fixed here
+    setBusy((b) => ({ ...b, publishing: true }));
     setNotice(null);
     setError(null);
     try {
@@ -109,12 +111,8 @@ export default function ApprovedPage() {
         </div>
       </div>
 
-      {notice ? (
-        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>
-      ) : null}
-      {error && !unauthorized ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>
-      ) : null}
+      {notice && <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>}
+      {error && !unauthorized && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>}
 
       {unauthorized ? (
         <Card>
@@ -134,37 +132,10 @@ export default function ApprovedPage() {
             description="These items passed your pipeline and are ready to publish."
             actions={
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => onPublish("MEMBER", false)}
-                  disabled={!!busy.publishing || selectedIds.length === 0}
-                  isLoading={!!busy.publishing}
-                >
-                  Draft as Member
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => onPublish("MEMBER", true)}
-                  disabled={!!busy.publishing || selectedIds.length === 0}
-                  isLoading={!!busy.publishing}
-                >
-                  Publish Now (Member)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => onPublish("ORG", false)}
-                  disabled={!!busy.publishing || selectedIds.length === 0 || orgs.length === 0}
-                  isLoading={!!busy.publishing}
-                >
-                  Draft as Org
-                </Button>
-                <Button
-                  onClick={() => onPublish("ORG", true)}
-                  disabled={!!busy.publishing || selectedIds.length === 0 || orgs.length === 0}
-                  isLoading={!!busy.publishing}
-                >
-                  Publish Now (Org)
-                </Button>
+                <Button variant="outline" onClick={() => onPublish("MEMBER", false)} disabled={busy.publishing || selectedIds.length === 0} isLoading={busy.publishing}>Draft as Member</Button>
+                <Button variant="secondary" onClick={() => onPublish("MEMBER", true)} disabled={busy.publishing || selectedIds.length === 0} isLoading={busy.publishing}>Publish Now (Member)</Button>
+                <Button variant="outline" onClick={() => onPublish("ORG", false)} disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0} isLoading={busy.publishing}>Draft as Org</Button>
+                <Button onClick={() => onPublish("ORG", true)} disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0} isLoading={busy.publishing}>Publish Now (Org)</Button>
               </div>
             }
           />
@@ -224,16 +195,10 @@ export default function ApprovedPage() {
           </CardContent>
           {approved.length > 0 ? (
             <CardFooter className="flex items-center justify-between">
-              <div className="text-sm text-zinc-600">
-                Selected: <span className="font-semibold">{selectedIds.length}</span>
-              </div>
+              <div className="text-sm text-zinc-600">Selected: <span className="font-semibold">{selectedIds.length}</span></div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" onClick={() => setSel({})} disabled={!selectedIds.length}>
-                  Clear selection
-                </Button>
-                <Button variant="outline" onClick={onClear} isLoading={!!busy.clearing}>
-                  Clear queue
-                </Button>
+                <Button variant="ghost" onClick={() => setSel({})} disabled={!selectedIds.length}>Clear selection</Button>
+                <Button variant="outline" onClick={onClear} isLoading={busy.clearing}>Clear queue</Button>
               </div>
             </CardFooter>
           ) : null}

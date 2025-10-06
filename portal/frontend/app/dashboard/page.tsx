@@ -3,7 +3,8 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { apiGet, apiPost, linkedInLoginUrl, getLoginSid } from "@/lib/config";
+import { apiGet, apiPost } from "@/lib/config";
+import ConnectLinkedInButton from "@/components/ConnectLinkedInButton";
 import LinkedInAppSettings from "@/components/LinkedInAppSettings";
 
 type Me = { sub: string; name: string; email?: string | null; org_preferred?: string | null };
@@ -44,22 +45,29 @@ export default function DashboardPage() {
       try {
         const o = await apiGet<OrgsResp>("/api/orgs");
         if ("orgs" in o) setOrgs(o.orgs || []);
-      } catch {
-        // orgs may 403 if scopes missing; ignore
-      }
+      } catch {}
     } catch (e: any) {
       setError(e?.message || "Failed to load");
     }
   }, []);
 
-  React.useEffect(() => { fetchAll(); }, [fetchAll]);
+  React.useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+
+  function clearSelection() {
+    setSel({});
+  }
 
   async function onGenerateApproved() {
     setBusy((b) => ({ ...b, gen: true }));
     setNotice(null);
     setError(null);
     try {
-      const res = await apiPost<{ approved_count: number; batch_id?: string }>("/api/run-batch", {});
+      const res = await apiPost<{ approved_count: number; batch_id?: string }>(
+        "/api/run-batch",
+        {}
+      );
       setNotice(`Generated ${res.approved_count} approved post(s).`);
       await fetchAll();
     } catch (e: any) {
@@ -70,21 +78,20 @@ export default function DashboardPage() {
   }
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
-    const ids = Object.entries(sel).filter(([, v]) => v).map(([k]) => k);
-    if (ids.length === 0) return;
+    if (selectedIds.length === 0) return;
     setBusy((b) => ({ ...b, pub: true }));
     setNotice(null);
     setError(null);
     try {
-      const payload: any = { ids, target, publish_now: publishNow };
+      const payload: any = { ids: selectedIds, target, publish_now: publishNow };
       if (target === "ORG" && orgs[0]?.id) payload.org_id = orgs[0].id;
 
       const res = await apiPost<{ successful: number; results: any[] }>(
         "/api/approved/publish",
         payload
       );
-      setNotice(`Publish: ${res.successful}/${ids.length} succeeded.`);
-      setSel({});
+      setNotice(`Publish: ${res.successful}/${selectedIds.length} succeeded.`);
+      clearSelection();
       await fetchAll();
     } catch (e: any) {
       setError(`Publish failed: ${e?.message || e}`);
@@ -93,9 +100,6 @@ export default function DashboardPage() {
     }
   }
 
-  const sid = React.useMemo(() => getLoginSid(), []);
-  const linkedInHref = linkedInLoginUrl(true, sid);
-
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -103,25 +107,17 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold">Dashboard</h1>
           <p className="text-sm text-zinc-600">Validate, approve, and publish LinkedIn content</p>
         </div>
-        <div className="flex items-center gap-2">
-          <a href={linkedInHref}><Button variant="outline">Connect LinkedIn</Button></a>
-        </div>
+        <ConnectLinkedInButton />
       </div>
 
-      <LinkedInAppSettings />
-
-      {notice ? (
-        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>
-      ) : null}
-      {error ? (
-        <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">{error}</div>
-      ) : null}
+      {notice && <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>}
+      {error && <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">{error}</div>}
 
       <Card>
         <CardHeader
           title="Account"
           description="LinkedIn identity and organization context"
-          actions={<a href={linkedInHref}><Button variant="secondary">Re-connect</Button></a>}
+          actions={<ConnectLinkedInButton label="Re-connect" variant="secondary" />}
         />
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -134,16 +130,16 @@ export default function DashboardPage() {
             <div className="font-medium">{me?.org_preferred || "—"}</div>
           </div>
         </CardContent>
-        <CardFooter className="flex items-center gap-2">
+        <CardFooter className="text-sm text-zinc-600">
           {orgs.length > 0 ? (
-            <div className="text-sm text-zinc-600">
-              Organizations you can manage: <span className="font-medium">{orgs.map((o) => o.id).join(", ")}</span>
-            </div>
+            <>Organizations you can manage: <span className="font-medium">{orgs.map(o => o.id).join(", ")}</span></>
           ) : (
-            <div className="text-sm text-zinc-600">No organizations found or missing scopes.</div>
+            <>No organizations found or missing scopes.</>
           )}
         </CardFooter>
       </Card>
+
+      <LinkedInAppSettings />
 
       <Card>
         <CardHeader
@@ -153,6 +149,63 @@ export default function DashboardPage() {
         />
         <CardContent className="text-sm text-zinc-600">
           Click <span className="font-medium">Generate</span> to run the pipeline. Approved posts will appear below.
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Approved Queue"
+          description={approved.length ? `${approved.length} ready` : "No approved posts yet"}
+          actions={
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => onPublish("MEMBER", false)} disabled={busy.pub || selectedIds.length === 0} isLoading={busy.pub}>Draft as Member</Button>
+              <Button variant="secondary" onClick={() => onPublish("MEMBER", true)} disabled={busy.pub || selectedIds.length === 0} isLoading={busy.pub}>Publish Now (Member)</Button>
+              <Button variant="outline" onClick={() => onPublish("ORG", false)} disabled={busy.pub || selectedIds.length === 0 || orgs.length === 0} isLoading={busy.pub}>Draft as Org</Button>
+              <Button onClick={() => onPublish("ORG", true)} disabled={busy.pub || selectedIds.length === 0 || orgs.length === 0} isLoading={busy.pub}>Publish Now (Org)</Button>
+            </div>
+          }
+        />
+        <CardContent className="p-0">
+          {approved.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-zinc-600">Nothing here yet.</div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {approved.map((p) => (
+                <label key={p.id} className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!sel[p.id]}
+                    onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium truncate">
+                        {p.content.slice(0, 80)}{p.content.length > 80 ? "…" : ""}
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        {new Date(p.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    {p.hashtags?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {p.hashtags.map((h, i) => (
+                          <span key={i} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
+                            #{h.replace(/^#/, "")}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-zinc-600">
+                      Status: <span className="font-medium">{p.status}</span>
+                      {p.li_post_id ? <> • LinkedIn ID: <span className="font-mono">{p.li_post_id}</span></> : null}
+                      {p.error_message ? <div className="text-red-600 mt-1">{p.error_message}</div> : null}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

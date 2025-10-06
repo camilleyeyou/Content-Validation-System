@@ -1,4 +1,3 @@
-# portal/backend/app/main.py
 from __future__ import annotations
 
 import os
@@ -24,37 +23,28 @@ LINKEDIN_ACLS_URL = (
     "&projection=(elements*(organizationalTarget~(id,localizedName,vanityName)))"
 )
 
-# ------------------------------------------------------------------------------
-# Models
-# ------------------------------------------------------------------------------
-
 class LinkedInSettings(BaseModel):
     client_id: str
     client_secret: str
-    # store as PLAIN STRING, but validate as URL
     redirect_uri: str
     scopes: Optional[List[str]] = None
 
     @field_validator("redirect_uri")
     @classmethod
     def validate_redirect_uri(cls, v: str) -> str:
-        # Validate with AnyHttpUrl, but always return a plain string
-        TypeAdapter(AnyHttpUrl).validate_python(v)
-        return str(v)
-
+        TypeAdapter(AnyHttpUrl).validate_python(v)  # validate
+        return str(v)  # store as plain string
 
 class LinkedInSettingsPublic(BaseModel):
     client_id: str
-    redirect_uri: str  # already validated, keep plain str
+    redirect_uri: str
     scopes: Optional[List[str]] = None
-
 
 class MeResponse(BaseModel):
     sub: str
     name: str
     email: Optional[str] = None
     org_preferred: Optional[str] = None
-
 
 class ApprovedRec(BaseModel):
     id: str
@@ -65,11 +55,6 @@ class ApprovedRec(BaseModel):
     li_post_id: Optional[str] = None
     error_message: Optional[str] = None
     user_sub: Optional[str] = None
-
-
-# ------------------------------------------------------------------------------
-# App setup
-# ------------------------------------------------------------------------------
 
 app = FastAPI(title=APP_NAME)
 
@@ -93,15 +78,15 @@ app.add_middleware(
     max_age=600,
 )
 
+# IMPORTANT: cross-site cookie for frontend (vercel.app) calling API (railway.app)
 SESSION_SECRET = os.getenv("SESSION_SECRET") or secrets.token_urlsafe(32)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
-    same_site="lax",
-    https_only=True if os.getenv("FORCE_SESSION_SECURE", "1") == "1" else False,
+    same_site="none",     # <— allow cross-site XHR with credentials
+    https_only=True,      # <— Secure
 )
 
-# In-memory runtime LinkedIn settings (prime from env if present)
 app.state.linkedin_settings: Optional[LinkedInSettings] = None
 
 def _prime_linkedin_settings_from_env() -> None:
@@ -118,7 +103,6 @@ def _prime_linkedin_settings_from_env() -> None:
                 scopes=scopes.split() if scopes else None,
             )
         except ValidationError:
-            # Ignore bad envs; UI can set them at runtime
             pass
 
 _prime_linkedin_settings_from_env()
@@ -135,10 +119,6 @@ def _get_portal_base_url() -> str:
 def _get_api_base_url() -> str:
     return os.getenv("API_BASE_URL") or "http://localhost:8001"
 
-# ------------------------------------------------------------------------------
-# Root + tiny favicon
-# ------------------------------------------------------------------------------
-
 @app.get("/")
 def root() -> Dict[str, Any]:
     cfg = app.state.linkedin_settings
@@ -152,12 +132,7 @@ def root() -> Dict[str, Any]:
 
 @app.get("/favicon.ico")
 def favicon():
-    # simple tiny transparent icon
     return PlainTextResponse("", status_code=204)
-
-# ------------------------------------------------------------------------------
-# Runtime LinkedIn settings
-# ------------------------------------------------------------------------------
 
 @app.options("/api/settings/linkedin")
 def options_settings() -> Response:
@@ -187,10 +162,6 @@ def set_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
         client_id=cfg.client_id, redirect_uri=cfg.redirect_uri, scopes=cfg.scopes
     )
     return {"ok": True, "settings": json.loads(pub.model_dump_json())}
-
-# ------------------------------------------------------------------------------
-# LinkedIn OAuth
-# ------------------------------------------------------------------------------
 
 def _build_state(include_org: bool, sid: Optional[str]) -> str:
     parts = []
@@ -227,7 +198,7 @@ def linkedin_login(request: Request, include_org: bool = True, sid: Optional[str
     params = {
         "response_type": "code",
         "client_id": str(cfg.client_id),
-        "redirect_uri": str(cfg.redirect_uri),  # ensure plain string
+        "redirect_uri": str(cfg.redirect_uri),
         "scope": " ".join(scopes),
         "state": _build_state(include_org, sid),
     }
@@ -237,11 +208,10 @@ def linkedin_login(request: Request, include_org: bool = True, sid: Optional[str
 @app.get("/auth/linkedin/callback")
 def linkedin_callback(request: Request, code: str, state: str):
     cfg = _get_runtime_linkedin()
-
     data = {
         "grant_type": "authorization_code",
         "code": str(code),
-        "redirect_uri": str(cfg.redirect_uri),   # ensure plain string (fix)
+        "redirect_uri": str(cfg.redirect_uri),
         "client_id": str(cfg.client_id),
         "client_secret": str(cfg.client_secret),
     }
@@ -257,11 +227,9 @@ def linkedin_callback(request: Request, code: str, state: str):
     token_json = r.json()
     access_token = token_json.get("access_token")
     id_token = token_json.get("id_token")
-
     if not access_token:
         raise HTTPException(status_code=502, detail=f"LinkedIn token missing access_token: {token_json}")
 
-    # Save to session
     request.session["li_access_token"] = str(access_token)
     request.session["li_id_token"] = str(id_token) if id_token else None
 
@@ -272,25 +240,14 @@ def linkedin_callback(request: Request, code: str, state: str):
 
     return RedirectResponse(_get_portal_base_url(), status_code=307)
 
-# ------------------------------------------------------------------------------
-# Helpers for LinkedIn API calls
-# ------------------------------------------------------------------------------
-
 def _bearer_headers(access_token: str) -> Dict[str, str]:
-    return {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-    }
+    return {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
 def _get_access_token_from_session(request: Request) -> str:
     tok = request.session.get("li_access_token")
     if not tok:
         raise HTTPException(status_code=401, detail="Not signed in")
     return str(tok)
-
-# ------------------------------------------------------------------------------
-# API: Me, Orgs
-# ------------------------------------------------------------------------------
 
 @app.options("/api/me")
 def options_me() -> Response:
@@ -340,15 +297,8 @@ def api_orgs(request: Request) -> Dict[str, Any]:
     for el in data.get("elements", []):
         tgt = el.get("organizationalTarget~") or {}
         if "id" in tgt:
-            orgs.append({
-                "id": str(tgt.get("id")),
-                "urn": f"urn:li:organization:{tgt.get('id')}",
-            })
+            orgs.append({"id": str(tgt.get("id")), "urn": f"urn:li:organization:{tgt.get('id')}"})
     return {"orgs": orgs}
-
-# ------------------------------------------------------------------------------
-# Approved content + Batch (fallback in-memory if your pipeline isn't present)
-# ------------------------------------------------------------------------------
 
 def _import_run_full():
     try:
@@ -375,7 +325,7 @@ def get_approved(request: Request) -> List[ApprovedRec]:
 
 class PublishPayload(BaseModel):
     ids: List[str]
-    target: str  # "MEMBER" | "ORG"
+    target: str
     publish_now: bool
     org_id: Optional[str] = None
 
@@ -402,7 +352,6 @@ def options_run_batch() -> Response:
 
 @app.post("/api/run-batch")
 async def run_batch(request: Request) -> Dict[str, Any]:
-    # Require login
     _ = _get_access_token_from_session(request)
 
     run_full = _import_run_full()
@@ -420,7 +369,6 @@ async def run_batch(request: Request) -> Dict[str, Any]:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Batch error: {e}")
 
-    # Fallback: generate dummy items
     import datetime, uuid
     now = datetime.datetime.utcnow().isoformat() + "Z"
     new_items = [
@@ -448,10 +396,6 @@ async def run_batch(request: Request) -> Dict[str, Any]:
     ]
     app.state.approved_store.extend(new_items)
     return {"ok": True, "approved_count": len(new_items), "batch_id": secrets.token_hex(8)}
-
-# ------------------------------------------------------------------------------
-# Health
-# ------------------------------------------------------------------------------
 
 @app.get("/healthz")
 def health() -> Dict[str, Any]:

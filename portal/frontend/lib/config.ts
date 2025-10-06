@@ -1,61 +1,15 @@
+// portal/frontend/lib/config.ts
 "use client";
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001").replace(/\/+$/, "");
 
-// ----- portal token (?t=...) -----
-const TOKEN_KEY = "portal_token";
-export function getToken(): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  return localStorage.getItem(TOKEN_KEY) || undefined;
-}
-export function setToken(token?: string) {
-  if (typeof window === "undefined") return;
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-export function syncTokenFromUrl() {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  const t = url.searchParams.get("t");
-  if (t) {
-    setToken(t);
-    url.searchParams.delete("t");
-    window.history.replaceState({}, "", url.toString());
-  }
-}
-
-// ----- LinkedIn settings sid -----
-const SID_KEY = "linkedin_sid";
-export function getLoginSid(): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  return localStorage.getItem(SID_KEY) || undefined;
-}
-export function setLoginSid(sid?: string) {
-  if (typeof window === "undefined") return;
-  if (sid) localStorage.setItem(SID_KEY, sid);
-  else localStorage.removeItem(SID_KEY);
-}
-
-export function linkedInLoginUrl(includeOrg = true, sid?: string) {
-  const params = new URLSearchParams();
-  if (includeOrg) params.set("include_org", "true");
-  const _sid = sid || getLoginSid();
-  if (_sid) params.set("sid", _sid);
-  const qs = params.toString();
-  return `${API_BASE}/auth/linkedin/login${qs ? `?${qs}` : ""}`;
-}
-
-function authHeaders() {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const t = getToken();
-  if (t) headers["Authorization"] = `Bearer ${t}`;
-  return headers;
-}
+export const linkedInLoginUrl = (includeOrg = true) =>
+  `${API_BASE}/auth/linkedin/login${includeOrg ? "?include_org=true" : ""}`;
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
-    headers: authHeaders(),
+    headers: { "Content-Type": "application/json" },
     cache: "no-store",
     mode: "cors",
   });
@@ -70,7 +24,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     credentials: "include",
-    headers: authHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
     mode: "cors",
@@ -80,4 +34,30 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     throw new Error(txt || `POST ${path} failed: ${res.status}`);
   }
   return res.json();
+}
+
+/**
+ * syncTokenFromUrl
+ *  - We don't need URL tokens (session is cookie-based).
+ *  - If a provider ever sends query params like ?access_token=... or ?sid=...
+ *    this will just clean them from the URL bar so they don’t linger.
+ *  - Returns true if any cleanup happened.
+ */
+export function syncTokenFromUrl(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const url = new URL(window.location.href);
+  const qp = url.searchParams;
+
+  // anything you want to clean up, add here:
+  const keys = ["access_token", "id_token", "token_type", "expires_in", "sid"];
+  const hadAny = keys.some((k) => qp.has(k));
+
+  if (!hadAny) return false;
+
+  keys.forEach((k) => qp.delete(k));
+  const newUrl = url.pathname + (qp.toString() ? `?${qp.toString()}` : "") + url.hash;
+  window.history.replaceState({}, "", newUrl);
+
+  return true;
 }
