@@ -1,11 +1,15 @@
-// portal/frontend/components/Header.tsx
 "use client";
 
 import Link from "next/link";
-import { linkedInLoginUrl } from "@/lib/config";
+import { useEffect, useState } from "react";
+import { linkedInLoginUrl, getLoginSid } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 
 export default function Header() {
+  const [sid, setSid] = useState<string | undefined>(undefined);
+  useEffect(() => setSid(getLoginSid()), []);
+  const href = linkedInLoginUrl(true, sid);
+
   return (
     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-zinc-100">
       <div className="mx-auto max-w-5xl px-4 h-14 flex items-center justify-between">
@@ -14,7 +18,7 @@ export default function Header() {
           <Link href="/dashboard" className="hover:opacity-80">Dashboard</Link>
           <Link href="/approved" className="hover:opacity-80">Approved</Link>
         </nav>
-        <a href={linkedInLoginUrl(true)}>
+        <a href={href}>
           <Button variant="outline">Connect LinkedIn</Button>
         </a>
       </div>

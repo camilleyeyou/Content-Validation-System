@@ -1,136 +1,94 @@
-// portal/frontend/components/LinkedInAppSettings.tsx
 "use client";
 
-import * as React from "react";
-import { apiGet, apiPost } from "@/lib/config";
-import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { apiGet, apiPost, setLoginSid, getLoginSid, linkedInLoginUrl } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 
-type Settings = {
-  client_id?: string;
-  client_secret?: string; // masked when reading
-  redirect_uri?: string;
-  version?: string;
-  org_id?: string;
-  extra_scopes?: string;
-  include_org_scopes?: boolean;
-};
-
 export default function LinkedInAppSettings() {
-  const [form, setForm] = React.useState<Settings>({
-    version: "202509",
-    include_org_scopes: true,
-  });
-  const [loading, setLoading] = React.useState(false);
-  const [saved, setSaved] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const [client_id, setClientId] = useState("");
+  const [client_secret, setClientSecret] = useState("");
+  const [redirect_uri, setRedirectUri] = useState("");
+  const [scope, setScope] = useState("openid profile email w_member_social rw_organization_admin w_organization_social");
+  const [sid, setSid] = useState<string | undefined>(getLoginSid());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
-      setError(null);
+      setLoading(true);
       try {
-        const s = await apiGet<{ linkedin: Settings }>("/api/settings/linkedin");
-        setForm((prev) => ({ ...prev, ...s.linkedin }));
-      } catch (e: any) {
-        // Not fatal if empty; show only if real error
-        console.warn("settings load:", e?.message || e);
+        const data = await apiGet<any>("/api/settings/linkedin");
+        // if env has defaults, we can show redirect for convenience
+        if (data?.redirect_uri && !redirect_uri) setRedirectUri(data.redirect_uri);
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
       }
     })();
-  }, []);
+  }, []); // eslint-disable-line
 
-  async function onSave() {
-    setLoading(true);
-    setSaved(null);
-    setError(null);
+  async function onSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
     try {
-      const payload = form;
-      await apiPost("/api/settings/linkedin", payload);
-      setSaved("LinkedIn settings saved.");
-    } catch (e: any) {
-      setError(e?.message || "Save failed");
+      const resp = await apiPost<{ ok: boolean; sid: string }>("/api/settings/linkedin", {
+        client_id,
+        client_secret,
+        redirect_uri,
+        scope,
+        include_org_default: true,
+      });
+      setSid(resp.sid);
+      setLoginSid(resp.sid);
+      alert("Saved! You can now use Connect LinkedIn.");
+    } catch (err: any) {
+      alert(err?.message || "Failed to save settings");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
+  const loginHref = linkedInLoginUrl(true, sid);
+
   return (
-    <Card>
-      <CardHeader
-        title="LinkedIn App Settings"
-        description="Provide your LinkedIn app credentials (client id/secret and redirect URI). These settings are used by the OAuth login."
-        actions={<Button onClick={onSave} isLoading={loading}>Save</Button>}
-      />
-      <CardContent className="grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-1">
-          <label className="block text-sm text-zinc-600 mb-1">Client ID</label>
+    <div className="rounded-2xl border border-zinc-200 p-4 space-y-3">
+      <h3 className="font-semibold">LinkedIn App Settings</h3>
+      {loading ? (
+        <div className="text-sm text-zinc-600">Loading…</div>
+      ) : (
+        <form onSubmit={onSave} className="space-y-3">
           <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.client_id || ""}
-            onChange={(e) => setForm((f) => ({ ...f, client_id: e.target.value }))}
-            placeholder="77xxxxxxxxxxxx"
+            className="w-full border rounded p-2"
+            placeholder="Client ID"
+            value={client_id}
+            onChange={(e)=>setClientId(e.target.value)}
           />
-        </div>
-        <div className="sm:col-span-1">
-          <label className="block text-sm text-zinc-600 mb-1">Client Secret</label>
           <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.client_secret || ""}
-            onChange={(e) => setForm((f) => ({ ...f, client_secret: e.target.value }))}
-            placeholder="********"
+            className="w-full border rounded p-2"
+            placeholder="Client Secret"
+            value={client_secret}
+            onChange={(e)=>setClientSecret(e.target.value)}
           />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-sm text-zinc-600 mb-1">Redirect URI</label>
           <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.redirect_uri || ""}
-            onChange={(e) => setForm((f) => ({ ...f, redirect_uri: e.target.value }))}
-            placeholder="https://YOUR-RAILWAY-DOMAIN/auth/linkedin/callback"
+            className="w-full border rounded p-2"
+            placeholder="Redirect URI"
+            value={redirect_uri}
+            onChange={(e)=>setRedirectUri(e.target.value)}
           />
-          <p className="text-xs text-zinc-500 mt-1">
-            Must exactly match the Redirect URL in your LinkedIn app.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm text-zinc-600 mb-1">LinkedIn Version</label>
           <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.version || ""}
-            onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
-            placeholder="202509"
+            className="w-full border rounded p-2"
+            placeholder="Scopes"
+            value={scope}
+            onChange={(e)=>setScope(e.target.value)}
           />
-        </div>
-        <div>
-          <label className="block text-sm text-zinc-600 mb-1">Org ID (optional)</label>
-          <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.org_id || ""}
-            onChange={(e) => setForm((f) => ({ ...f, org_id: e.target.value }))}
-            placeholder="123456"
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-sm text-zinc-600 mb-1">Extra Scopes (space-separated)</label>
-          <input
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-black/10"
-            value={form.extra_scopes || ""}
-            onChange={(e) => setForm((f) => ({ ...f, extra_scopes: e.target.value }))}
-            placeholder="rw_organization_admin w_organization_social"
-          />
-        </div>
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!form.include_org_scopes}
-            onChange={(e) => setForm((f) => ({ ...f, include_org_scopes: e.target.checked }))}
-          />
-          <span className="text-sm text-zinc-700">Include org scopes in login</span>
-        </label>
-      </CardContent>
-      <CardFooter>
-        {saved ? <div className="text-green-700">{saved}</div> : null}
-        {error ? <div className="text-red-700">{error}</div> : null}
-      </CardFooter>
-    </Card>
+          <div className="flex items-center gap-2">
+            <Button type="submit" isLoading={saving}>Save</Button>
+            <a href={loginHref}><Button variant="outline">Connect LinkedIn</Button></a>
+          </div>
+          {sid ? <div className="text-xs text-zinc-500">sid: {sid}</div> : null}
+        </form>
+      )}
+    </div>
   );
 }

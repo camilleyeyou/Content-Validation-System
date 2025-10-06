@@ -1,37 +1,27 @@
-// portal/frontend/app/page.tsx
 "use client";
 
-import * as React from "react";
-import { linkedInLoginUrl } from "@/lib/config";
 import LinkedInAppSettings from "@/components/LinkedInAppSettings";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { linkedInLoginUrl, getLoginSid } from "@/lib/config";
+import { useEffect, useState } from "react";
 
 export default function HomePage() {
+  const [sid, setSid] = useState<string | undefined>(undefined);
+  useEffect(() => setSid(getLoginSid()), []);
+  const href = linkedInLoginUrl(true, sid);
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader
-          title="Welcome to LinkedIn Content Portal"
-          description="Run your pipeline, approve content, and publish as a member or organization."
-          actions={
-            <a href={linkedInLoginUrl(true)}>
-              <Button>Connect LinkedIn</Button>
-            </a>
-          }
-        />
-        <CardContent className="space-y-3">
-          <p className="text-sm text-zinc-700">
-            Use the <span className="font-medium">Dashboard</span> to generate approved posts,
-            then go to <span className="font-medium">Approved</span> to publish them.
-          </p>
-          <p className="text-xs text-zinc-500">
-            Tip: If your app credentials change, update them below, then “Connect LinkedIn” again.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl border border-zinc-200 p-6">
+        <h1 className="text-2xl font-semibold">LinkedIn Content Portal</h1>
+        <p className="text-sm text-zinc-600 mt-1">
+          Validate, approve and publish LinkedIn content.
+        </p>
+        <div className="mt-4">
+          <a href={href}><Button>Connect LinkedIn</Button></a>
+        </div>
+      </div>
 
-      {/* App Settings on Home as requested */}
       <LinkedInAppSettings />
     </div>
   );

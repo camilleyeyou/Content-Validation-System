@@ -1,4 +1,3 @@
-// portal/frontend/components/TokenSync.tsx
 "use client";
 import { useEffect } from "react";
 import { syncTokenFromUrl } from "@/lib/config";

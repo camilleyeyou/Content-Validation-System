@@ -1,10 +1,9 @@
-// portal/frontend/app/approved/page.tsx
 "use client";
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { apiGet, apiPost, linkedInLoginUrl } from "@/lib/config";
+import { apiGet, apiPost, linkedInLoginUrl, getLoginSid } from "@/lib/config";
 
 type ApprovedRec = {
   id: string;
@@ -31,7 +30,8 @@ export default function ApprovedPage() {
     [sel]
   );
 
-  const loginUrl = linkedInLoginUrl(true);
+  const sid = React.useMemo(() => getLoginSid(), []);
+  const loginUrl = linkedInLoginUrl(true, sid);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -47,9 +47,7 @@ export default function ApprovedPage() {
     }
   }, []);
 
-  React.useEffect(() => {
-    load();
-  }, [load]);
+  React.useEffect(() => { load(); }, [load]);
 
   function toggleAll(checked: boolean) {
     const next: Record<string, boolean> = {};
@@ -59,7 +57,7 @@ export default function ApprovedPage() {
 
   async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
     if (selectedIds.length === 0) return;
-    setBusy((b) => ({ ...b, publishing: true })); // <-- fixed
+    setBusy((b) => ({ ...b, publishing: true }));  // <-- fixed here
     setNotice(null);
     setError(null);
     try {
@@ -103,27 +101,19 @@ export default function ApprovedPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Approved Queue</h1>
-          <p className="text-sm text-zinc-600">
-            Select items and publish as member or organization.
-          </p>
+          <p className="text-sm text-zinc-600">Select items and publish as member or organization.</p>
         </div>
         <div className="flex items-center gap-2">
-          <a href={loginUrl}>
-            <Button variant="outline">Connect LinkedIn</Button>
-          </a>
+          <a href={loginUrl}><Button variant="outline">Connect LinkedIn</Button></a>
           <Button variant="ghost" onClick={load}>Refresh</Button>
         </div>
       </div>
 
       {notice ? (
-        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
-          {notice}
-        </div>
+        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>
       ) : null}
       {error && !unauthorized ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
-          {error}
-        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">{error}</div>
       ) : null}
 
       {unauthorized ? (
@@ -131,57 +121,47 @@ export default function ApprovedPage() {
           <CardHeader
             title="You're not signed in"
             description="Connect LinkedIn to view and publish approved content."
-            actions={
-              <a href={loginUrl}>
-                <Button>Connect LinkedIn</Button>
-              </a>
-            }
+            actions={<a href={loginUrl}><Button>Connect LinkedIn</Button></a>}
           />
           <CardContent>
-            <p className="text-sm text-zinc-600">
-              After connecting, you’ll be redirected back here automatically.
-            </p>
+            <p className="text-sm text-zinc-600">After connecting, you’ll be redirected back here automatically.</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader
-            title={
-              approved.length
-                ? `${approved.length} item${approved.length > 1 ? "s" : ""}`
-                : "No approved posts yet"
-            }
+            title={approved.length ? `${approved.length} item${approved.length > 1 ? "s" : ""}` : "No approved posts yet"}
             description="These items passed your pipeline and are ready to publish."
             actions={
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   onClick={() => onPublish("MEMBER", false)}
-                  disabled={busy.publishing || selectedIds.length === 0}
-                  isLoading={busy.publishing}
+                  disabled={!!busy.publishing || selectedIds.length === 0}
+                  isLoading={!!busy.publishing}
                 >
                   Draft as Member
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => onPublish("MEMBER", true)}
-                  disabled={busy.publishing || selectedIds.length === 0}
-                  isLoading={busy.publishing}
+                  disabled={!!busy.publishing || selectedIds.length === 0}
+                  isLoading={!!busy.publishing}
                 >
                   Publish Now (Member)
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => onPublish("ORG", false)}
-                  disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0}
-                  isLoading={busy.publishing}
+                  disabled={!!busy.publishing || selectedIds.length === 0 || orgs.length === 0}
+                  isLoading={!!busy.publishing}
                 >
                   Draft as Org
                 </Button>
                 <Button
                   onClick={() => onPublish("ORG", true)}
-                  disabled={busy.publishing || selectedIds.length === 0 || orgs.length === 0}
-                  isLoading={busy.publishing}
+                  disabled={!!busy.publishing || selectedIds.length === 0 || orgs.length === 0}
+                  isLoading={!!busy.publishing}
                 >
                   Publish Now (Org)
                 </Button>
@@ -204,15 +184,11 @@ export default function ApprovedPage() {
                     <span>Select all</span>
                   </label>
                   <div className="text-zinc-500">
-                    Org access:{" "}
-                    <span className="font-medium">{orgs.length > 0 ? "available" : "none"}</span>
+                    Org access: <span className="font-medium">{orgs.length > 0 ? "available" : "none"}</span>
                   </div>
                 </div>
                 {approved.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
-                  >
+                  <label key={p.id} className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer">
                     <input
                       type="checkbox"
                       className="mt-1 h-4 w-4"
@@ -222,20 +198,14 @@ export default function ApprovedPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-medium truncate">
-                          {p.content.slice(0, 90)}
-                          {p.content.length > 90 ? "…" : ""}
+                          {p.content.slice(0, 90)}{p.content.length > 90 ? "…" : ""}
                         </div>
-                        <div className="text-xs text-zinc-500">
-                          {new Date(p.created_at).toLocaleString()}
-                        </div>
+                        <div className="text-xs text-zinc-500">{new Date(p.created_at).toLocaleString()}</div>
                       </div>
                       {p.hashtags?.length ? (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {p.hashtags.map((h, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
-                            >
+                            <span key={i} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
                               #{h.replace(/^#/, "")}
                             </span>
                           ))}
@@ -243,15 +213,8 @@ export default function ApprovedPage() {
                       ) : null}
                       <div className="mt-2 text-xs text-zinc-600">
                         Status: <span className="font-medium">{p.status}</span>
-                        {p.li_post_id ? (
-                          <>
-                            {" "}
-                            • LinkedIn ID: <span className="font-mono">{p.li_post_id}</span>
-                          </>
-                        ) : null}
-                        {p.error_message ? (
-                          <div className="text-red-600 mt-1">{p.error_message}</div>
-                        ) : null}
+                        {p.li_post_id ? <> • LinkedIn ID: <span className="font-mono">{p.li_post_id}</span></> : null}
+                        {p.error_message ? <div className="text-red-600 mt-1">{p.error_message}</div> : null}
                       </div>
                     </div>
                   </label>
@@ -268,7 +231,7 @@ export default function ApprovedPage() {
                 <Button variant="ghost" onClick={() => setSel({})} disabled={!selectedIds.length}>
                   Clear selection
                 </Button>
-                <Button variant="outline" onClick={onClear} isLoading={busy.clearing}>
+                <Button variant="outline" onClick={onClear} isLoading={!!busy.clearing}>
                   Clear queue
                 </Button>
               </div>
