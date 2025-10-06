@@ -2,19 +2,25 @@
 "use client";
 
 import { useEffect } from "react";
-import { syncTokenFromUrl } from "@/lib/config";
 
 /**
- * Mount this once (e.g., in layout) to clean up any stray query tokens
- * after OAuth redirects. It’s harmless if nothing is present.
+ * Cleans OAuth query params (code/state/app_session) from the URL
+ * after the backend has already set the session cookie.
  */
 export default function TokenSync() {
   useEffect(() => {
-    try {
-      syncTokenFromUrl();
-    } catch {
-      // ignore
+    if (typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+    const hadOauthParams =
+      params.has("code") || params.has("state") || params.has("app_session");
+
+    if (hadOauthParams) {
+      // Remove all query params to keep the URL pretty post-login
+      window.history.replaceState({}, "", url.pathname);
     }
   }, []);
+
   return null;
 }

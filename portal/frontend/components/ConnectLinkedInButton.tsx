@@ -1,21 +1,25 @@
+// portal/frontend/components/ConnectLinkedInButton.tsx
 "use client";
 
-import { linkedInLoginUrl } from "@/lib/config";
+import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { linkedInLoginUrl } from "@/lib/config";
 
 export default function ConnectLinkedInButton({
-  label = "Connect LinkedIn",
   includeOrg = true,
   variant = "outline",
+  children,
+  className,
 }: {
-  label?: string;
   includeOrg?: boolean;
   variant?: "default" | "secondary" | "outline" | "ghost";
+  children?: React.ReactNode;
+  className?: string;
 }) {
   const href = linkedInLoginUrl(includeOrg);
   return (
-    <a href={href}>
-      <Button variant={variant}>{label}</Button>
+    <a href={href} className={className}>
+      <Button variant={variant}>{children ?? "Connect LinkedIn"}</Button>
     </a>
   );
 }
