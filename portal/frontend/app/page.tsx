@@ -1,4 +1,3 @@
-// portal/frontend/app/page.tsx
 import Link from "next/link";
 import ConnectButton from "@/components/ConnectButton";
 

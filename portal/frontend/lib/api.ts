@@ -1,4 +1,3 @@
-// portal/frontend/app/lib/api.ts
 "use client";
 
 import { API_BASE } from "./config";

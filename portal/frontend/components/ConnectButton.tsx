@@ -1,9 +1,9 @@
-// portal/frontend/app/components/ConnectButton.tsx
 "use client";
 
 import { API_BASE } from "@/lib/config";
 
 export default function ConnectButton() {
+  // Same URL builder everywhere (Home + Header)
   const href = `${API_BASE}/auth/linkedin/login?include_org=true`;
 
   return (
