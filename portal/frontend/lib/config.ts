@@ -1,78 +1,70 @@
-"use client";
+// portal/frontend/lib/config.ts
+// Centralized API helpers. Ensures cookies are sent cross-site so sessions work.
 
-// ---- API Base & helpers ----
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080").replace(
-  /\/+$/,
-  ""
-);
+export const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+    "https://content-validation-system-production.up.railway.app");
 
-export function linkedInLoginUrl(includeOrg = true, redirect?: string) {
-  const qs = new URLSearchParams();
-  if (includeOrg) qs.set("include_org", "true");
-  if (redirect) qs.set("redirect", redirect);
-  return `${API_BASE}/auth/linkedin/login${qs.toString() ? `?${qs.toString()}` : ""}`;
-}
+type ApiErrorShape = { detail?: string; message?: string; error?: string };
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    mode: "cors",
-  });
+async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || `GET ${path} failed: ${res.status}`);
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const data = (await res.json()) as ApiErrorShape;
+      msg = data.detail || data.message || data.error || msg;
+    } catch {
+      // non-JSON error; keep default msg
+    }
+    throw new Error(msg);
   }
-  return res.json();
+
+  // tolerate empty response bodies
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    return (await res.json()) as T;
+  }
+  return undefined as unknown as T;
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+export async function apiGet<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "GET",
+    credentials: "include",            // ★ send cookies cross-site
+    headers: {
+      Accept: "application/json",
+      ...(init?.headers || {}),
+    },
+    ...init,
+  });
+  return handle<T>(res);
+}
+
+export async function apiPost<T>(
+  path: string,
+  body?: any,
+  init?: RequestInit
+): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-    mode: "cors",
+    credentials: "include",            // ★ send cookies cross-site
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(init?.headers || {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...init,
   });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || `POST ${path} failed: ${res.status}`);
-  }
-  return res.json();
+  return handle<T>(res);
 }
 
-// ---- Types used around the app ----
-export type ApprovedRec = {
-  id: string;
-  content: string;
-  hashtags: string[];
-  status: string;
-  created_at: string;
-  li_post_id?: string | null;
-  error_message?: string | null;
-  user_sub?: string;
-};
-
-// ---- Normalizers to tolerate both old and new API shapes ----
-export function normalizeApprovedResponse(raw: any): ApprovedRec[] {
-  if (Array.isArray(raw)) return raw as ApprovedRec[];
-  if (raw && Array.isArray(raw.items)) return raw.items as ApprovedRec[];
-  // Some callers may pass {data: [...]} etc; be forgiving:
-  if (raw?.data && Array.isArray(raw.data)) return raw.data as ApprovedRec[];
-  return [];
-}
-
-// Convenience wrappers
-export async function fetchApproved(): Promise<ApprovedRec[]> {
-  const raw = await apiGet<any>("/api/approved");
-  return normalizeApprovedResponse(raw);
-}
-
-export async function runBatch(count = 3): Promise<ApprovedRec[]> {
-  // Backend reads 'count' from query in our latest main, but sending in body is harmless.
-  const raw = await apiPost<any>("/api/run-batch", { count });
-  // Return newly created items (if present) so UI can append immediately.
-  return normalizeApprovedResponse(raw);
+export function linkedInLoginUrl(includeOrg = true, redirect?: string) {
+  const url = new URL(`${API_BASE}/auth/linkedin/login`);
+  if (includeOrg) url.searchParams.set("include_org", "true");
+  if (redirect) url.searchParams.set("redirect", redirect);
+  return url.toString();
 }
