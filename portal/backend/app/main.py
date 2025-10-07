@@ -13,20 +13,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ------------------------------------------------------------------------------
-# Logging
-# ------------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ------------------------------------------------------------------------------
-# App
-# ------------------------------------------------------------------------------
-app = FastAPI(title="Publishing Portal API", version="3.0.0")
+app = FastAPI(title="Publishing Portal API", version="3.1.0")
 
-# ------------------------------------------------------------------------------
-# CORS (allow localhost + your main Vercel + any *.vercel.app previews)
-# ------------------------------------------------------------------------------
+# CORS: allow localhost + your main Vercel + any *.vercel.app previews
 explicit_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
 explicit_origins = [o.strip() for o in explicit_origins_env.split(",") if o.strip()]
 if not explicit_origins:
@@ -34,48 +26,35 @@ if not explicit_origins:
         "http://localhost:3000",
         "https://content-validation-system.vercel.app",
     ]
-
-# Accept any *.vercel.app subdomain
 allow_origin_regex = r"^https:\/\/([a-z0-9-]+\.)*vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=explicit_origins,
     allow_origin_regex=allow_origin_regex,
-    allow_credentials=False,  # no cookies/sessions anymore
+    allow_credentials=False,  # no sessions/cookies
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     max_age=600,
 )
 
-# ------------------------------------------------------------------------------
-# Global approved queue (shared by all users)
-# ------------------------------------------------------------------------------
+# ------------------ Global approved queue (shared by everyone) -----------------
 APPROVED_GLOBAL: List[Dict[str, Any]] = []
 QUEUE_LOCK = threading.Lock()
 
-# ------------------------------------------------------------------------------
-# Models
-# ------------------------------------------------------------------------------
 class PublishIn(BaseModel):
     ids: List[str]
-    target: str  # kept for FE compatibility: "MEMBER" | "ORG"
+    target: str  # kept for UI compatibility ("MEMBER" | "ORG")
     publish_now: bool = True
-    org_id: Optional[str] = None
+    org_id: Optional[str] = None  # ignored here
 
 class AddApprovedIn(BaseModel):
     content: str
     hashtags: Optional[List[str]] = None
 
-# ------------------------------------------------------------------------------
-# Root/health/config
-# ------------------------------------------------------------------------------
 @app.get("/")
 def root():
-    return {
-        "ok": True,
-        "message": "Publishing Portal API (global queue, no OAuth)",
-    }
+    return {"ok": True, "message": "Publishing API (global queue, no OAuth)"}
 
 @app.get("/api/health")
 def health():
@@ -90,9 +69,6 @@ def api_config():
         "cors_regex": allow_origin_regex,
     }
 
-# ------------------------------------------------------------------------------
-# Approved queue
-# ------------------------------------------------------------------------------
 @app.options("/api/approved")
 def options_approved():
     return JSONResponse({"ok": True})
@@ -119,35 +95,6 @@ def add_approved(payload: AddApprovedIn):
         total = len(APPROVED_GLOBAL)
     return {"ok": True, "id": rec["id"], "total": total}
 
-@app.post("/api/approved/seed-demo")
-def seed_demo():
-    """Optional: quickly drop a couple demo items into the global queue."""
-    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    samples = [
-        {
-            "id": uuid.uuid4().hex,
-            "content": "Demo: This post came from the pipeline (global queue).",
-            "hashtags": ["Demo", "Pipeline"],
-            "status": "approved",
-            "created_at": now,
-            "li_post_id": None,
-            "error_message": None,
-        },
-        {
-            "id": uuid.uuid4().hex,
-            "content": "Demo: Second sample post, ready to publish.",
-            "hashtags": ["Sample", "Ready"],
-            "status": "approved",
-            "created_at": now,
-            "li_post_id": None,
-            "error_message": None,
-        },
-    ]
-    with QUEUE_LOCK:
-        APPROVED_GLOBAL.extend(samples)
-        total = len(APPROVED_GLOBAL)
-    return {"added": len(samples), "total": total}
-
 @app.post("/api/approved/publish")
 def post_publish(payload: PublishIn):
     if not payload.ids:
@@ -165,9 +112,7 @@ def post_publish(payload: PublishIn):
                     it["status"] = "published" if payload.publish_now else "draft"
                     it["li_post_id"] = it.get("li_post_id") or f"local-{uuid.uuid4().hex[:12]}"
                     it["published_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                    it["published_as"] = payload.target  # just for UI display
-                    if payload.target == "ORG" and payload.org_id:
-                        it["published_org_id"] = payload.org_id
+                    it["published_as"] = payload.target
                     results.append(
                         {"id": it["id"], "li_post_id": it["li_post_id"], "status": it["status"]}
                     )
@@ -192,9 +137,6 @@ def post_clear():
         APPROVED_GLOBAL.clear()
     return {"deleted": deleted}
 
-# ------------------------------------------------------------------------------
-# Error handlers
-# ------------------------------------------------------------------------------
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     logger.error(f"HTTP {exc.status_code}: {exc.detail}")

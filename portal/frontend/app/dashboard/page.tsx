@@ -23,7 +23,6 @@ export default function DashboardPage() {
   const [notice, setNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [debug, setDebug] = React.useState(false);
 
   const selectedIds = React.useMemo(
     () => Object.entries(sel).filter(([, v]) => v).map(([k]) => k),
@@ -96,21 +95,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function onSeed() {
-    setBusy(true);
-    setNotice(null);
-    setError(null);
-    try {
-      await apiPost("/api/approved/seed-demo", {});
-      await load();
-      setNotice("Added demo posts to the global queue.");
-    } catch (e: any) {
-      setError(e?.message || "Seed failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
@@ -130,14 +114,10 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
-          <p className="text-sm text-zinc-600">Global queue — publish/draft/clear (no LinkedIn).</p>
+          <p className="text-sm text-zinc-600">Global queue — publish/draft/clear.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={load}>Refresh</Button>
-          <Button variant="outline" onClick={onSeed}>Add Demo Posts</Button>
-          <Button variant="outline" size="sm" onClick={() => setDebug((d) => !d)}>
-            {debug ? "Hide" : "Show"} Debug
-          </Button>
         </div>
       </div>
 
@@ -173,7 +153,7 @@ export default function DashboardPage() {
         <div className="divide-y divide-zinc-100">
           {approved.length === 0 ? (
             <div className="px-6 py-8 text-sm text-zinc-600 text-center">
-              Nothing to publish. Click “Add Demo Posts” or push items to <code>/api/approved/add</code>.
+              Nothing to publish. Push items to <code>/api/approved/add</code> from your generator.
             </div>
           ) : (
             approved.map((p) => (
@@ -244,14 +224,6 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
-
-      {/* Debug */}
-      {debug && (
-        <Card className="p-4 bg-gray-50 text-xs font-mono">
-          <div>Approved: {approved.length}</div>
-          <div>Selected IDs: {JSON.stringify(selectedIds)}</div>
-        </Card>
-      )}
     </div>
   );
 }
