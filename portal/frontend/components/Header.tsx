@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import ConnectLinkedInButton from "@/components/ConnectLinkedInButton";
 
 export default function Header() {
   return (
@@ -20,7 +19,6 @@ export default function Header() {
         </nav>
 
         {/* One, consistent connect button (uses redirect back to current page) */}
-        <ConnectLinkedInButton includeOrg />
       </div>
     </header>
   );

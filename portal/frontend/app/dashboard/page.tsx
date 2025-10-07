@@ -2,19 +2,9 @@
 "use client";
 
 import * as React from "react";
-import TokenSync from "@/components/TokenSync";
-import LinkedInAppSettings from "@/components/LinkedInAppSettings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { apiGet, apiPost, linkedInLoginUrl } from "@/lib/config";
-
-type Me = {
-  sub: string;
-  name: string;
-  email?: string | null;
-  org_preferred?: string | null;
-  token_expires_in?: number;
-};
+import { apiGet, apiPost } from "@/lib/config";
 
 type ApprovedRec = {
   id: string;
@@ -26,18 +16,12 @@ type ApprovedRec = {
   error_message?: string | null;
 };
 
-type OrgsResp = { orgs: { id: string; urn: string }[] } | { error?: string };
-
 export default function DashboardPage() {
-  const [me, setMe] = React.useState<Me | null>(null);
-  const [orgs, setOrgs] = React.useState<{ id: string; urn: string }[]>([]);
   const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
   const [sel, setSel] = React.useState<Record<string, boolean>>({});
-  const [busyGen, setBusyGen] = React.useState(false);
-  const [busyPub, setBusyPub] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [debug, setDebug] = React.useState(false);
 
@@ -46,339 +30,228 @@ export default function DashboardPage() {
     [sel]
   );
 
-  const fetchAll = React.useCallback(async () => {
+  const load = React.useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
-      const approvedResp = await apiGet<ApprovedRec[]>("/api/approved");
-      console.log("Fetched approved posts:", approvedResp);
-      setApproved(approvedResp || []);
-
-      try {
-        const meResp = await apiGet<Me>("/api/me");
-        setMe(meResp);
-        setIsAuthenticated(true);
-
-        try {
-          const o = await apiGet<OrgsResp>("/api/orgs");
-          if (o && "orgs" in o) setOrgs(o.orgs || []);
-        } catch {
-          /* orgs may need extra perms */
-        }
-      } catch {
-        setMe(null);
-        setIsAuthenticated(false);
-        setOrgs([]);
-      }
+      const list = await apiGet<ApprovedRec[]>("/api/approved");
+      setApproved(Array.isArray(list) ? list : []);
     } catch (e: any) {
-      console.error("Error fetching data:", e);
-      setError(e?.message || "Failed to load data");
+      setError(e?.message || "Failed to load queue");
     } finally {
       setLoading(false);
     }
   }, []);
 
   React.useEffect(() => {
-    fetchAll();
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetchAll();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchAll]);
+    load();
+  }, [load]);
 
-  function clearSelection() {
-    setSel({});
-  }
-  function isSelected(id: string) {
-    return !!sel[id];
+  function toggleAll(checked: boolean) {
+    const next: Record<string, boolean> = {};
+    for (const p of approved) next[p.id] = checked;
+    setSel(next);
   }
 
-  async function onGenerateApproved() {
-    if (!isAuthenticated) {
-      setError("Please connect your LinkedIn account first");
-      return;
-    }
-    setBusyGen(true);
-    setNotice(null);
-    setError(null);
-    try {
-      const res = await apiPost<{ approved_count: number; batch_id?: string }>("/api/run-batch", {});
-      setNotice(`Generated ${res.approved_count} approved post(s). Refreshing...`);
-      setTimeout(async () => {
-        await fetchAll();
-        const newApproved = await apiGet<ApprovedRec[]>("/api/approved");
-        if (newApproved && newApproved.length > approved.length) {
-          setNotice(`Successfully added ${newApproved.length - approved.length} new posts!`);
-        } else if (newApproved && newApproved.length === approved.length) {
-          setError("Posts were generated but may not have been saved. Try refreshing the page.");
-        }
-        setApproved(newApproved || []);
-      }, 500);
-    } catch (e: any) {
-      console.error("Generate error:", e);
-      setError(`Generate failed: ${e?.message || e}`);
-    } finally {
-      setBusyGen(false);
-    }
-  }
-
-  async function onPublish(target: "MEMBER" | "ORG", publishNow: boolean) {
-    if (!isAuthenticated) {
-      setError("Please connect your LinkedIn account first");
-      return;
-    }
+  async function onPublish(publishNow: boolean) {
     if (selectedIds.length === 0) {
-      setError("Please select at least one post to publish");
+      setError("Select at least one post");
       return;
     }
-    setBusyPub(true);
+    setBusy(true);
     setNotice(null);
     setError(null);
     try {
-      const payload: any = { ids: selectedIds, target, publish_now: publishNow };
-      if (target === "ORG") {
-        if (orgs.length === 0) throw new Error("No organizations available. Check your LinkedIn app permissions.");
-        payload.org_id = orgs[0].id;
+      const res = await apiPost<{ successful: number; results: any[]; errors?: any[] }>(
+        "/api/approved/publish",
+        { ids: selectedIds, target: "MEMBER", publish_now: publishNow }
+      );
+      if (res.errors?.length) {
+        setError(`Some items failed (${res.successful}/${selectedIds.length}).`);
+      } else {
+        setNotice(`${publishNow ? "Published" : "Drafted"}: ${res.successful}/${selectedIds.length}`);
       }
-      const res = await apiPost<{ successful: number; results: any[] }>("/api/approved/publish", payload);
-      setNotice(`Successfully ${publishNow ? "published" : "drafted"} ${res.successful} of ${selectedIds.length} posts`);
-      clearSelection();
-      await fetchAll();
+      setSel({});
+      await load();
     } catch (e: any) {
-      console.error("Publish error:", e);
-      setError(`Publish failed: ${e?.message || e}`);
+      setError(e?.message || "Publish failed");
     } finally {
-      setBusyPub(false);
+      setBusy(false);
     }
   }
 
-  const connectHref = React.useMemo(() => {
-    const redirectBack = typeof window !== "undefined" ? window.location.href : "https://content-validation-system.vercel.app/dashboard";
-    return linkedInLoginUrl(true, redirectBack);
-  }, []);
+  async function onClear() {
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    try {
+      const res = await apiPost<{ deleted: number }>("/api/approved/clear", {});
+      setNotice(`Cleared ${res.deleted} item(s).`);
+      setSel({});
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Clear failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSeed() {
+    setBusy(true);
+    setNotice(null);
+    setError(null);
+    try {
+      await apiPost("/api/approved/seed-demo", {});
+      await load();
+      setNotice("Added demo posts to the global queue.");
+    } catch (e: any) {
+      setError(e?.message || "Seed failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (loading) {
     return (
-      <>
-        <TokenSync />
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex items-center justify-center py-12">
-            <div className="text-zinc-600">Loading...</div>
-          </div>
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
         </div>
-      </>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-zinc-600">Loading…</div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <>
-      <TokenSync />
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Dashboard</h1>
-            <p className="text-sm text-zinc-600">Configure LinkedIn, generate content, and publish</p>
-          </div>
-          <div className="flex gap-2">
-            {!isAuthenticated && (
-              <a href={connectHref}>
-                <Button>Connect LinkedIn</Button>
-              </a>
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
+          <p className="text-sm text-zinc-600">Global queue — publish/draft/clear (no LinkedIn).</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={load}>Refresh</Button>
+          <Button variant="outline" onClick={onSeed}>Add Demo Posts</Button>
+          <Button variant="outline" size="sm" onClick={() => setDebug((d) => !d)}>
+            {debug ? "Hide" : "Show"} Debug
+          </Button>
+        </div>
+      </div>
+
+      {/* Status */}
+      {notice && <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>}
+      {error && <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">{error}</div>}
+
+      {/* Queue */}
+      <Card className="p-0">
+        <div className="px-4 py-3 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-semibold">Approved Queue</div>
+              <div className="text-sm text-zinc-600">
+                {approved.length ? `${approved.length} post${approved.length === 1 ? "" : "s"} ready` : "No approved posts"}
+              </div>
+            </div>
+            {approved.length > 0 && (
+              <div className="text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    onChange={(e) => toggleAll(e.target.checked)}
+                    checked={approved.length > 0 && approved.every((p) => sel[p.id])}
+                  />
+                  Select all
+                </label>
+              </div>
             )}
-            <Button variant="outline" onClick={() => fetchAll()}>
-              Refresh
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setDebug(!debug)}>
-              {debug ? "Hide" : "Show"} Debug
-            </Button>
           </div>
         </div>
 
-        {/* Status Messages */}
-        {notice && <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>}
-        {error && <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">{error}</div>}
-
-        {/* Step 1: LinkedIn Configuration (form only) */}
-        <LinkedInAppSettings />
-
-        {/* Step 2: Account Status */}
-        {isAuthenticated ? (
-          <Card className="p-4 space-y-3 border-green-200 bg-green-50/50">
-            <div className="font-semibold text-green-800">✓ Connected to LinkedIn</div>
-            <div className="text-sm text-green-700">
-              Signed in as <strong>{me?.name || "LinkedIn User"}</strong>
-              {me?.email && <span className="text-green-600"> ({me.email})</span>}
+        <div className="divide-y divide-zinc-100">
+          {approved.length === 0 ? (
+            <div className="px-6 py-8 text-sm text-zinc-600 text-center">
+              Nothing to publish. Click “Add Demo Posts” or push items to <code>/api/approved/add</code>.
             </div>
-            {orgs.length > 0 && (
-              <div className="text-sm text-green-700">Organizations available: <strong>{orgs.map((o) => o.id).join(", ")}</strong></div>
-            )}
-          </Card>
-        ) : (
-          <Card className="p-4 border-amber-200 bg-amber-50/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-amber-800">⚠️ Not Connected</div>
-                <div className="text-sm text-amber-700 mt-1">Please connect your LinkedIn account.</div>
-              </div>
-              <a href={connectHref}>
-                <Button>Connect LinkedIn →</Button>
-              </a>
-            </div>
-          </Card>
-        )}
-
-        {/* Step 3: Generate Content */}
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-semibold">Generate Approved Posts</div>
-              <div className="text-sm text-zinc-600">Run your content generation pipeline</div>
-            </div>
-            <Button onClick={onGenerateApproved} disabled={busyGen || !isAuthenticated}>
-              {busyGen ? "Generating…" : "Generate"}
-            </Button>
-          </div>
-          {!isAuthenticated && <div className="text-sm text-amber-600">Connect your LinkedIn account to generate posts</div>}
-        </Card>
-
-        {/* Step 4: Approved Queue */}
-        <Card className="p-0">
-          <div className="px-4 py-3 border-b">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">Approved Queue</div>
-                <div className="text-sm text-zinc-600">
-                  {approved.length ? `${approved.length} post${approved.length === 1 ? "" : "s"} ready` : "No approved posts yet"}
-                </div>
-              </div>
-              {approved.length > 0 && (
-                <div className="text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          const newSel: Record<string, boolean> = {};
-                          approved.forEach((p) => (newSel[p.id] = true));
-                          setSel(newSel);
-                        } else {
-                          setSel({});
-                        }
-                      }}
-                      checked={approved.length > 0 && approved.every((p) => sel[p.id])}
-                    />
-                    Select all
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {approved.length > 0 && (
-            <div className="p-4 border-b">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPublish("MEMBER", false)}
-                  disabled={busyPub || selectedIds.length === 0 || !isAuthenticated}
-                >
-                  Draft as Member
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onPublish("MEMBER", true)}
-                  disabled={busyPub || selectedIds.length === 0 || !isAuthenticated}
-                >
-                  Publish as Member
-                </Button>
-                {orgs.length > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onPublish("ORG", false)}
-                      disabled={busyPub || selectedIds.length === 0 || !isAuthenticated}
-                    >
-                      Draft as Org
-                    </Button>
-                    <Button size="sm" onClick={() => onPublish("ORG", true)} disabled={busyPub || selectedIds.length === 0 || !isAuthenticated}>
-                      Publish as Org
-                    </Button>
-                  </>
-                )}
-              </div>
-              {!isAuthenticated && selectedIds.length > 0 && (
-                <div className="text-sm text-amber-600 mt-2">Connect your LinkedIn account to publish posts</div>
-              )}
-            </div>
-          )}
-
-          <div className="divide-y divide-zinc-100">
-            {!approved || approved.length === 0 ? (
-              <div className="px-6 py-8 text-sm text-zinc-600 text-center">No posts yet. Click "Generate" to create some sample posts.</div>
-            ) : (
-              approved.map((p, index) => (
-                <label key={p.id || index} className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isSelected(p.id)}
-                    onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
-                    className="mt-1 h-4 w-4"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium">{p.content || "No content"}</div>
-                    {p.hashtags && p.hashtags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {p.hashtags.map((h, i) => (
-                          <span key={i} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
-                            #{h.replace(/^#/, "")}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-2 text-xs text-zinc-600">
-                      Status: <span className="font-medium">{p.status || "pending"}</span>
-                      {p.li_post_id && (
-                        <span className="ml-2">
-                          LinkedIn ID: <span className="font-mono">{p.li_post_id}</span>
+          ) : (
+            approved.map((p) => (
+              <label key={p.id} className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!sel[p.id]}
+                  onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
+                  className="mt-1 h-4 w-4"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{p.content || "No content"}</div>
+                  {p.hashtags?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {p.hashtags.map((h, i) => (
+                        <span key={i} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
+                          #{h.replace(/^#/, "")}
                         </span>
-                      )}
+                      ))}
                     </div>
+                  ) : null}
+                  <div className="mt-2 text-xs text-zinc-600">
+                    Status: <span className="font-medium">{p.status || "approved"}</span>
+                    {p.li_post_id && (
+                      <span className="ml-2">Local ID: <span className="font-mono">{p.li_post_id}</span></span>
+                    )}
+                    {p.error_message && <div className="text-red-600 mt-1">{p.error_message}</div>}
                   </div>
-                  <div className="text-xs text-zinc-500 shrink-0">{p.created_at ? new Date(p.created_at).toLocaleDateString() : "Now"}</div>
-                </label>
-              ))
-            )}
-          </div>
+                </div>
+                <div className="text-xs text-zinc-500 shrink-0">
+                  {p.created_at ? new Date(p.created_at).toLocaleDateString() : "Now"}
+                </div>
+              </label>
+            ))
+          )}
+        </div>
 
-          {approved.length > 0 && (
-            <div className="flex items-center justify-between px-6 py-3 border-t">
-              <div className="text-sm text-zinc-600">
-                Selected: <span className="font-semibold">{selectedIds.length}</span> of {approved.length}
-              </div>
-              <Button variant="ghost" size="sm" onClick={clearSelection} disabled={!selectedIds.length}>
-                Clear selection
+        {approved.length > 0 && (
+          <div className="flex items-center justify-between px-6 py-3 border-t">
+            <div className="text-sm text-zinc-600">
+              Selected: <span className="font-semibold">{selectedIds.length}</span> of {approved.length}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPublish(false)}
+                disabled={busy || selectedIds.length === 0}
+              >
+                Save as Draft
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => onPublish(true)}
+                disabled={busy || selectedIds.length === 0}
+              >
+                Publish Now
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClear}
+                disabled={busy}
+              >
+                Clear Queue
               </Button>
             </div>
-          )}
-        </Card>
-
-        {/* Debug block */}
-        {debug && (
-          <Card className="p-4 bg-gray-50 text-xs font-mono">
-            <div>Authenticated: {isAuthenticated ? "Yes" : "No"}</div>
-            <div>User: {me?.name || "None"}</div>
-            <div>Orgs: {orgs.length}</div>
-            <div>Approved Posts: {approved.length}</div>
-            <div>Posts Data: {JSON.stringify(approved.slice(0, 1), null, 2)}</div>
-          </Card>
+          </div>
         )}
-      </div>
-    </>
+      </Card>
+
+      {/* Debug */}
+      {debug && (
+        <Card className="p-4 bg-gray-50 text-xs font-mono">
+          <div>Approved: {approved.length}</div>
+          <div>Selected IDs: {JSON.stringify(selectedIds)}</div>
+        </Card>
+      )}
+    </div>
   );
 }
