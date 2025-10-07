@@ -4,7 +4,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { apiGet, apiPost, API_BASE, linkedInLoginUrl } from "@/lib/config";
+import { apiGet, apiPost, API_BASE } from "@/lib/config";
 
 type LinkedInSettings = {
   client_id?: string | null;
@@ -23,46 +23,31 @@ export default function LinkedInAppSettings() {
   const [message, setMessage] = React.useState<{ type: "success" | "error" | "warning" | "info"; text: string } | null>(null);
   const [expanded, setExpanded] = React.useState(true);
   const [copied, setCopied] = React.useState(false);
-  const [currentUrl, setCurrentUrl] = React.useState("");
 
   const fetchSettings = React.useCallback(async () => {
     try {
       const s = await apiGet<LinkedInSettings>("/api/settings/linkedin");
       setSettings(s);
-      
-      // Pre-fill form if settings exist
+
       if (s.client_id) setClientId(s.client_id);
-      if (s.redirect_uri) {
-        setRedirectUri(s.redirect_uri);
-      } else if (s.suggested_redirect_uri) {
-        setRedirectUri(s.suggested_redirect_uri);
-      }
-      
-      // Show form if no settings configured
+      if (s.redirect_uri) setRedirectUri(s.redirect_uri);
+      else if (s.suggested_redirect_uri) setRedirectUri(s.suggested_redirect_uri);
+
       if (!s.has_secret) {
         setExpanded(true);
-        setMessage({
-          type: "info",
-          text: "Please configure your LinkedIn OAuth app credentials to get started."
-        });
+        setMessage({ type: "info", text: "Please configure your LinkedIn OAuth app credentials to get started." });
       } else {
         setExpanded(false);
       }
     } catch (err) {
       console.error("Failed to load LinkedIn settings:", err);
       setExpanded(true);
-      setMessage({
-        type: "error",
-        text: "Failed to load settings. Please try refreshing the page."
-      });
+      setMessage({ type: "error", text: "Failed to load settings. Please try refreshing the page." });
     }
   }, []);
 
   React.useEffect(() => {
     fetchSettings();
-    if (typeof window !== "undefined") {
-      setCurrentUrl(window.location.href);
-    }
   }, [fetchSettings]);
 
   const copyToClipboard = async (text: string) => {
@@ -80,7 +65,6 @@ export default function LinkedInAppSettings() {
     setSaving(true);
     setMessage(null);
 
-    // Validation
     if (!clientId.trim()) {
       setMessage({ type: "error", text: "Client ID is required" });
       setSaving(false);
@@ -113,17 +97,17 @@ export default function LinkedInAppSettings() {
           text: "Settings saved, but the redirect URI might not match the expected value. Double-check your LinkedIn app configuration.",
         });
       } else {
-        setMessage({ type: "success", text: "Settings saved successfully! You can now connect your LinkedIn account." });
+        setMessage({ type: "success", text: "Settings saved successfully! You can now connect your LinkedIn account from the Dashboard." });
         setExpanded(false);
       }
 
       await fetchSettings();
-      setClientSecret(""); // Clear secret after saving
+      setClientSecret("");
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to save settings";
-      setMessage({ 
-        type: "error", 
-        text: errorMessage.includes("detail") ? JSON.parse(errorMessage).detail : errorMessage
+      setMessage({
+        type: "error",
+        text: errorMessage.includes("detail") ? JSON.parse(errorMessage).detail : errorMessage,
       });
     } finally {
       setSaving(false);
@@ -131,14 +115,12 @@ export default function LinkedInAppSettings() {
   }
 
   const suggestedRedirect = settings?.suggested_redirect_uri || `${API_BASE}/auth/linkedin/callback`;
-  const loginHref = linkedInLoginUrl(true, currentUrl || undefined);
   const isConfigured = settings?.has_secret === true;
 
   return (
     <div className="space-y-4">
-      {/* Main Settings Card */}
       <Card className="p-0">
-        <div 
+        <div
           className="px-4 py-3 border-b cursor-pointer hover:bg-zinc-50"
           onClick={() => setExpanded(!expanded)}
         >
@@ -149,15 +131,18 @@ export default function LinkedInAppSettings() {
                 {isConfigured && <span className="ml-2 text-green-600">✓</span>}
               </div>
               <div className="text-sm text-zinc-600">
-                {isConfigured 
-                  ? "Your LinkedIn app is configured. Click Connect LinkedIn to authenticate."
-                  : "Set up your LinkedIn OAuth app credentials"}
+                {isConfigured ? "Your LinkedIn app is configured." : "Set up your LinkedIn OAuth app credentials"}
               </div>
             </div>
-            <Button variant="ghost" size="sm" type="button" onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(!expanded);
-            }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(!expanded);
+              }}
+            >
               {expanded ? "Hide" : "Edit"}
             </Button>
           </div>
@@ -165,14 +150,13 @@ export default function LinkedInAppSettings() {
 
         {expanded && (
           <div className="p-4 space-y-4">
-            {/* Quick Instructions */}
             <div className="bg-blue-50 rounded-lg p-3 text-sm">
               <div className="font-medium mb-2">Quick Setup:</div>
               <ol className="space-y-1 ml-4 list-decimal">
                 <li>
-                  <a 
-                    href="https://www.linkedin.com/developers/apps/new" 
-                    target="_blank" 
+                  <a
+                    href="https://www.linkedin.com/developers/apps/new"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:underline"
                   >
@@ -185,26 +169,17 @@ export default function LinkedInAppSettings() {
               </ol>
             </div>
 
-            {/* Redirect URI Display */}
             <div className="space-y-2">
               <div className="text-sm font-medium">OAuth 2.0 Redirect URL (add this to your LinkedIn app):</div>
               <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border">
                 <code className="text-xs flex-1 font-mono break-all">{suggestedRedirect}</code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  onClick={() => copyToClipboard(suggestedRedirect)}
-                >
+                <Button size="sm" variant="outline" type="button" onClick={() => copyToClipboard(suggestedRedirect)}>
                   {copied ? "Copied!" : "Copy"}
                 </Button>
               </div>
-              <div className="text-xs text-amber-600">
-                ⚠️ Must match EXACTLY in your LinkedIn app (including https://)
-              </div>
+              <div className="text-xs text-amber-600">⚠️ Must match EXACTLY in your LinkedIn app (including https://)</div>
             </div>
 
-            {/* Credentials Form */}
             <form onSubmit={handleSave} className="space-y-3">
               <div>
                 <label htmlFor="client_id" className="block text-sm font-medium mb-1">
@@ -253,9 +228,7 @@ export default function LinkedInAppSettings() {
                   className="w-full px-3 py-2 border rounded-md text-sm font-mono"
                 />
                 {redirectUri && redirectUri !== suggestedRedirect && (
-                  <div className="text-xs text-amber-600 mt-1">
-                    Warning: This doesn't match the expected URL. Make sure it's correct.
-                  </div>
+                  <div className="text-xs text-amber-600 mt-1">Warning: This doesn't match the expected URL. Make sure it's correct.</div>
                 )}
               </div>
 
@@ -264,59 +237,24 @@ export default function LinkedInAppSettings() {
               </Button>
             </form>
 
-            {/* Message Display */}
             {message && (
-              <div className={`rounded-lg p-3 text-sm ${
-                message.type === "success" ? "bg-green-50 text-green-800" :
-                message.type === "warning" ? "bg-amber-50 text-amber-800" :
-                message.type === "error" ? "bg-red-50 text-red-800" :
-                "bg-blue-50 text-blue-800"
-              }`}>
+              <div
+                className={`rounded-lg p-3 text-sm ${
+                  message.type === "success"
+                    ? "bg-green-50 text-green-800"
+                    : message.type === "warning"
+                    ? "bg-amber-50 text-amber-800"
+                    : message.type === "error"
+                    ? "bg-red-50 text-red-800"
+                    : "bg-blue-50 text-blue-800"
+                }`}
+              >
                 {message.text}
               </div>
             )}
           </div>
         )}
       </Card>
-
-      {/* Connect LinkedIn Button - Only show when configured */}
-      {isConfigured && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-semibold">Connect Your LinkedIn Account</div>
-              <div className="text-sm text-zinc-600">
-                Authenticate with LinkedIn to start publishing content
-              </div>
-            </div>
-            <a href={loginHref}>
-              <Button>
-                Connect LinkedIn →
-              </Button>
-            </a>
-          </div>
-        </Card>
-      )}
-
-      {/* Troubleshooting */}
-      {expanded && (
-        <details className="text-sm">
-          <summary className="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
-            Common Issues & Solutions
-          </summary>
-          <div className="mt-3 space-y-2 ml-4 text-gray-600">
-            <div>
-              <strong>Invalid redirect_uri:</strong> The URL in your LinkedIn app must match exactly
-            </div>
-            <div>
-              <strong>Unauthorized scope:</strong> Request required products in LinkedIn app
-            </div>
-            <div>
-              <strong>Can't post to org:</strong> Need "Advertising API" product + org admin access
-            </div>
-          </div>
-        </details>
-      )}
     </div>
   );
 }
