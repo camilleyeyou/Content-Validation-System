@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
+  const [debug, setDebug] = React.useState(false); // Debug toggle
 
   const selectedIds = React.useMemo(
     () => Object.entries(sel).filter(([, v]) => v).map(([k]) => k),
@@ -52,7 +53,8 @@ export default function DashboardPage() {
     try {
       // Always fetch approved posts (works even when not authenticated)
       const approvedResp = await apiGet<ApprovedRec[]>("/api/approved");
-      setApproved(approvedResp);
+      console.log("Fetched approved posts:", approvedResp); // Debug log
+      setApproved(approvedResp || []); // Ensure we always set an array
 
       // Try to fetch user info
       try {
@@ -76,6 +78,7 @@ export default function DashboardPage() {
         setOrgs([]);
       }
     } catch (e: any) {
+      console.error("Error fetching data:", e); // Debug log
       setError(e?.message || "Failed to load data");
     } finally {
       setLoading(false);
@@ -84,6 +87,13 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     fetchAll();
+    // Poll every 5 seconds when authenticated to catch session updates
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAll();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
   }, [fetchAll]);
 
   function clearSelection() {
@@ -105,10 +115,28 @@ export default function DashboardPage() {
     setError(null);
     
     try {
+      console.log("Generating posts..."); // Debug log
       const res = await apiPost<{ approved_count: number; batch_id?: string }>("/api/run-batch", {});
-      setNotice(`Generated ${res.approved_count} approved post(s).`);
-      await fetchAll();
+      console.log("Generate response:", res); // Debug log
+      
+      setNotice(`Generated ${res.approved_count} approved post(s). Refreshing...`);
+      
+      // Force a refresh after a short delay to ensure backend has saved
+      setTimeout(async () => {
+        await fetchAll();
+        // Check if posts were actually added
+        const newApproved = await apiGet<ApprovedRec[]>("/api/approved");
+        console.log("After generate, approved posts:", newApproved); // Debug log
+        if (newApproved && newApproved.length > approved.length) {
+          setNotice(`Successfully added ${newApproved.length - approved.length} new posts!`);
+        } else if (newApproved && newApproved.length === approved.length) {
+          setError("Posts were generated but may not have been saved. Try refreshing the page.");
+        }
+        setApproved(newApproved || []);
+      }, 500);
+      
     } catch (e: any) {
+      console.error("Generate error:", e); // Debug log
       setError(`Generate failed: ${e?.message || e}`);
     } finally {
       setBusyGen(false);
@@ -121,7 +149,10 @@ export default function DashboardPage() {
       return;
     }
     
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0) {
+      setError("Please select at least one post to publish");
+      return;
+    }
     
     setBusyPub(true);
     setNotice(null);
@@ -141,15 +172,18 @@ export default function DashboardPage() {
         payload.org_id = orgs[0].id;
       }
 
+      console.log("Publishing with payload:", payload); // Debug log
       const res = await apiPost<{ successful: number; results: any[] }>(
         "/api/approved/publish",
         payload
       );
+      console.log("Publish response:", res); // Debug log
       
       setNotice(`Successfully ${publishNow ? 'published' : 'drafted'} ${res.successful} of ${selectedIds.length} posts`);
       clearSelection();
       await fetchAll();
     } catch (e: any) {
+      console.error("Publish error:", e); // Debug log
       setError(`Publish failed: ${e?.message || e}`);
     } finally {
       setBusyPub(false);
@@ -181,10 +215,30 @@ export default function DashboardPage() {
               Configure LinkedIn, generate content, and publish
             </p>
           </div>
-          <Button variant="outline" onClick={() => fetchAll()}>
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => fetchAll()}>
+              Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setDebug(!debug)}
+            >
+              {debug ? "Hide" : "Show"} Debug
+            </Button>
+          </div>
         </div>
+
+        {/* Debug Info */}
+        {debug && (
+          <Card className="p-4 bg-gray-50 text-xs font-mono">
+            <div>Authenticated: {isAuthenticated ? "Yes" : "No"}</div>
+            <div>User: {me?.name || "None"}</div>
+            <div>Orgs: {orgs.length}</div>
+            <div>Approved Posts: {approved.length}</div>
+            <div>Posts Data: {JSON.stringify(approved.slice(0, 1), null, 2)}</div>
+          </Card>
+        )}
 
         {/* Status Messages */}
         {notice && (
@@ -212,15 +266,6 @@ export default function DashboardPage() {
                   {me?.email && <span className="text-green-600"> ({me.email})</span>}
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                onClick={async () => {
-                  await apiPost("/api/logout", {});
-                  await fetchAll();
-                }}
-              >
-                Disconnect
-              </Button>
             </div>
             {orgs.length > 0 && (
               <div className="text-sm text-green-700">
@@ -263,11 +308,35 @@ export default function DashboardPage() {
         {/* Step 4: Approved Queue */}
         <Card className="p-0">
           <div className="px-4 py-3 border-b">
-            <div className="font-semibold">Approved Queue</div>
-            <div className="text-sm text-zinc-600">
-              {approved.length 
-                ? `${approved.length} post${approved.length === 1 ? '' : 's'} ready` 
-                : "No approved posts yet"}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold">Approved Queue</div>
+                <div className="text-sm text-zinc-600">
+                  {approved.length 
+                    ? `${approved.length} post${approved.length === 1 ? '' : 's'} ready` 
+                    : "No approved posts yet"}
+                </div>
+              </div>
+              {approved.length > 0 && (
+                <div className="text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const newSel: Record<string, boolean> = {};
+                          approved.forEach(p => newSel[p.id] = true);
+                          setSel(newSel);
+                        } else {
+                          setSel({});
+                        }
+                      }}
+                      checked={approved.length > 0 && approved.every(p => sel[p.id])}
+                    />
+                    Select all
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -321,14 +390,14 @@ export default function DashboardPage() {
 
           {/* Post List */}
           <div className="divide-y divide-zinc-100">
-            {approved.length === 0 ? (
+            {!approved || approved.length === 0 ? (
               <div className="px-6 py-8 text-sm text-zinc-600 text-center">
                 No posts yet. Click "Generate" to create some sample posts.
               </div>
             ) : (
-              approved.map((p) => (
+              approved.map((p, index) => (
                 <label
-                  key={p.id}
+                  key={p.id || index}
                   className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer"
                 >
                   <input
@@ -341,9 +410,9 @@ export default function DashboardPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">
-                      {p.content}
+                      {p.content || "No content"}
                     </div>
-                    {p.hashtags?.length > 0 && (
+                    {p.hashtags && p.hashtags.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {p.hashtags.map((h, i) => (
                           <span
@@ -356,7 +425,7 @@ export default function DashboardPage() {
                       </div>
                     )}
                     <div className="mt-2 text-xs text-zinc-600">
-                      Status: <span className="font-medium">{p.status}</span>
+                      Status: <span className="font-medium">{p.status || "pending"}</span>
                       {p.li_post_id && (
                         <span className="ml-2">
                           LinkedIn ID: <span className="font-mono">{p.li_post_id}</span>
@@ -365,7 +434,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="text-xs text-zinc-500 shrink-0">
-                    {new Date(p.created_at).toLocaleDateString()}
+                    {p.created_at ? new Date(p.created_at).toLocaleDateString() : "Now"}
                   </div>
                 </label>
               ))
