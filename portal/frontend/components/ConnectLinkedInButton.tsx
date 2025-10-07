@@ -1,37 +1,35 @@
+// portal/frontend/components/ConnectLinkedInButton.tsx
 "use client";
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { API_BASE, linkedInLoginUrl } from "@/lib/config";
+import { linkedInLoginUrl } from "@/lib/config";
 
-type Props = {
+interface ConnectLinkedInButtonProps {
   includeOrg?: boolean;
-  variant?: React.ComponentProps<typeof Button>["variant"];
-  className?: string;
+  variant?: "default" | "outline" | "secondary" | "ghost";
   children?: React.ReactNode;
-};
+}
 
-export default function ConnectLinkedInButton({
-  includeOrg = true,
-  variant,
-  className,
-  children,
-}: Props) {
-  const [href, setHref] = React.useState<string>(linkedInLoginUrl(includeOrg));
+export default function ConnectLinkedInButton({ 
+  includeOrg = false, 
+  variant = "default",
+  children 
+}: ConnectLinkedInButtonProps) {
+  const [currentUrl, setCurrentUrl] = React.useState<string>("");
 
   React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const redirect = window.location.href; // send them back to where they clicked
-    const url = new URL(`${API_BASE}/auth/linkedin/login`);
-    if (includeOrg) url.searchParams.set("include_org", "true");
-    url.searchParams.set("redirect", redirect);
-    setHref(url.toString());
-  }, [includeOrg]);
+    if (typeof window !== "undefined") {
+      setCurrentUrl(window.location.href);
+    }
+  }, []);
+
+  const loginHref = linkedInLoginUrl(includeOrg, currentUrl || undefined);
 
   return (
-    <a href={href}>
-      <Button variant={variant} className={className}>
-        {children ?? "Connect LinkedIn"}
+    <a href={loginHref}>
+      <Button variant={variant}>
+        {children || "Connect LinkedIn"}
       </Button>
     </a>
   );
