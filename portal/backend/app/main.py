@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 import time
 import logging
+import asyncio
+import importlib.util
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+# Make sure project root is importable (for tests/ and src/)
+sys.path.insert(0, os.path.abspath("."))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("portal.backend")
@@ -19,24 +25,23 @@ logger = logging.getLogger("portal.backend")
 # ------------------------------------------------------------------------------
 FRONTEND_ORIGIN = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")
 
-# Default “system” user (no auth)
+# Single global user (no LinkedIn auth)
 DEFAULT_USER_SUB = os.getenv("DEFAULT_USER_SUB", "system")
 DEFAULT_USER_NAME = os.getenv("DEFAULT_USER_NAME", "Portal User")
 DEFAULT_USER_EMAIL = os.getenv("DEFAULT_USER_EMAIL", "portal@example.com")
 
-# Optional org id (only for display/target metadata)
+# Optional org id for display/target metadata only
 LINKEDIN_ORG_ID = os.getenv("LINKEDIN_ORG_ID")
 
-# test_complete_system hook
+# Test runner path
 TEST_IMPORT_PATH = os.getenv("TEST_IMPORT_PATH", "tests.test_complete_system")
 TEST_FUNCTION_NAME = os.getenv("TEST_FUNCTION_NAME", "test_complete_system")
 
 # ------------------------------------------------------------------------------
 # App & CORS
 # ------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API (no LinkedIn auth)", version="1.1.0")
+app = FastAPI(title="Content Portal API (real OpenAI required)", version="1.3.0")
 
-# Easiest cross-origin behavior for Vercel previews: allow any origin by default
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if os.getenv("CORS_ALLOW_ANY", "1") == "1" else [FRONTEND_ORIGIN],
@@ -47,7 +52,7 @@ app.add_middleware(
 )
 
 # ------------------------------------------------------------------------------
-# In-memory DB (demo) aligned to your SQL model
+# In-memory DB (demo) aligned with your SQL model
 # ------------------------------------------------------------------------------
 DB: Dict[str, Dict[str, Any]] = {
     "users": {},   # li_sub -> {sub, name, email, created_at}
@@ -96,7 +101,7 @@ def _new_post_row(
 ) -> Dict[str, Any]:
     return {
         "id": uuid.uuid4().hex,
-        "user_id": None,  # demo: no DB FK
+        "user_id": None,  # demo only
         "user_sub": DEFAULT_USER_SUB,
         "target_type": target_type,     # 'MEMBER' | 'ORG'
         "target_urn": target_urn,       # urn:li:person:SUB or urn:li:organization:ID
@@ -112,9 +117,10 @@ def _new_post_row(
 
 def _extract_posts_from_batch(batch: Any) -> List[Dict[str, Any]]:
     """
-    Pull approved posts from typical shapes returned by test_complete_system:
-      - batch.get_approved_posts() -> list[{content, hashtags?}]
+    Pull approved posts from typical shapes returned by tests/test_complete_system:
+      - batch.get_approved_posts() -> list of objects or dicts
       - dict keys: approved / approved_posts / posts -> list[...]
+    Each item should yield {content, hashtags?}.
     """
     posts = None
     if hasattr(batch, "get_approved_posts"):
@@ -129,32 +135,48 @@ def _extract_posts_from_batch(batch: Any) -> List[Dict[str, Any]]:
                 break
     if not posts:
         return []
+
     out: List[Dict[str, Any]] = []
     for p in posts:
-        if not isinstance(p, dict):
-            continue
-        content = (p.get("content") or p.get("text") or p.get("body") or "").strip()
+        if isinstance(p, dict):
+            content = (p.get("content") or p.get("text") or p.get("body") or "").strip()
+            ht = p.get("hashtags") or p.get("tags") or []
+        else:
+            content = (getattr(p, "content", None) or getattr(p, "text", None) or "").strip()
+            ht = getattr(p, "hashtags", []) or getattr(p, "tags", []) or []
         if not content:
             continue
-        ht = p.get("hashtags") or p.get("tags") or []
         if isinstance(ht, str):
             ht = [ht]
         out.append({"content": content, "hashtags": _normalize_hashtags(ht)})
     return out
 
-def _fallback_fake_batch() -> Any:
-    """Fallback generator when openai (or the test module) is unavailable."""
-    class FakeBatch:
-        def __init__(self):
-            self.id = uuid.uuid4().hex
-            self._posts = [
-                {"content": "We shipped a small UX polish today.", "hashtags": ["ProductUpdate", "UX"]},
-                {"content": "3 quick lessons from our pipeline run.", "hashtags": ["Engineering", "DevNotes"]},
-                {"content": "Roadmap peek: dashboard cleanup + copy-to-clipboard.", "hashtags": ["Startup", "SaaS"]},
-            ]
-        def get_approved_posts(self):
-            return self._posts
-    return FakeBatch()
+def _openai_installed() -> bool:
+    return importlib.util.find_spec("openai") is not None
+
+async def _run_test_function_async() -> Any:
+    """
+    Import and run tests.test_complete_system.test_complete_system(run_publish=False).
+    Returns whatever the test returns (batch-like object).
+    """
+    # Enforce REAL OpenAI if the key is present
+    if os.getenv("OPENAI_API_KEY") and not _openai_installed():
+        raise RuntimeError(
+            "OPENAI_API_KEY is set, but the 'openai' package is not installed. "
+            "Add 'openai>=1.7,<2' to requirements.txt and redeploy."
+        )
+
+    # Import module dynamically
+    mod = __import__(TEST_IMPORT_PATH, fromlist=[TEST_FUNCTION_NAME])
+    fn = getattr(mod, TEST_FUNCTION_NAME, None)
+    if fn is None:
+        raise RuntimeError(f"Function {TEST_FUNCTION_NAME} not found in {TEST_IMPORT_PATH}")
+
+    # Call with run_publish=False so no LinkedIn calls happen
+    result = fn(run_publish=False)
+    if asyncio.iscoroutine(result):
+        result = await result
+    return result
 
 # ------------------------------------------------------------------------------
 # Routes
@@ -175,13 +197,11 @@ def api_orgs():
         return {"orgs": [{"id": LINKEDIN_ORG_ID, "urn": f"urn:li:organization:{LINKEDIN_ORG_ID}"}]}
     return {"orgs": []}
 
-# --- legacy alias so old UI doesn't 404 and cause re-renders -------------------
+# Legacy alias so old callers don't 404
 @app.get("/api/approved")
 def api_approved_alias():
-    # Return all stored posts (you can filter to QUEUED if you prefer)
     return list(sorted(DB["posts"].values(), key=lambda r: r["created_at"], reverse=True))
 
-# --- posts (create + list) ----------------------------------------------------
 from pydantic import BaseModel
 
 class ComposeIn(BaseModel):
@@ -194,16 +214,14 @@ class ComposeIn(BaseModel):
 @app.post("/api/posts")
 def create_post(payload: ComposeIn):
     """
-    Store a post locally (no LinkedIn).
-    'publish_now' just toggles lifecycle to PUBLISHED locally.
+    Store a post locally (copy/paste workflow). No LinkedIn calls.
     """
     user = current_user()
 
     if payload.target == "ORG":
-        if not payload.org_id and LINKEDIN_ORG_ID:
-            payload.org_id = LINKEDIN_ORG_ID
+        org_id = payload.org_id or LINKEDIN_ORG_ID or "unknown"
         target_type = "ORG"
-        target_urn = f"urn:li:organization:{payload.org_id or 'unknown'}"
+        target_urn = f"urn:li:organization:{org_id}"
     elif payload.target == "MEMBER":
         target_type = "MEMBER"
         target_urn = f"urn:li:person:{user['sub']}"
@@ -228,70 +246,50 @@ def create_post(payload: ComposeIn):
 
 @app.get("/api/posts")
 def list_posts():
-    # Global queue
+    # Global queue (all users)
     return list(sorted(DB["posts"].values(), key=lambda r: r["created_at"], reverse=True))
 
-# --- run the full system (generate approved posts) ----------------------------
 @app.post("/api/run-batch")
-def run_batch():
+async def run_batch():
     """
-    Attempt to run tests.test_complete_system.test_complete_system.
-    If openai (or the test module) is missing, fall back to a built-in generator
-    so the UI remains usable.
+    Run the full system test and ingest approved posts into the local queue.
+    Always uses run_publish=False (no LinkedIn).
+    Requires real OpenAI when OPENAI_API_KEY is set.
     """
-    batch = None
     try:
-        mod = __import__(TEST_IMPORT_PATH, fromlist=[TEST_FUNCTION_NAME])
-        fn = getattr(mod, TEST_FUNCTION_NAME)
-        # support sync/async
-        if getattr(fn, "__code__", None) and (fn.__code__.co_flags & 0x80):
-            import asyncio
-            batch = asyncio.run(fn())
-        else:
-            batch = fn()
-    except ModuleNotFoundError as e:
-        # Typical case: openai not installed or test module missing.
-        logger.error("Module import error, using fallback generator: %s", e)
-        batch = _fallback_fake_batch()
+        batch = await _run_test_function_async()
+        approved = _extract_posts_from_batch(batch)
+        logger.info("Approved posts from test: %d", len(approved))
+
+        user = current_user()
+        target_type = "ORG" if LINKEDIN_ORG_ID else "MEMBER"
+        target_urn = f"urn:li:organization:{LINKEDIN_ORG_ID}" if LINKEDIN_ORG_ID else f"urn:li:person:{user['sub']}"
+
+        added = 0
+        for p in approved:
+            row = _new_post_row(
+                commentary=p["content"],
+                hashtags=_normalize_hashtags(p.get("hashtags") or []),
+                target_type=target_type,
+                target_urn=target_urn,
+                lifecycle="QUEUED",
+            )
+            DB["posts"][row["id"]] = row
+            added += 1
+
+        return {
+            "batch_id": getattr(batch, "id", None),
+            "approved": len(approved),
+            "added": added,
+            "published": 0,
+            "errors": [],
+        }
     except Exception as e:
-        logger.error("Test run error, using fallback generator: %s", e, exc_info=True)
-        batch = _fallback_fake_batch()
+        logger.error("Run-batch error: %s", e, exc_info=True)
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
-    approved = _extract_posts_from_batch(batch)
-    logger.info("Approved from system run: %d", len(approved))
-
-    user = current_user()
-    target_type = "ORG" if LINKEDIN_ORG_ID else "MEMBER"
-    target_urn = f"urn:li:organization:{LINKEDIN_ORG_ID}" if LINKEDIN_ORG_ID else f"urn:li:person:{user['sub']}"
-
-    added = 0
-    for p in approved:
-        row = _new_post_row(
-            commentary=p["content"],
-            hashtags=_normalize_hashtags(p.get("hashtags") or []),
-            target_type=target_type,
-            target_urn=target_urn,
-            lifecycle="QUEUED",
-        )
-        DB["posts"][row["id"]] = row
-        added += 1
-
-    return {
-        "batch_id": getattr(batch, "id", None),
-        "approved": len(approved),
-        "added": added,
-        "published": 0,
-        "errors": [],
-    }
-
-# --- utility ------------------------------------------------------------------
 @app.post("/api/approved/clear")
 def clear_all():
     n = len(DB["posts"])
     DB["posts"].clear()
     return {"deleted": n}
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    logger.error("Unhandled exception: %s", exc, exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
