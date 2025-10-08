@@ -1,6 +1,15 @@
+# --- core web ---
 fastapi>=0.110
 uvicorn[standard]>=0.27
 requests>=2.31
-pydantic>=2.5
+pydantic>=2.6
+
+# --- config & env ---
 python-dotenv>=1.0
-openai>=1.7,<2
+PyYAML>=6.0
+
+# --- AI client (needed by src/infrastructure/ai/openai_client.py) ---
+openai>=1.30.0
+
+# --- logging (needed by logger_config / structlog imports) ---
+structlog>=24.1
