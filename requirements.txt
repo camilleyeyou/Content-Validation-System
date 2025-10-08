@@ -1,20 +1,4 @@
-# requirements.txt
-fastapi==0.115.5
-uvicorn[standard]==0.30.3
-requests==2.32.3
-pydantic==2.11.0
-python-dotenv==1.0.1
-
-# You used this earlier
-structlog==25.4.0
-
-# Data utils you had
-pandas==2.3.3
-openpyxl==3.1.5
-redis==6.4.0
-
-# Fix the failing pin:
-tenacity==9.1.2
-
-# Needed by starlette.middleware.sessions
-itsdangerous==2.2.0
+fastapi
+uvicorn[standard]
+requests
+openai>=1.43.0

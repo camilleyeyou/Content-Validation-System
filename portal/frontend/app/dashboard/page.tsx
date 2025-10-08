@@ -67,7 +67,7 @@ export default function Dashboard() {
         hashtags: hashtags.split(",").map((s) => s.trim()).filter(Boolean),
         target,
         org_id: target === "ORG" ? orgId : null,
-        publish_now: true, // local publish flag (no LinkedIn)
+        publish_now: true, // local publish (no LinkedIn)
       };
       const data = await fetchJSON(`${API_BASE}/api/posts`, {
         method: "POST",
@@ -189,23 +189,36 @@ export default function Dashboard() {
             return (
               <div key={r.id} style={{ border: "1px solid #ddd", padding: 12 }}>
                 <div style={{ fontSize: 12, color: "#666" }}>
-                  {r.target_type} • {r.lifecycle} • {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
+                  {r.target_type} • {r.lifecycle} •{" "}
+                  {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
                 </div>
                 <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{r.commentary}</div>
                 {r.hashtags?.length ? (
                   <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {r.hashtags.map((h, i) => (
-                      <span key={i} style={{ fontSize: 12, background: "#f2f2f2", padding: "2px 6px", borderRadius: 999 }}>
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: 12,
+                          background: "#f2f2f2",
+                          padding: "2px 6px",
+                          borderRadius: 999,
+                        }}
+                      >
                         #{h}
                       </span>
                     ))}
                   </div>
                 ) : null}
                 {r.li_post_id && (
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>LinkedIn ID: {r.li_post_id}</div>
+                  <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>
+                    LinkedIn ID: {r.li_post_id}
+                  </div>
                 )}
                 {r.error_message && (
-                  <div style={{ fontSize: 12, color: "#B00020", marginTop: 6 }}>Error: {r.error_message}</div>
+                  <div style={{ fontSize: 12, color: "#B00020", marginTop: 6 }}>
+                    Error: {r.error_message}
+                  </div>
                 )}
                 <div style={{ marginTop: 8 }}>
                   <button
