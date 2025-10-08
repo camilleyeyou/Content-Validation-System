@@ -18,8 +18,8 @@ from pydantic import BaseModel
 from sqlalchemy import (
     create_engine, MetaData, Table, Column, String, Text, DateTime
 )
-from sqlalchemy import select, insert, delete
-from sqlalchemy import Engine, Row
+from sqlalchemy.sql import select, insert, delete
+from sqlalchemy.engine import Engine, Row
 
 # ===========================
 # Env / basic config
@@ -27,10 +27,22 @@ from sqlalchemy import Engine, Row
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")
 PORT = int(os.getenv("PORT", "8080"))
 
-# Where the FE calls this API from (CORS)
-CORS_ALLOW = [PORTAL_BASE_URL]
+# ---- CORS config ----
+# Prefer explicit list via CORS_ALLOW_ORIGINS (comma-separated).
+# Otherwise fall back to a permissive regex that matches vercel/railway/localhost.
+def _split_env_list(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
 
-# Path for SQLite file (committed to ephemeral FS unless you mount a Persistent Volume on Railway)
+CORS_ALLOW_ORIGINS = _split_env_list(os.getenv("CORS_ALLOW_ORIGINS"))
+CORS_ALLOW_ORIGIN_REGEX = os.getenv(
+    "CORS_ALLOW_ORIGIN_REGEX",
+    # vercel/railway/localhost (http or https)
+    r"^https?:\/\/([a-z0-9-]+\.)*(vercel\.app|railway\.app|localhost(:\d{1,5})?)$"
+)
+
+# Path for SQLite file
 DATA_DIR = os.getenv("DATA_DIR", "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(DATA_DIR, 'app.db')}")
@@ -41,8 +53,7 @@ DB_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(DATA_DIR, 'app.db')
 engine: Engine = create_engine(DB_URL, future=True)
 meta = MetaData()
 
-# A single global queue of generated posts (no user auth needed)
-# Match the shape your FE expects: id, content, hashtags[], status, created_at, li_post_id, error_message
+# A single global queue of generated posts
 posts = Table(
     "posts",
     meta,
@@ -72,12 +83,15 @@ def row_to_approved(rec: Row) -> Dict[str, Any]:
 # ===========================
 # App
 # ===========================
-app = FastAPI(title="Content Portal API", version="1.2.0")
+app = FastAPI(title="Content Portal API", version="1.2.1")
 
+# IMPORTANT: allow_origin_regex supports changing Vercel preview URLs.
+# We also keep allow_origins if you set CORS_ALLOW_ORIGINS explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ALLOW,
-    allow_credentials=True,
+    allow_origins=CORS_ALLOW_ORIGINS if CORS_ALLOW_ORIGINS else [],
+    allow_origin_regex=CORS_ALLOW_ORIGIN_REGEX if not CORS_ALLOW_ORIGINS else None,
+    allow_credentials=True,   # ok even if we don't use cookies; FE may send credentials
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -102,7 +116,6 @@ def now_utc() -> datetime:
 # -----------------------------------------------------------
 # SYSTEM PIPELINE: call your real test_complete_system runner
 # -----------------------------------------------------------
-# Uses real OpenAI if OPENAI_API_KEY is present
 from tests.test_complete_system import test_complete_system  # your actual full pipeline
 
 async def run_pipeline_and_collect() -> Dict[str, Any]:
@@ -110,7 +123,6 @@ async def run_pipeline_and_collect() -> Dict[str, Any]:
     Runs the full generation/validation pipeline and writes APPROVED posts to SQLite.
     Returns a summary dict: {approved_count, total_in_queue, batch_id}
     """
-    # Run your real end-to-end system (no publish to LinkedIn here)
     batch = await test_complete_system(run_publish=False)
 
     approved_posts = getattr(batch, "get_approved_posts", lambda: [])()
@@ -118,12 +130,8 @@ async def run_pipeline_and_collect() -> Dict[str, Any]:
 
     with engine.begin() as conn:
         for p in approved_posts:
-            # Be defensive about attribute names
             content = getattr(p, "content", "") or ""
-            hashtags = getattr(p, "hashtags", None)
-            if hashtags is None:
-                # Some models keep hashtags in the generator result; default empty list
-                hashtags = []
+            hashtags = getattr(p, "hashtags", None) or []
 
             rec = {
                 "id": uuid.uuid4().hex,
@@ -137,7 +145,6 @@ async def run_pipeline_and_collect() -> Dict[str, Any]:
             conn.execute(insert(posts).values(**rec))
             approved_count += 1
 
-        # Count total rows in queue
         total_in_queue = conn.execute(select(posts.c.id)).fetchall()
         total_in_queue = len(total_in_queue)
 
@@ -180,7 +187,6 @@ def mark_published(payload: PublishIn):
         raise HTTPException(status_code=400, detail="No posts selected")
     updated = 0
     with engine.begin() as conn:
-        # Fetch all, then update in Python to keep it simple
         existing = conn.execute(
             select(posts).where(posts.c.id.in_(payload.ids))
         ).fetchall()
@@ -208,18 +214,13 @@ async def run_batch_route():
             "total_in_queue": result["total_in_queue"],
         }
     except ModuleNotFoundError as e:
-        # Bubble up helpful error messages if a lib is missing
         return JSONResponse(
             status_code=500,
             content={"detail": f"Missing dependency: {e}. Make sure it's listed in your repo-root requirements.txt and redeploy."},
         )
     except Exception as e:
-        # Generic error with a short message
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
-# ---------------------------
-# (Optional) Root info
-# ---------------------------
 @app.get("/")
 def root():
     return {
@@ -227,4 +228,6 @@ def root():
         "message": "Content Portal API (SQLite-backed queue)",
         "db": DB_URL,
         "portal_base_url": PORTAL_BASE_URL,
+        "cors_allow_origins": CORS_ALLOW_ORIGINS,
+        "cors_allow_origin_regex": CORS_ALLOW_ORIGIN_REGEX if not CORS_ALLOW_ORIGINS else None,
     }
