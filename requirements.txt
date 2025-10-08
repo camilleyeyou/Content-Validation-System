@@ -16,8 +16,11 @@ typing_extensions>=4.9
 pandas>=2.1
 numpy>=1.25
 
-# --- OpenAI (real client, no mocks) ---
+# --- OpenAI (real client) ---
 openai>=1.30.0
 
 # --- Retries / robustness ---
 tenacity>=8.2.3
+
+# --- Persistence (NEW) ---
+SQLAlchemy>=2.0
