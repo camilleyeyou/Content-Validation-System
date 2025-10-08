@@ -3,8 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Publishing Dashboard",
-  description: "Global queue — simple publisher",
+  title: "Simple Publisher",
+  description: "Generate posts and copy/paste to LinkedIn",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="bg-white text-zinc-900">{children}</body>
     </html>
   );
 }

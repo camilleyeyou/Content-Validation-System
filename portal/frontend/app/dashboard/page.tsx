@@ -1,229 +1,232 @@
-// portal/frontend/app/dashboard/page.tsx
 "use client";
+import { useEffect, useState } from "react";
 
-import * as React from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { apiGet, apiPost } from "@/lib/config";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8001";
 
-type ApprovedRec = {
+type PostRow = {
   id: string;
-  content: string;
-  hashtags: string[];
-  status: string;
-  created_at: string;
-  li_post_id?: string | null;
-  error_message?: string | null;
+  target_type: "MEMBER" | "ORG";
+  lifecycle: string;
+  commentary: string;
+  hashtags?: string[];
+  li_post_id?: string;
+  error_message?: string;
+  created_at?: string;
 };
 
-export default function DashboardPage() {
-  const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
-  const [sel, setSel] = React.useState<Record<string, boolean>>({});
-  const [busy, setBusy] = React.useState(false);
-  const [notice, setNotice] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(true);
+export default function Dashboard() {
+  const [me, setMe] = useState<any>(null);
+  const [orgs, setOrgs] = useState<any[]>([]);
+  const [commentary, setCommentary] = useState("");
+  const [hashtags, setHashtags] = useState("MyBrand, Update");
+  const [target, setTarget] = useState<"AUTO" | "MEMBER" | "ORG">("AUTO");
+  const [orgId, setOrgId] = useState("");
+  const [rows, setRows] = useState<PostRow[]>([]);
+  const [msg, setMsg] = useState("");
 
-  const selectedIds = React.useMemo(
-    () => Object.entries(sel).filter(([, v]) => v).map(([k]) => k),
-    [sel]
-  );
-
-  const load = React.useCallback(async () => {
-    setError(null);
-    setLoading(true);
+  async function fetchJSON(url: string, opts: any = {}) {
+    const r = await fetch(url, { ...opts });
+    const text = await r.text();
+    if (!r.ok) throw new Error(text || `${r.status} ${r.statusText}`);
     try {
-      const list = await apiGet<ApprovedRec[]>("/api/approved");
-      setApproved(Array.isArray(list) ? list : []);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load queue");
-    } finally {
-      setLoading(false);
+      return JSON.parse(text);
+    } catch {
+      return text;
     }
+  }
+
+  async function loadMe() {
+    try {
+      setMe(await fetchJSON(`${API_BASE}/api/me`));
+    } catch {}
+  }
+  async function loadOrgs() {
+    try {
+      const data = await fetchJSON(`${API_BASE}/api/orgs`);
+      setOrgs(data.orgs || []);
+    } catch {}
+  }
+  async function loadPosts() {
+    try {
+      setRows(await fetchJSON(`${API_BASE}/api/posts`));
+    } catch {}
+  }
+
+  useEffect(() => {
+    loadMe();
+    loadOrgs();
+    loadPosts();
   }, []);
 
-  React.useEffect(() => {
-    load();
-  }, [load]);
-
-  function toggleAll(checked: boolean) {
-    const next: Record<string, boolean> = {};
-    for (const p of approved) next[p.id] = checked;
-    setSel(next);
-  }
-
-  async function onPublish(publishNow: boolean) {
-    if (selectedIds.length === 0) {
-      setError("Select at least one post");
-      return;
-    }
-    setBusy(true);
-    setNotice(null);
-    setError(null);
+  async function publish() {
+    setMsg("");
     try {
-      const res = await apiPost<{ successful: number; results: any[]; errors?: any[] }>(
-        "/api/approved/publish",
-        { ids: selectedIds, target: "MEMBER", publish_now: publishNow }
-      );
-      if (res.errors?.length) {
-        setError(`Some items failed (${res.successful}/${selectedIds.length}).`);
-      } else {
-        setNotice(`${publishNow ? "Published" : "Drafted"}: ${res.successful}/${selectedIds.length}`);
-      }
-      setSel({});
-      await load();
+      const payload = {
+        commentary,
+        hashtags: hashtags.split(",").map((s) => s.trim()).filter(Boolean),
+        target,
+        org_id: target === "ORG" ? orgId : null,
+        publish_now: true, // local publish flag (no LinkedIn)
+      };
+      const data = await fetchJSON(`${API_BASE}/api/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setMsg(`Saved locally as ${data.lifecycle}`);
+      setCommentary("");
+      await loadPosts();
     } catch (e: any) {
-      setError(e?.message || "Publish failed");
-    } finally {
-      setBusy(false);
+      setMsg(e?.message || "Error");
     }
   }
 
-  async function onClear() {
-    setBusy(true);
-    setNotice(null);
-    setError(null);
+  async function runBatch() {
+    setMsg("Running full system…");
     try {
-      const res = await apiPost<{ deleted: number }>("/api/approved/clear", {});
-      setNotice(`Cleared ${res.deleted} item(s).`);
-      setSel({});
-      await load();
+      const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
+      setMsg(`Batch ${data.batch_id || ""}: approved ${data.approved}, added ${data.added}`);
+      await loadPosts();
     } catch (e: any) {
-      setError(e?.message || "Clear failed");
-    } finally {
-      setBusy(false);
+      setMsg(e?.message || "Error");
     }
   }
 
-  if (loading) {
-    return (
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
-        </div>
-        <div className="flex items-center justify-center py-12">
-          <div className="text-zinc-600">Loading…</div>
-        </div>
-      </div>
-    );
+  async function clearAll() {
+    setMsg("");
+    try {
+      const data = await fetchJSON(`${API_BASE}/api/approved/clear`, { method: "POST" });
+      setMsg(`Cleared ${data.deleted} items`);
+      await loadPosts();
+    } catch (e: any) {
+      setMsg(e?.message || "Error");
+    }
   }
+
+  const subline = me ? (
+    <>
+      Acting as <b>{me.name || me.sub}</b>
+      {orgs.length > 0 ? (
+        <span style={{ color: "#666" }}> • Org ready: {orgs.map((o) => o.id).join(", ")}</span>
+      ) : null}
+    </>
+  ) : (
+    "Loading…"
+  );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
-          <p className="text-sm text-zinc-600">Global queue — publish/draft/clear.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={load}>Refresh</Button>
-        </div>
-      </div>
+    <main style={{ padding: 24, display: "grid", gap: 16, maxWidth: 900, margin: "0 auto" }}>
+      <h1>Dashboard</h1>
+      <div style={{ fontSize: 14, color: "#444" }}>{subline}</div>
 
-      {/* Status */}
-      {notice && <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">{notice}</div>}
-      {error && <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">{error}</div>}
+      <section style={{ display: "grid", gap: 8 }}>
+        <h2>Compose</h2>
+        <textarea
+          value={commentary}
+          onChange={(e) => setCommentary(e.target.value)}
+          placeholder="Write your post…"
+          style={{ width: "100%", height: 140, padding: 12 }}
+        />
+        <input
+          value={hashtags}
+          onChange={(e) => setHashtags(e.target.value)}
+          placeholder="Hashtags (comma)"
+          style={{ padding: 8 }}
+        />
 
-      {/* Queue */}
-      <Card className="p-0">
-        <div className="px-4 py-3 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-semibold">Approved Queue</div>
-              <div className="text-sm text-zinc-600">
-                {approved.length ? `${approved.length} post${approved.length === 1 ? "" : "s"} ready` : "No approved posts"}
-              </div>
-            </div>
-            {approved.length > 0 && (
-              <div className="text-sm">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    onChange={(e) => toggleAll(e.target.checked)}
-                    checked={approved.length > 0 && approved.every((p) => sel[p.id])}
-                  />
-                  Select all
-                </label>
-              </div>
-            )}
-          </div>
-        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label>Target:</label>
+          <select value={target} onChange={(e) => setTarget(e.target.value as any)}>
+            <option value="AUTO">Auto (Org if configured)</option>
+            <option value="MEMBER">Personal</option>
+            <option value="ORG">Company</option>
+          </select>
 
-        <div className="divide-y divide-zinc-100">
-          {approved.length === 0 ? (
-            <div className="px-6 py-8 text-sm text-zinc-600 text-center">
-              Nothing to publish. Push items to <code>/api/approved/add</code> from your generator.
-            </div>
-          ) : (
-            approved.map((p) => (
-              <label key={p.id} className="flex items-start gap-3 px-6 py-4 hover:bg-zinc-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={!!sel[p.id]}
-                  onChange={(e) => setSel((s) => ({ ...s, [p.id]: e.target.checked }))}
-                  className="mt-1 h-4 w-4"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{p.content || "No content"}</div>
-                  {p.hashtags?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {p.hashtags.map((h, i) => (
-                        <span key={i} className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
-                          #{h.replace(/^#/, "")}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 text-xs text-zinc-600">
-                    Status: <span className="font-medium">{p.status || "approved"}</span>
-                    {p.li_post_id && (
-                      <span className="ml-2">Local ID: <span className="font-mono">{p.li_post_id}</span></span>
-                    )}
-                    {p.error_message && <div className="text-red-600 mt-1">{p.error_message}</div>}
-                  </div>
-                </div>
-                <div className="text-xs text-zinc-500 shrink-0">
-                  {p.created_at ? new Date(p.created_at).toLocaleDateString() : "Now"}
-                </div>
-              </label>
-            ))
+          {target === "ORG" && (
+            <>
+              <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+                <option value="">-- select org --</option>
+                {orgs.map((o: any) => (
+                  <option key={o.urn} value={o.id}>
+                    {o.id}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 12, color: "#666" }}>
+                (or set LINKEDIN_ORG_ID in backend env)
+              </span>
+            </>
           )}
+
+          <button
+            onClick={publish}
+            style={{ padding: "8px 12px", background: "#111", color: "#fff", borderRadius: 8 }}
+          >
+            Save
+          </button>
+          <button
+            onClick={runBatch}
+            style={{ padding: "8px 12px", background: "#0A66C2", color: "#fff", borderRadius: 8 }}
+          >
+            Generate (run full system)
+          </button>
+          <button onClick={clearAll} style={{ padding: "8px 12px", borderRadius: 8 }}>
+            Clear queue
+          </button>
         </div>
 
-        {approved.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t">
-            <div className="text-sm text-zinc-600">
-              Selected: <span className="font-semibold">{selectedIds.length}</span> of {approved.length}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPublish(false)}
-                disabled={busy || selectedIds.length === 0}
-              >
-                Save as Draft
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onPublish(true)}
-                disabled={busy || selectedIds.length === 0}
-              >
-                Publish Now
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onClear}
-                disabled={busy}
-              >
-                Clear Queue
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-    </div>
+        {msg && <div style={{ fontSize: 13 }}>{msg}</div>}
+      </section>
+
+      <section>
+        <h2>Recent</h2>
+        <div style={{ display: "grid", gap: 8 }}>
+          {rows.map((r) => {
+            const full =
+              r.commentary +
+              (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
+            return (
+              <div key={r.id} style={{ border: "1px solid #ddd", padding: 12 }}>
+                <div style={{ fontSize: 12, color: "#666" }}>
+                  {r.target_type} • {r.lifecycle} • {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
+                </div>
+                <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{r.commentary}</div>
+                {r.hashtags?.length ? (
+                  <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {r.hashtags.map((h, i) => (
+                      <span key={i} style={{ fontSize: 12, background: "#f2f2f2", padding: "2px 6px", borderRadius: 999 }}>
+                        #{h}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {r.li_post_id && (
+                  <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>LinkedIn ID: {r.li_post_id}</div>
+                )}
+                {r.error_message && (
+                  <div style={{ fontSize: 12, color: "#B00020", marginTop: 6 }}>Error: {r.error_message}</div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(r.commentary)}
+                    style={{ padding: "6px 10px", borderRadius: 6, marginRight: 8 }}
+                  >
+                    Copy text
+                  </button>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(full)}
+                    style={{ padding: "6px 10px", borderRadius: 6 }}
+                  >
+                    Copy post + tags
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {rows.length === 0 && <div style={{ color: "#666" }}>Nothing yet. Click Generate.</div>}
+        </div>
+      </section>
+    </main>
   );
 }
