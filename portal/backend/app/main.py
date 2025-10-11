@@ -1,7 +1,7 @@
 # portal/backend/app/main.py
 """
 Complete Content Portal API with Prompt Management
-Updated to include all routes and functionality
+Fixed for both local development and deployment
 """
 
 import os
@@ -15,15 +15,22 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 # --------------------------------------------------------------------------------------
-# CRITICAL: Add project root to Python path so we can import from 'src'
+# CRITICAL: Setup paths for both development and deployment
 # --------------------------------------------------------------------------------------
-# Get the project root (three levels up from this file)
-# portal/backend/app/main.py -> portal/backend -> portal -> PROJECT_ROOT
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+# Get current file location
+CURRENT_DIR = Path(__file__).parent.resolve()
+BACKEND_DIR = CURRENT_DIR.parent.resolve()
+PORTAL_DIR = BACKEND_DIR.parent.resolve()
+PROJECT_ROOT = PORTAL_DIR.parent.resolve()
+
+# Add both backend and project root to path
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-print(f"🔧 Added to Python path: {PROJECT_ROOT}")
+print(f"🔧 Backend dir: {BACKEND_DIR}")
+print(f"🔧 Project root: {PROJECT_ROOT}")
 
 # --------------------------------------------------------------------------------------
 # Now we can import FastAPI and other dependencies
@@ -32,8 +39,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Import the prompts router (this will now work because PROJECT_ROOT is in sys.path)
-from app.prompts_routes import router as prompts_router
+# Import the prompts router using relative import
+from .prompts_routes import router as prompts_router
 
 # --------------------------------------------------------------------------------------
 # Env / Config
@@ -52,7 +59,7 @@ app = FastAPI(title="Content Portal API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if ALLOW_ALL else _cors,
-    allow_credentials=False,  # no cookie/session auth in this simplified portal
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -63,22 +70,18 @@ app.add_middleware(
 app.include_router(prompts_router)
 
 # --------------------------------------------------------------------------------------
-# In-memory global queue (shared by everyone)
-# Shape matches FE expectations for "approved" items
+# In-memory global queue
 # --------------------------------------------------------------------------------------
 APPROVED_QUEUE: List[Dict[str, Any]] = []
 
 
 def _approved_from_batch(batch) -> List[Dict[str, Any]]:
-    """
-    Convert the batch's approved posts to the FE 'approved' shape.
-    """
+    """Convert the batch's approved posts to the FE 'approved' shape."""
     items: List[Dict[str, Any]] = []
     if not batch or not getattr(batch, "get_approved_posts", None):
         return items
 
     for post in batch.get_approved_posts():
-        # Each 'post' is your domain object; adapt as needed
         content = getattr(post, "content", "") or ""
         hashtags = getattr(post, "hashtags", None) or []
         items.append(
@@ -121,18 +124,13 @@ def healthz():
 
 @app.get("/api/approved")
 def get_approved():
-    """
-    Return whatever is currently in the global approved queue
-    (copy-paste posts for the dashboard).
-    """
+    """Return whatever is currently in the global approved queue"""
     return APPROVED_QUEUE
 
 
 @app.post("/api/approved/clear")
 def clear_approved():
-    """
-    Clear the global queue.
-    """
+    """Clear the global queue."""
     deleted = len(APPROVED_QUEUE)
     APPROVED_QUEUE.clear()
     return {"deleted": deleted}
@@ -140,21 +138,10 @@ def clear_approved():
 
 @app.post("/api/run-batch")
 async def run_batch():
-    """
-    Run the full content pipeline (tests/test_complete_system.test_complete_system),
-    using the REAL OpenAI client if OPENAI_API_KEY is present.
-
-    We do NOT attempt to publish to LinkedIn here; we just fill the approved queue
-    with human-copyable posts for the dashboard.
-    """
+    """Run the full content pipeline"""
     try:
-        # Import here so the API process loads only when needed.
         from tests.test_complete_system import test_complete_system as run_full
-
-        # Run your full system once; do not publish to LinkedIn from here
         batch = await run_full(run_publish=False)
-
-        # Convert approved to FE shape and append to global queue
         newly_approved = _approved_from_batch(batch)
         APPROVED_QUEUE.extend(newly_approved)
 
@@ -165,32 +152,23 @@ async def run_batch():
             "total_in_queue": len(APPROVED_QUEUE),
         }
     except ModuleNotFoundError as e:
-        # Helpful error when a required dep (e.g., openai, structlog) is missing
         return JSONResponse(
             status_code=500,
             content={
                 "detail": f"Missing dependency: {e}. "
-                          f"Make sure it's listed in your repo-root requirements.txt and redeploy."
+                          f"Make sure it's listed in your requirements.txt."
             },
         )
     except Exception as e:
-        # Generic failure path with a short message
         return JSONResponse(
             status_code=500,
             content={"detail": str(e)},
         )
 
 
-# --------------------------------------------------------------------------------------
-# Additional Routes for Portal Features (Optional)
-# --------------------------------------------------------------------------------------
-
 @app.get("/api/me")
 async def get_me():
-    """
-    Placeholder for user info endpoint
-    Returns mock user data for now
-    """
+    """Placeholder for user info endpoint"""
     return {
         "name": "Content Manager",
         "sub": "user_001",
@@ -200,36 +178,23 @@ async def get_me():
 
 @app.get("/api/orgs")
 async def get_orgs():
-    """
-    Placeholder for organizations endpoint
-    Returns empty list for now
-    """
-    return {
-        "orgs": []
-    }
+    """Placeholder for organizations endpoint"""
+    return {"orgs": []}
 
 
 @app.get("/api/posts")
 async def get_posts():
-    """
-    Return all posts from the approved queue
-    This is the same as /api/approved but with a different endpoint name
-    for consistency with the frontend expectations
-    """
+    """Return all posts from the approved queue"""
     return APPROVED_QUEUE
 
 
 @app.post("/api/posts")
 async def create_post(payload: Dict[str, Any]):
-    """
-    Create a new post manually (not from batch generation)
-    This allows users to add custom posts to the queue
-    """
+    """Create a new post manually"""
     try:
         commentary = payload.get("commentary", "")
         hashtags = payload.get("hashtags", [])
         target = payload.get("target", "AUTO")
-        org_id = payload.get("org_id")
         
         if not commentary:
             return JSONResponse(
@@ -237,7 +202,6 @@ async def create_post(payload: Dict[str, Any]):
                 content={"detail": "Commentary is required"}
             )
         
-        # Create new post entry
         new_post = {
             "id": uuid.uuid4().hex,
             "target_type": target if target != "AUTO" else "MEMBER",
@@ -269,9 +233,7 @@ async def create_post(payload: Dict[str, Any]):
 # --------------------------------------------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
-    """
-    Run on application startup
-    """
+    """Run on application startup"""
     print("="*60)
     print("🚀 Content Portal API Starting Up")
     print("="*60)

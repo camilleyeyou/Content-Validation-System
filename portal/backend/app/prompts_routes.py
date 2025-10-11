@@ -1,7 +1,7 @@
 # portal/backend/app/prompts_routes.py
 """
 API routes for prompt management
-Complete version with path handling
+Fixed for deployment
 """
 
 import sys
@@ -10,9 +10,14 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-# Ensure project root is in path (in case this is imported before main.py)
-# portal/backend/app/prompts_routes.py -> portal/backend -> portal -> PROJECT_ROOT
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+# Setup paths (similar to main.py)
+CURRENT_DIR = Path(__file__).parent.resolve()
+BACKEND_DIR = CURRENT_DIR.parent.resolve()
+PORTAL_DIR = BACKEND_DIR.parent.resolve()
+PROJECT_ROOT = PORTAL_DIR.parent.resolve()
+
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -21,7 +26,7 @@ from src.infrastructure.prompts.prompt_manager import get_prompt_manager
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
-# Pydantic models for request/response
+# Pydantic models
 class PromptUpdate(BaseModel):
     system_prompt: Optional[str] = None
     user_prompt_template: Optional[str] = None
@@ -40,7 +45,7 @@ class AgentInfo(BaseModel):
     has_custom_prompts: bool
 
 
-# Agent registry - maps agent names to their classes
+# Agent registry
 AGENT_REGISTRY = {
     "AdvancedContentGenerator": {
         "class": "AdvancedContentGenerator",
@@ -70,15 +75,12 @@ AGENT_REGISTRY = {
 
 
 def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
-    """
-    Get default prompts from agent class
-    This instantiates the agent temporarily to extract prompts
-    """
+    """Get default prompts from agent class"""
     try:
         from src.domain.agents.base_agent import AgentConfig
         from src.infrastructure.config.config_manager import AppConfig
         
-        # Mock AI client for prompt extraction
+        # Mock AI client
         class MockAIClient:
             async def generate(self, **kwargs):
                 return {"content": {}, "usage": {"total_tokens": 0}}
@@ -87,7 +89,6 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
         agent_config = AgentConfig()
         mock_client = MockAIClient()
         
-        # Instantiate agent to get default prompts
         if agent_name == "AdvancedContentGenerator":
             from src.domain.agents.advanced_content_generator import AdvancedContentGenerator
             agent = AdvancedContentGenerator(agent_config, mock_client, app_config)
@@ -100,7 +101,6 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
             from src.domain.agents.validators.jordan_park_validator import JordanParkValidator
             from src.domain.models.post import LinkedInPost, CulturalReference
             agent = JordanParkValidator(agent_config, mock_client, app_config)
-            # Create a dummy post to extract the template (with all required fields)
             dummy_post = LinkedInPost(
                 id="dummy",
                 batch_id="template_batch",
@@ -127,7 +127,7 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
                 id="dummy",
                 batch_id="template_batch",
                 post_number=1,
-                content="Sample post content for template extraction. This needs to be at least 50 characters long to pass validation.",
+                content="Sample post content for template extraction. This needs to be at least 50 characters long.",
                 hashtags=["Test"],
                 target_audience="Tech professionals",
                 cultural_reference=CulturalReference(
@@ -149,7 +149,7 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
                 id="dummy",
                 batch_id="template_batch",
                 post_number=1,
-                content="Sample post content for template extraction. This needs to be at least 50 characters long to pass validation.",
+                content="Sample post content for template extraction. This needs to be at least 50 characters long.",
                 hashtags=["Test"],
                 target_audience="Tech professionals",
                 cultural_reference=CulturalReference(
@@ -171,7 +171,7 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
                 id="dummy",
                 batch_id="template_batch",
                 post_number=1,
-                content="Sample post content for template extraction. This needs to be at least 50 characters long to pass validation.",
+                content="Sample post content for template extraction. This needs to be at least 50 characters long.",
                 hashtags=["Test"],
                 target_audience="Tech professionals"
             )
@@ -188,16 +188,14 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
                 id="dummy",
                 batch_id="template_batch",
                 post_number=1,
-                content="Sample post content for template extraction. This needs to be at least 50 characters long to pass validation.",
+                content="Sample post content for template extraction. This needs to be at least 50 characters long.",
                 hashtags=["Test"],
                 target_audience="Tech professionals"
             )
             dummy_feedback = {
                 "main_issues": ["Issue 1", "Issue 2"],
                 "priority_fix": "Fix hook",
-                "specific_improvements": {
-                    "hook": "Make stronger"
-                },
+                "specific_improvements": {"hook": "Make stronger"},
                 "keep_these_elements": ["Brand voice"],
                 "revised_hook_suggestion": "Try this hook",
                 "tone_adjustment": "More casual"
@@ -241,16 +239,12 @@ async def list_agents():
 
 @router.get("/{agent_name}", response_model=AgentPromptResponse)
 async def get_agent_prompts(agent_name: str):
-    """Get prompts for a specific agent (both default and custom)"""
+    """Get prompts for a specific agent"""
     if agent_name not in AGENT_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Agent {agent_name} not found")
     
     prompt_manager = get_prompt_manager()
-    
-    # Get custom prompts (if any)
     custom_prompts = prompt_manager.get_agent_prompts(agent_name)
-    
-    # Get default prompts from agent class
     default_prompts = get_agent_default_prompts(agent_name)
     
     return AgentPromptResponse(
@@ -271,7 +265,6 @@ async def update_agent_prompts(agent_name: str, prompts: PromptUpdate):
     
     prompt_manager = get_prompt_manager()
     
-    # Build update dict (only include non-None values)
     update_dict = {}
     if prompts.system_prompt is not None:
         update_dict["system_prompt"] = prompts.system_prompt
