@@ -1,224 +1,244 @@
 // portal/frontend/app/page.tsx
-// import { redirect } from "next/navigation";
-// 
-// export default function Home() {
-//   redirect("/dashboard");
-// }
-// portal/frontend/app/page.tsx
 "use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
-import * as React from "react";
-import { API_BASE, apiGet, apiPost, fetchApproved, ApprovedRec } from "@/lib/config";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8001";
 
-export default function Home() {
-  const [approved, setApproved] = React.useState<ApprovedRec[]>([]);
-  const [topic, setTopic] = React.useState("");
-  const [count, setCount] = React.useState(3);
-  const [busy, setBusy] = React.useState(false);
-  const [notice, setNotice] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+type PostRow = {
+  id: string;
+  target_type: "MEMBER" | "ORG";
+  lifecycle: string;
+  commentary?: string;
+  content?: string;
+  hashtags?: string[];
+  li_post_id?: string;
+  error_message?: string;
+  created_at?: string;
+};
 
-  const load = React.useCallback(async () => {
-    setError(null);
+export default function Dashboard() {
+  const [me, setMe] = useState<any>(null);
+  const [rows, setRows] = useState<PostRow[]>([]);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function fetchJSON(url: string, opts: any = {}) {
+    const r = await fetch(url, { ...opts });
+    const text = await r.text();
+    if (!r.ok) throw new Error(text || `${r.status} ${r.statusText}`);
     try {
-      const list = await fetchApproved();
-      setApproved(list);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load");
+      return JSON.parse(text);
+    } catch {
+      return text;
     }
+  }
+
+  async function loadMe() {
+    try {
+      setMe(await fetchJSON(`${API_BASE}/api/me`));
+    } catch {}
+  }
+
+  async function loadPosts() {
+    try {
+      setRows(await fetchJSON(`${API_BASE}/api/approved`));
+    } catch {}
+  }
+
+  useEffect(() => {
+    loadMe();
+    loadPosts();
   }, []);
 
-  React.useEffect(() => {
-    load();
-  }, [load]);
-
-  async function onGenerate() {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+  async function runBatch() {
+    setMsg("Running content generation...");
+    setLoading(true);
     try {
-      await apiPost("/api/run-batch", { topic: topic || undefined, count });
-      setNotice("Generated new posts.");
-      await load();
+      const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
+      setMsg(
+        `✅ Generated ${data.approved_count || 0} approved posts! Total in queue: ${
+          data.total_in_queue || 0
+        }`
+      );
+      await loadPosts();
     } catch (e: any) {
-      setError(e?.message || "Generate failed");
+      setMsg(`❌ Error: ${e?.message || "Unknown error"}`);
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
-  async function onClear() {
-    setBusy(true);
-    setError(null);
-    setNotice(null);
+  async function clearAll() {
+    if (!confirm("Clear all posts from queue?")) return;
+    setMsg("");
+    setLoading(true);
     try {
-      await apiPost("/api/approved/clear", {});
-      setNotice("Cleared queue.");
-      setApproved([]);
+      const data = await fetchJSON(`${API_BASE}/api/approved/clear`, { method: "POST" });
+      setMsg(`✅ Cleared ${data.deleted} posts`);
+      await loadPosts();
     } catch (e: any) {
-      setError(e?.message || "Clear failed");
+      setMsg(`❌ Error: ${e?.message || "Unknown error"}`);
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
-  }
-
-  function copy(text: string) {
-    navigator.clipboard.writeText(text).catch(() => {});
-  }
-
-  function formatPost(p: ApprovedRec) {
-    const tags = p.hashtags?.length ? " " + p.hashtags.map(h => `#${h.replace(/^#/, "")}`).join(" ") : "";
-    return `${p.content}${tags}`;
-  }
-
-  async function onExportTxt() {
-    const blob = new Blob(
-      approved.map(p => formatPost(p)).join("\n\n---\n\n").split("\n").join("\r\n") ? 
-      [approved.map(p => formatPost(p)).join("\n\n---\n\n")] : [""],
-      { type: "text/plain;charset=utf-8" }
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.download = "posts.txt";
-    a.href = url;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Publishing Dashboard</h1>
-          <p className="text-sm text-zinc-600">Generate posts and copy/paste to LinkedIn.</p>
-        </div>
-        <a
-          className="text-xs text-zinc-500"
-          href={`${API_BASE}/api/health`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          API health →
-        </a>
-      </header>
-
-      {notice && (
-        <div className="rounded-xl bg-green-50 text-green-800 border border-green-200 px-4 py-3">
-          {notice}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-xl bg-red-50 text-red-800 border border-red-200 px-4 py-3">
-          {error}
-        </div>
-      )}
-
-      {/* Generator */}
-      <div className="rounded-2xl border p-4 space-y-3">
-        <div className="font-semibold">Generate Posts</div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="md:col-span-3">
-            <label className="block text-sm mb-1">Topic (optional)</label>
-            <input
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g., content workflow, launch announcement, hiring..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Count</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onGenerate}
-            disabled={busy}
-            className="px-4 py-2 rounded-md bg-black text-white disabled:opacity-60"
-          >
-            {busy ? "Working…" : "Generate"}
-          </button>
-          <button
-            onClick={onExportTxt}
-            disabled={!approved.length}
-            className="px-3 py-2 rounded-md border"
-          >
-            Export .txt
-          </button>
-          <button
-            onClick={onClear}
-            disabled={busy || !approved.length}
-            className="px-3 py-2 rounded-md border"
-          >
-            Clear queue
-          </button>
-        </div>
-        <p className="text-xs text-zinc-500">
-          Backend tries <span className="font-mono">GEN_API_URL</span> → OpenAI (<span className="font-mono">OPENAI_API_KEY</span>) → fallback samples.
+    <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Content Dashboard</h1>
+        <p className="text-sm text-zinc-600">
+          {me ? (
+            <>
+              Acting as <span className="font-semibold">{me.name || me.sub}</span>
+            </>
+          ) : (
+            "Loading..."
+          )}
         </p>
       </div>
 
-      {/* Queue */}
-      <div className="rounded-2xl border overflow-hidden">
-        <div className="px-4 py-3 border-b flex items-center justify-between">
-          <div className="font-semibold">Global Queue</div>
-          <div className="text-sm text-zinc-600">{approved.length} item{approved.length === 1 ? "" : "s"}</div>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={runBatch}
+            disabled={loading}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          >
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              "🚀"
+            )}
+            Generate Posts
+          </button>
+          <button
+            onClick={clearAll}
+            disabled={loading}
+            className="px-6 py-3 bg-white border border-zinc-300 rounded-lg font-semibold hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            🗑️ Clear Queue
+          </button>
+          <Link
+            href="/prompts"
+            className="px-6 py-3 bg-zinc-900 text-white rounded-lg font-semibold hover:bg-zinc-800 transition-all inline-flex items-center gap-2"
+          >
+            🤖 Manage Agent Prompts
+          </Link>
         </div>
 
-        {approved.length === 0 ? (
-          <div className="p-6 text-sm text-zinc-600">Nothing yet. Generate a few posts above.</div>
-        ) : (
-          <div className="divide-y">
-            {approved.map((p) => {
-              const merged = formatPost(p);
-              return (
-                <div key={p.id} className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium mb-2">{new Date(p.created_at).toLocaleString()}</div>
-                      <p className="whitespace-pre-wrap">{p.content}</p>
-                      {p.hashtags?.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {p.hashtags.map((h, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700"
-                            >
-                              #{h.replace(/^#/, "")}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="shrink-0 flex flex-col gap-2">
-                      <button
-                        className="px-3 py-1.5 text-sm rounded-md border"
-                        onClick={() => copy(p.content)}
-                      >
-                        Copy text
-                      </button>
-                      <button
-                        className="px-3 py-1.5 text-sm rounded-md border"
-                        onClick={() => copy(merged)}
-                      >
-                        Copy post + tags
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        {msg && (
+          <div
+            className={`mt-4 p-4 rounded-lg text-sm ${
+              msg.includes("❌")
+                ? "bg-red-50 text-red-800 border border-red-200"
+                : "bg-green-50 text-green-800 border border-green-200"
+            }`}
+          >
+            {msg}
           </div>
         )}
       </div>
-    </div>
+
+      {/* Stats */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Statistics</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Total Posts</div>
+            <div className="text-3xl font-bold">{rows.length}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Status</div>
+            <div className={`text-lg font-semibold ${rows.length > 0 ? "text-green-600" : "text-zinc-500"}`}>
+              {rows.length > 0 ? "Ready to Publish" : "No Posts"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Posts List */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Generated Posts ({rows.length})</h2>
+        <div className="space-y-4">
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-zinc-500 text-sm">
+              No posts yet. Click "Generate Posts" to create content using your AI agents.
+            </div>
+          ) : (
+            rows.map((r) => {
+              const displayContent = r.content || r.commentary || "";
+              const full =
+                displayContent +
+                (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
+              return (
+                <div
+                  key={r.id}
+                  className="border border-zinc-200 rounded-lg p-4 bg-zinc-50 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex gap-2 flex-wrap mb-3 text-xs">
+                    <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
+                      {r.target_type}
+                    </span>
+                    <span className="px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full font-medium">
+                      {r.lifecycle}
+                    </span>
+                    {r.created_at && (
+                      <span className="ml-auto text-zinc-500">
+                        {new Date(r.created_at).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="whitespace-pre-wrap mb-3 leading-relaxed text-sm">
+                    {displayContent}
+                  </div>
+                  {r.hashtags?.length ? (
+                    <div className="mb-3 flex gap-2 flex-wrap">
+                      {r.hashtags.map((h, i) => (
+                        <span
+                          key={i}
+                          className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium"
+                        >
+                          #{h}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {r.li_post_id && (
+                    <div className="text-xs text-green-700 font-medium mb-2">
+                      ✅ Published • LinkedIn ID: {r.li_post_id}
+                    </div>
+                  )}
+                  {r.error_message && (
+                    <div className="text-xs text-red-700 bg-red-50 p-2 rounded mb-2">
+                      ❌ Error: {r.error_message}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(displayContent)}
+                      className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
+                      📋 Copy Text
+                    </button>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(full)}
+                      className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
+                      📋 Copy with Tags
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </main>
   );
 }

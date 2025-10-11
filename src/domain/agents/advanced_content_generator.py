@@ -1,6 +1,6 @@
 """
 Advanced Content Generator - Creates LinkedIn posts using multi-element combination protocol
-Implements sophisticated content creation strategy for Jesse A. Eisenbalm
+Updated with custom prompt loading support
 """
 
 import json
@@ -169,7 +169,8 @@ class AdvancedContentGenerator(BaseAgent):
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for advanced content generation"""
-        return f"""You are a LinkedIn content creator for Jesse A. Eisenbalm, a premium lip balm brand.
+        # Build default prompt
+        default_prompt = f"""You are a LinkedIn content creator for Jesse A. Eisenbalm, a premium lip balm brand.
 
 BRAND ESSENCE: 
 A physical, analog product that bridges the gap between digital overwhelm and human presence. 
@@ -195,6 +196,9 @@ MANDATORY COMPONENTS FOR EVERY POST:
 4. Subtle product integration
 
 You MUST respond with valid JSON format only."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_generation_prompt(self, elements: Tuple[str, str], story_arc: str, length_type: str) -> str:
         """Build the user prompt for post generation"""
@@ -203,7 +207,8 @@ You MUST respond with valid JSON format only."""
         min_words, max_words = self.post_lengths[length_type]
         format_template = self._get_format_template(length_type)
         
-        return f"""Generate a LinkedIn post for Jesse A. Eisenbalm using this exact protocol:
+        # Build default template
+        default_template = f"""Generate a LinkedIn post for Jesse A. Eisenbalm using this exact protocol:
 
 ELEMENTS TO COMBINE:
 1. {element_descriptions[0]}
@@ -247,6 +252,9 @@ CRITICAL: Return ONLY this JSON structure:
 }}
 
 Generate the post now. Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _get_element_descriptions(self, elements: Tuple[str, str]) -> Tuple[str, str]:
         """Get detailed descriptions for selected elements"""

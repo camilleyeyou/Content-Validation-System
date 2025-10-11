@@ -1,6 +1,6 @@
 """
 Jordan Park Validator - Social Media Expert Persona (Content Strategist)
-Replaces the generic SocialMediaValidator with detailed persona-based evaluation
+Updated with custom prompt loading support
 """
 
 import json
@@ -85,7 +85,8 @@ class JordanParkValidator(BaseAgent):
         """Build Jordan Park's persona system prompt"""
         algo_context = self._get_algorithm_context()
         
-        return f"""You are Jordan Park, 26-year-old freelance Content Strategist specializing in LinkedIn.
+        # Build default prompt
+        default_prompt = f"""You are Jordan Park, 26-year-old freelance Content Strategist specializing in LinkedIn.
 
 PROFESSIONAL IDENTITY:
 - Ex-agency, left after burnout
@@ -146,6 +147,9 @@ WHAT I RESPECT:
 
 EVALUATION LENS:
 Every post is a data point. I can predict engagement within 2% accuracy based on hook, format, timing, and meme freshness. I see the matrix of LinkedIn engagement."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build Jordan's evaluation prompt"""
@@ -164,7 +168,8 @@ Every post is a data point. I can predict engagement within 2% accuracy based on
         
         hashtag_analysis = self._analyze_hashtags(post.hashtags)
         
-        return f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Jordan Park, Content Strategist:
+        # Build default template
+        default_template = f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Jordan Park, Content Strategist:
 
 POST CONTENT:
 {post.content}
@@ -216,6 +221,9 @@ CRITICAL: Return ONLY this JSON structure:
 }}
 
 Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _analyze_hashtags(self, hashtags: List[str]) -> Dict[str, Any]:
         """Analyze hashtag strategy"""

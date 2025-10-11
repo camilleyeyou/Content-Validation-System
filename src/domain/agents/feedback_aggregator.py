@@ -1,6 +1,6 @@
 """
 Feedback Aggregator Agent - Analyzes validation failures and creates improvement instructions
-Fixed version with robust JSON handling
+Updated with custom prompt loading support
 """
 
 import json
@@ -29,7 +29,8 @@ class FeedbackAggregator(BaseAgent):
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for feedback aggregation"""
-        return f"""You are a Content Strategy Expert analyzing why LinkedIn posts fail validation.
+        # Build default prompt
+        default_prompt = f"""You are a Content Strategy Expert analyzing why LinkedIn posts fail validation.
 
 YOUR ROLE:
 Synthesize feedback from multiple validators to create specific, actionable improvement instructions.
@@ -52,6 +53,9 @@ FOCUS ON:
 - Concrete examples of improvements
 
 IMPORTANT: Respond with valid JSON only."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_aggregation_prompt(self, post: LinkedInPost) -> str:
         """Build the user prompt for feedback aggregation"""
@@ -65,7 +69,8 @@ IMPORTANT: Respond with valid JSON only."""
 - Key Issues: {self._extract_key_issues(score.criteria_breakdown)}
 """)
         
-        return f"""Analyze why this LinkedIn post failed validation and create improvement instructions:
+        # Build default template
+        default_template = f"""Analyze why this LinkedIn post failed validation and create improvement instructions:
 
 ORIGINAL POST:
 {post.content}
@@ -98,6 +103,9 @@ CRITICAL: Return ONLY this JSON structure:
 }}
 
 Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _extract_key_issues(self, criteria_breakdown: Dict) -> str:
         """Extract key issues from criteria breakdown"""

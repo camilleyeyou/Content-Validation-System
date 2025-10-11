@@ -234,6 +234,12 @@ export default function Dashboard() {
                     Copy post + tags
                   </button>
                 </div>
+
+                <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+                  <a href="/prompts" style={{ color: "#0A66C2", fontWeight: 600 }}>
+                    📝 Manage Agent Prompts
+                  </a>
+                </div>
               </div>
             );
           })}

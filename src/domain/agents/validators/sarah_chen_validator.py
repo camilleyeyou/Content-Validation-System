@@ -1,6 +1,6 @@
 """
 Customer Validator - Sarah Chen Persona
-28-year-old Product Manager at Series B startup evaluating Jesse A. Eisenbalm content
+Updated with custom prompt loading support
 """
 
 import json
@@ -13,7 +13,7 @@ class SarahChenValidator(BaseAgent):
     """Validates posts from Sarah Chen's perspective - target customer persona"""
     
     def __init__(self, config, ai_client, app_config):
-        super().__init__("CustomerValidator", config, ai_client)
+        super().__init__("SarahChenValidator", config, ai_client)
         self.app_config = app_config
         
     async def process(self, post: LinkedInPost) -> ValidationScore:
@@ -61,7 +61,8 @@ class SarahChenValidator(BaseAgent):
         """Build Sarah Chen persona system prompt"""
         context = self._get_current_context()
         
-        return f"""You are Sarah Chen, a 28-year-old Product Manager at a Series B startup (50-200 employees).
+        # Build default prompt
+        default_prompt = f"""You are Sarah Chen, a 28-year-old Product Manager at a Series B startup (50-200 employees).
 
 IDENTITY & CURRENT STATE:
 - Title: Product Manager managing 2 junior PMs, reporting to VP Product
@@ -111,6 +112,9 @@ VALUES: Authenticity, efficiency with boundaries, peer recognition, tangible res
 FEARS: Becoming obsolete, being seen as luddite, losing human touch, imposter syndrome
 
 IMPORTANT: Respond with valid JSON only. Evaluate based on Sarah's actual mindset and context."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build the user prompt for Sarah Chen's evaluation"""
@@ -120,7 +124,8 @@ IMPORTANT: Respond with valid JSON only. Evaluate based on Sarah's actual mindse
         
         hashtags = f"\nHashtags: {', '.join(['#' + tag for tag in post.hashtags])}" if post.hashtags else ""
         
-        return f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Sarah Chen.
+        # Build default template
+        default_template = f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Sarah Chen.
 
 POST CONTENT:
 {post.content}
@@ -165,6 +170,9 @@ Score based on:
 - Actual likelihood you'd try the product (35%)
 
 Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _parse_validation_response(self, response: Dict) -> ValidationScore:
         """Parse Sarah Chen's validation response"""

@@ -1,6 +1,6 @@
 """
 Revision Generator Agent - Creates improved versions of posts based on feedback
-Fixed version with robust JSON handling
+Updated with custom prompt loading support
 """
 
 import json
@@ -40,7 +40,8 @@ class RevisionGenerator(BaseAgent):
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for revision generation"""
-        return f"""You are a Master Copy Editor specializing in LinkedIn content optimization.
+        # Build default prompt
+        default_prompt = f"""You are a Master Copy Editor specializing in LinkedIn content optimization.
 
 BRAND CONTEXT:
 - Product: {self.app_config.brand.product_name} ({self.app_config.brand.price})
@@ -66,6 +67,9 @@ SUCCESS CRITERIA:
 The revised post should score 7+ with all validators while maintaining the original's core message.
 
 IMPORTANT: Respond with valid JSON only."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_revision_prompt(self, post: LinkedInPost, feedback: Dict) -> str:
         """Build the user prompt for revision generation"""
@@ -76,7 +80,8 @@ IMPORTANT: Respond with valid JSON only."""
             if value:
                 improvement_list.append(f"- {key}: {value}")
         
-        return f"""Revise this LinkedIn post based on specific feedback:
+        # Build default template
+        default_template = f"""Revise this LinkedIn post based on specific feedback:
 
 ORIGINAL POST:
 {post.content}
@@ -119,6 +124,9 @@ CRITICAL: Return ONLY this JSON structure:
 }}
 
 Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _parse_revision_response(self, response: Dict) -> str:
         """Parse the revision response with robust error handling"""

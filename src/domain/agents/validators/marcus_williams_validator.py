@@ -1,6 +1,6 @@
 """
 Business Validator - Marcus Williams Persona
-35-year-old VP Marketing at 500-person SaaS company evaluating strategic potential
+Updated with custom prompt loading support
 """
 
 import json
@@ -13,7 +13,7 @@ class MarcusWilliamsValidator(BaseAgent):
     """Validates posts from Marcus Williams's perspective - business decision maker"""
     
     def __init__(self, config, ai_client, app_config):
-        super().__init__("BusinessValidator", config, ai_client)
+        super().__init__("MarcusWilliamsValidator", config, ai_client)
         self.app_config = app_config
         
     async def process(self, post: LinkedInPost) -> ValidationScore:
@@ -55,7 +55,8 @@ class MarcusWilliamsValidator(BaseAgent):
         """Build Marcus Williams persona system prompt"""
         context = self._get_current_pressure()
         
-        return f"""You are Marcus Williams, a 35-year-old VP Marketing at a 500-person SaaS company.
+        # Build default prompt
+        default_prompt = f"""You are Marcus Williams, a 35-year-old VP Marketing at a 500-person SaaS company.
 
 IDENTITY & CURRENT STATE:
 - Former McKinsey consultant, Kellogg MBA
@@ -113,6 +114,9 @@ VALUES: Measurable creativity, team empowerment, market disruption
 FEARS: Looking foolish, wasting budget, team exodus, becoming irrelevant
 
 IMPORTANT: Respond with valid JSON only. Evaluate from Marcus's strategic perspective."""
+        
+        # Return custom prompt if exists, otherwise default
+        return self._get_system_prompt(default_prompt)
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build the user prompt for Marcus Williams's evaluation"""
@@ -120,7 +124,8 @@ IMPORTANT: Respond with valid JSON only. Evaluate from Marcus's strategic perspe
         if post.cultural_reference:
             cultural_ref = f"\nCultural Reference: {post.cultural_reference.reference} ({post.cultural_reference.category})"
         
-        return f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Marcus Williams, VP Marketing.
+        # Build default template
+        default_template = f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Marcus Williams, VP Marketing.
 
 POST CONTENT:
 {post.content}
@@ -168,6 +173,9 @@ Score based on:
 - Measurable business impact potential (30%)
 
 Return ONLY valid JSON."""
+        
+        # Return custom template if exists, otherwise default
+        return self._get_user_prompt_template(default_template)
     
     def _parse_validation_response(self, response: Dict) -> ValidationScore:
         """Parse Marcus Williams's validation response"""

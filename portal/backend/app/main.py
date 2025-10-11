@@ -1,15 +1,39 @@
 # portal/backend/app/main.py
+"""
+Complete Content Portal API with Prompt Management
+Updated to include all routes and functionality
+"""
+
 import os
+import sys
 import json
 import time
 import uuid
 import asyncio
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
+# --------------------------------------------------------------------------------------
+# CRITICAL: Add project root to Python path so we can import from 'src'
+# --------------------------------------------------------------------------------------
+# Get the project root (three levels up from this file)
+# portal/backend/app/main.py -> portal/backend -> portal -> PROJECT_ROOT
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+print(f"🔧 Added to Python path: {PROJECT_ROOT}")
+
+# --------------------------------------------------------------------------------------
+# Now we can import FastAPI and other dependencies
+# --------------------------------------------------------------------------------------
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+# Import the prompts router (this will now work because PROJECT_ROOT is in sys.path)
+from app.prompts_routes import router as prompts_router
 
 # --------------------------------------------------------------------------------------
 # Env / Config
@@ -32,6 +56,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --------------------------------------------------------------------------------------
+# Register the prompts router
+# --------------------------------------------------------------------------------------
+app.include_router(prompts_router)
 
 # --------------------------------------------------------------------------------------
 # In-memory global queue (shared by everyone)
@@ -76,6 +105,12 @@ def root():
         "message": "Content Portal API",
         "portal_base_url": PORTAL_BASE_URL,
         "cors_allow_origins": _cors,
+        "project_root": str(PROJECT_ROOT),
+        "features": {
+            "content_generation": True,
+            "prompt_management": True,
+            "batch_processing": True
+        }
     }
 
 
@@ -144,3 +179,135 @@ async def run_batch():
             status_code=500,
             content={"detail": str(e)},
         )
+
+
+# --------------------------------------------------------------------------------------
+# Additional Routes for Portal Features (Optional)
+# --------------------------------------------------------------------------------------
+
+@app.get("/api/me")
+async def get_me():
+    """
+    Placeholder for user info endpoint
+    Returns mock user data for now
+    """
+    return {
+        "name": "Content Manager",
+        "sub": "user_001",
+        "email": "manager@jesseaeisembalm.com"
+    }
+
+
+@app.get("/api/orgs")
+async def get_orgs():
+    """
+    Placeholder for organizations endpoint
+    Returns empty list for now
+    """
+    return {
+        "orgs": []
+    }
+
+
+@app.get("/api/posts")
+async def get_posts():
+    """
+    Return all posts from the approved queue
+    This is the same as /api/approved but with a different endpoint name
+    for consistency with the frontend expectations
+    """
+    return APPROVED_QUEUE
+
+
+@app.post("/api/posts")
+async def create_post(payload: Dict[str, Any]):
+    """
+    Create a new post manually (not from batch generation)
+    This allows users to add custom posts to the queue
+    """
+    try:
+        commentary = payload.get("commentary", "")
+        hashtags = payload.get("hashtags", [])
+        target = payload.get("target", "AUTO")
+        org_id = payload.get("org_id")
+        
+        if not commentary:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Commentary is required"}
+            )
+        
+        # Create new post entry
+        new_post = {
+            "id": uuid.uuid4().hex,
+            "target_type": target if target != "AUTO" else "MEMBER",
+            "lifecycle": "draft",
+            "commentary": commentary,
+            "hashtags": hashtags,
+            "li_post_id": None,
+            "error_message": None,
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        
+        APPROVED_QUEUE.append(new_post)
+        
+        return {
+            "ok": True,
+            "post": new_post,
+            "lifecycle": "draft"
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)}
+        )
+
+
+# --------------------------------------------------------------------------------------
+# Startup Event
+# --------------------------------------------------------------------------------------
+@app.on_event("startup")
+async def startup_event():
+    """
+    Run on application startup
+    """
+    print("="*60)
+    print("🚀 Content Portal API Starting Up")
+    print("="*60)
+    print(f"Project Root: {PROJECT_ROOT}")
+    print(f"Portal Base URL: {PORTAL_BASE_URL}")
+    print(f"CORS Origins: {_cors}")
+    print(f"Features:")
+    print(f"  - Content Generation: ✅")
+    print(f"  - Prompt Management: ✅")
+    print(f"  - Batch Processing: ✅")
+    print("="*60)
+    
+    # Ensure config directory exists at project root
+    config_dir = PROJECT_ROOT / "config"
+    config_dir.mkdir(exist_ok=True)
+    
+    # Initialize prompts file if it doesn't exist
+    prompts_file = config_dir / "prompts.json"
+    if not prompts_file.exists():
+        with open(prompts_file, 'w') as f:
+            json.dump({}, f)
+        print(f"✅ Created {prompts_file}")
+    else:
+        print(f"✅ Found existing {prompts_file}")
+
+
+# --------------------------------------------------------------------------------------
+# Main entry point (for local development)
+# --------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=True,
+        log_level="info"
+    )

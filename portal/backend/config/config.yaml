@@ -1,0 +1,34 @@
+batch:
+  max_revisions: 2
+  max_total_attempts: 20
+  min_approvals_required: 2
+  posts_per_batch: 5
+  target_approval_rate: 0.3
+brand:
+  price: $8.99
+  product_name: Jesse A. Eisenbalm
+  ritual: Stop. Breathe. Apply.
+  tagline: The only business lip balm that keeps you human in an AI world
+cultural_references:
+  seasonal_themes:
+  - performance reviews
+  - networking events
+  tv_shows:
+  - The Office
+  - Mad Men
+  - Silicon Valley
+  workplace_themes:
+  - Zoom fatigue
+  - LinkedIn culture
+environment: development
+logging_level: INFO
+openai:
+  api_key: your-api-key-here
+  max_tokens: 600
+  model: gpt-4o-mini
+  temperature: 0.7
+output:
+  approved_posts_file: approved_posts.csv
+  output_dir: data/output
+  rejected_posts_file: rejected_posts.csv
+  revised_posts_file: revised_approved_posts.csv

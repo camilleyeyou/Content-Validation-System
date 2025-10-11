@@ -1,5 +1,7 @@
+# src/domain/agents/base_agent.py
 """
-Base Agent with improved JSON response handling
+Base Agent with improved JSON response handling and custom prompt support
+MODIFY your existing base_agent.py to add the prompt loading functionality
 """
 
 from abc import ABC, abstractmethod
@@ -36,7 +38,7 @@ class AgentConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 class BaseAgent(ABC):
-    """Abstract base class for all AI agents with improved error handling"""
+    """Abstract base class for all AI agents with improved error handling and custom prompts"""
     
     def __init__(self, 
                  name: str,
@@ -49,6 +51,36 @@ class BaseAgent(ABC):
         self._call_count = 0
         self._total_tokens = 0
         
+        # NEW: Load custom prompts if available
+        self._custom_prompts = self._load_custom_prompts()
+        
+    def _load_custom_prompts(self) -> Dict[str, str]:
+        """Load custom prompts for this agent if they exist"""
+        try:
+            from src.infrastructure.prompts.prompt_manager import get_prompt_manager
+            prompt_manager = get_prompt_manager()
+            custom = prompt_manager.get_agent_prompts(self.name)
+            if custom:
+                self.logger.info("Loaded custom prompts", agent=self.name)
+            return custom
+        except Exception as e:
+            self.logger.warning("Could not load custom prompts", error=str(e))
+            return {}
+    
+    def _get_system_prompt(self, default_prompt: str) -> str:
+        """Get system prompt - custom if available, otherwise default"""
+        if "system_prompt" in self._custom_prompts:
+            self.logger.debug("Using custom system prompt")
+            return self._custom_prompts["system_prompt"]
+        return default_prompt
+    
+    def _get_user_prompt_template(self, default_template: str) -> str:
+        """Get user prompt template - custom if available, otherwise default"""
+        if "user_prompt_template" in self._custom_prompts:
+            self.logger.debug("Using custom user prompt template")
+            return self._custom_prompts["user_prompt_template"]
+        return default_template
+    
     @abstractmethod
     async def process(self, input_data: Any) -> Any:
         """Process input and return result"""
@@ -78,7 +110,7 @@ class BaseAgent(ABC):
                 model=self.config.model,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
-                response_format=response_format  # Pass response format
+                response_format=response_format
             )
             
             # Validate response
@@ -92,7 +124,6 @@ class BaseAgent(ABC):
             if response_format == "json":
                 content = response.get("content")
                 if isinstance(content, str):
-                    # This shouldn't happen if OpenAIClient works correctly
                     self.logger.warning("Received string instead of parsed JSON")
                     import json
                     try:
@@ -143,24 +174,22 @@ class BaseAgent(ABC):
             "name": self.name,
             "call_count": self._call_count,
             "total_tokens": self._total_tokens,
-            "estimated_cost": self._estimate_cost()
+            "estimated_cost": self._estimate_cost(),
+            "using_custom_prompts": bool(self._custom_prompts)
         }
     
     def _estimate_cost(self) -> float:
         """Estimate cost based on tokens used"""
-        # GPT-4o-mini pricing (as of knowledge cutoff)
         input_price_per_1k = 0.00015
         output_price_per_1k = 0.0006
         
-        # Rough estimate (assuming 70% input, 30% output)
         input_tokens = self._total_tokens * 0.7
         output_tokens = self._total_tokens * 0.3
         
         cost = (input_tokens / 1000 * input_price_per_1k + 
                 output_tokens / 1000 * output_price_per_1k)
         
-        # Ensure we return at least a minimal cost if tokens were used
         if self._total_tokens > 0 and cost == 0:
-            cost = 0.0001  # Minimum cost
+            cost = 0.0001
         
         return round(cost, 6)
