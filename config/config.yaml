@@ -6,7 +6,7 @@ openai:
   timeout: 30
 
 batch:
-  posts_per_batch: 5
+  posts_per_batch: 1  # ← CHANGED FROM 5 TO 1
   max_revisions: 2
   target_approval_rate: 0.3
   max_total_attempts: 20

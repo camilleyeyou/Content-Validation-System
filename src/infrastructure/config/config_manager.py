@@ -15,7 +15,7 @@ class OpenAIConfig(BaseModel):
 
 class BatchConfig(BaseModel):
     """Batch processing configuration"""
-    posts_per_batch: int = 5
+    posts_per_batch: int = 1  # Changed from 5 to 1 (generate 1 post with 1 image at a time)
     max_revisions: int = 2
     target_approval_rate: float = 0.3
     max_total_attempts: int = 20
@@ -105,7 +105,7 @@ class AppConfig:
                 'max_tokens': 600
             },
             'batch': {
-                'posts_per_batch': 5,
+                'posts_per_batch': 1,  # Changed from 5 to 1
                 'max_revisions': 2,
                 'target_approval_rate': 0.3,
                 'max_total_attempts': 20,

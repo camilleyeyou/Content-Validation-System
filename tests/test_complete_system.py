@@ -3,6 +3,7 @@ Complete System Test - Run the entire LinkedIn content validation pipeline
 Now includes:
 - Optional LinkedIn OAuth (via linkedin_oauth_server.py) without hardcoding secrets
 - Publishing approved posts to LinkedIn using LinkedInIntegrationService
+- DALL-E image generation support
 """
 
 import asyncio
@@ -55,18 +56,21 @@ USE_REAL_API = os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY") != "y
 
 
 # ---------------------------
-# Mock AI client (unchanged)
+# Mock AI client with image generation
 # ---------------------------
 class MockAIClient:
-    """Mock AI client for testing without API key"""
+    """Mock AI client for testing without API key - includes image generation"""
 
     def __init__(self):
         self.call_count = 0
+        self.image_count = 0
 
     async def generate(self, prompt: str, system_prompt: str = None, **kwargs):
         self.call_count += 1
 
-        if "Generate" in prompt and "LinkedIn posts" in prompt:
+        if "Generate" in prompt and "LinkedIn post" in prompt and "image" in prompt.lower():
+            return self._mock_generation_with_image()
+        elif "Generate" in prompt and "LinkedIn posts" in prompt:
             return self._mock_generation()
         elif "skeptical 28-year-old" in prompt:
             return self._mock_customer_validation()
@@ -81,6 +85,76 @@ class MockAIClient:
 
         return {"content": "Mock response", "usage": {"total_tokens": 100}}
 
+    async def generate_image(self, prompt: str, size: str = "1024x1024", 
+                           quality: str = "standard", style: str = "vivid"):
+        """Mock DALL-E image generation"""
+        self.image_count += 1
+        
+        # Return a placeholder image URL
+        mock_images = [
+            "https://via.placeholder.com/1024x1024/4A90E2/FFFFFF?text=Jesse+A.+Eisenbalm+Workspace",
+            "https://via.placeholder.com/1024x1024/1E3A5F/FFD700?text=Premium+Lip+Balm+Ritual",
+            "https://via.placeholder.com/1024x1024/2C5F7C/F5F5F5?text=Modern+Professional+Moment"
+        ]
+        
+        return {
+            "url": mock_images[self.image_count % len(mock_images)],
+            "revised_prompt": f"Mock revised: {prompt[:100]}..."
+        }
+
+    def _mock_generation_with_image(self):
+        """Mock generation that includes image prompts"""
+        import random
+        
+        posts = [
+            {
+                "content": "Remember when Jim from The Office taught us that small moments matter? In our AI-obsessed workplace, Jesse A. Eisenbalm ($8.99) is that small moment. Stop. Breathe. Apply. A premium ritual that keeps you grounded when every meeting is 'pivotal' and every email is 'urgent'. Because your humanity isn't a KPI, but your lips deserve premium care.\n\n#HumanFirst #LinkedInLife #PremiumSelfCare #OfficeLife",
+                "hook": "Remember when Jim from The Office taught us that small moments matter?",
+                "target_audience": "Tech professionals",
+                "cultural_reference": {
+                    "category": "tv_show",
+                    "reference": "The Office",
+                    "context": "Jim's humanity in corporate chaos"
+                },
+                "hashtags": ["HumanFirst", "LinkedInLife", "PremiumSelfCare", "OfficeLife"],
+                "image_prompt": "Professional lifestyle photography of a premium lip balm on a modern office desk with a laptop displaying a spreadsheet. Warm natural lighting from a window creating soft shadows. Composition shows the lip balm in sharp focus in foreground, workspace slightly blurred in background. Color palette: navy blue and gold accents, clean white desk surface. The scene conveys a moment of pause during a busy workday. High-end product photography style, sophisticated and calm.",
+                "image_description": "A premium lip balm centered on a modern workspace, representing a moment of self-care during a busy professional day"
+            },
+            {
+                "content": "That Zoom fatigue hitting different at 3pm? Your fifth back-to-back video call doesn't care about your chapped lips, but you should. Jesse A. Eisenbalm - because for $8.99, you can own one thing that AI can't optimize: your moment to Stop. Breathe. Apply. Stay human, stay smooth.\n\n#RemoteWork #ZoomFatigue #SelfCare #StayHuman",
+                "hook": "That Zoom fatigue hitting different at 3pm?",
+                "target_audience": "Remote workers",
+                "cultural_reference": {
+                    "category": "workplace",
+                    "reference": "Zoom fatigue",
+                    "context": "Modern remote work struggle"
+                },
+                "hashtags": ["RemoteWork", "ZoomFatigue", "SelfCare", "StayHuman"],
+                "image_prompt": "Lifestyle shot of a home office setup from behind, showing a person's silhouette facing a laptop screen with multiple video call windows. Premium lip balm positioned prominently on desk beside wireless headphones and coffee mug. Warm backlight from window, creating intimate workspace atmosphere. Modern minimalist aesthetic with navy and gold tones. The image captures digital exhaustion meeting physical self-care.",
+                "image_description": "A remote worker's desk with video calls in progress and a lip balm ready for a self-care moment"
+            },
+            {
+                "content": "Performance review season got you questioning your humanity? While AI writes your self-assessment, take a moment for an actual self-assessment. Stop. Breathe. Apply. Jesse A. Eisenbalm - $8.99 for the only metric that matters: staying human when everything else is automated.\n\n#CorporateLife #PerformanceReview #HumanTouch #LipCare",
+                "hook": "Performance review season got you questioning your humanity?",
+                "target_audience": "Corporate professionals",
+                "cultural_reference": {
+                    "category": "seasonal",
+                    "reference": "Performance reviews",
+                    "context": "Annual corporate ritual"
+                },
+                "hashtags": ["CorporateLife", "PerformanceReview", "HumanTouch", "LipCare"],
+                "image_prompt": "Professional product photography of a premium lip balm on a clean desk with performance review documents and a pen nearby. Overhead view, natural lighting creating soft shadows. The lip balm is perfectly centered and in focus while papers are slightly out of focus. Color scheme: sophisticated navy, gold, and white. The composition suggests a moment of human pause amid corporate bureaucracy. Clean, modern, high-end aesthetic.",
+                "image_description": "A lip balm and performance review documents, symbolizing human needs amid corporate processes"
+            }
+        ]
+        
+        selected = random.choice(posts)
+        
+        return {
+            "content": selected,
+            "usage": {"total_tokens": 350}
+        }
+
     def _mock_generation(self):
         return {
             "content": {
@@ -91,20 +165,6 @@ class MockAIClient:
                         "target_audience": "Tech professionals",
                         "cultural_reference": {"category": "tv_show","reference": "The Office","context": "Jim's humanity in corporate chaos"},
                         "hashtags": ["HumanFirst","LinkedInLife","PremiumSelfCare","OfficeLife"]
-                    },
-                    {
-                        "content": "That Zoom fatigue hitting different at 3pm? Your fifth back-to-back video call doesn't care about your chapped lips, but you should. Jesse A. Eisenbalm - because for $8.99, you can own one thing that AI can't optimize: your moment to Stop. Breathe. Apply. Stay human, stay smooth.",
-                        "hook": "That Zoom fatigue hitting different at 3pm?",
-                        "target_audience": "Remote workers",
-                        "cultural_reference": {"category": "workplace","reference": "Zoom fatigue","context": "Modern remote work struggle"},
-                        "hashtags": ["RemoteWork","ZoomFatigue","SelfCare","StayHuman"]
-                    },
-                    {
-                        "content": "Performance review season got you questioning your humanity? While AI writes your self-assessment, take a moment for an actual self-assessment. Stop. Breathe. Apply. Jesse A. Eisenbalm - $8.99 for the only metric that matters: staying human when everything else is automated.",
-                        "hook": "Performance review season got you questioning your humanity?",
-                        "target_audience": "Corporate professionals",
-                        "cultural_reference": {"category": "seasonal","reference": "Performance reviews","context": "Annual corporate ritual"},
-                        "hashtags": ["CorporateLife","PerformanceReview","HumanTouch","LipCare"]
                     }
                 ]
             },
@@ -263,10 +323,10 @@ async def publish_approved_posts_to_linkedin(batch) -> dict | None:
 # Core test flows
 # ---------------------------
 async def test_complete_system(run_publish: bool = False):
-    """Run your full generation/validation flow; optionally publish approved posts."""
+    """Run your full generation/validation flow with images; optionally publish approved posts."""
 
     print("\n" + "="*60)
-    print("🚀 COMPLETE SYSTEM TEST")
+    print("🚀 COMPLETE SYSTEM TEST WITH IMAGE GENERATION")
     print("="*60)
 
     # Load configuration
@@ -275,7 +335,7 @@ async def test_complete_system(run_publish: bool = False):
 
     # Create AI client
     if USE_REAL_API:
-        print("✅ Using REAL OpenAI API")
+        print("✅ Using REAL OpenAI API (with DALL-E 3)")
         from src.infrastructure.ai.openai_client import OpenAIClient
         ai_client = OpenAIClient(app_config)
     else:
@@ -314,9 +374,9 @@ async def test_complete_system(run_publish: bool = False):
 
     # ---- Run a batch
     print("\n" + "-"*60)
-    print("RUNNING BATCH PROCESSING")
+    print("RUNNING BATCH PROCESSING WITH IMAGE GENERATION")
     print("-"*60)
-    print(f"Processing batch of {app_config.batch.posts_per_batch} posts...")
+    print(f"Processing batch of {app_config.batch.posts_per_batch} post(s)...")
     batch = await controller.run_single_batch(batch_size=app_config.batch.posts_per_batch)
 
     print(f"\nBatch {batch.id[:8]} completed!")
@@ -326,10 +386,10 @@ async def test_complete_system(run_publish: bool = False):
     print(f"Rejected: {batch.metrics.rejected_posts}")
     print(f"Approval rate: {batch.metrics.approval_rate:.1%}")
 
-    # Approved preview
+    # Approved preview with images
     if batch.get_approved_posts():
         print("\n" + "-"*60)
-        print("APPROVED POSTS")
+        print("APPROVED POSTS WITH IMAGES")
         print("-"*60)
         for i, post in enumerate(batch.get_approved_posts(), 1):
             print(f"\n📝 Post {i}:")
@@ -338,6 +398,13 @@ async def test_complete_system(run_publish: bool = False):
             print(f"Revisions: {post.revision_count}")
             if post.cultural_reference:
                 print(f"Cultural Ref: {post.cultural_reference.reference}")
+            # Image info
+            if hasattr(post, 'image_url') and post.image_url:
+                print(f"🖼️  Image URL: {post.image_url[:60]}...")
+                if hasattr(post, 'image_description') and post.image_description:
+                    print(f"   Description: {post.image_description[:80]}...")
+            else:
+                print(f"⚠️  No image generated")
 
     # Rejected summary
     if batch.get_rejected_posts():
@@ -400,9 +467,12 @@ async def test_complete_system(run_publish: bool = False):
     print(f"Total approvals: {stats['total_approvals']}")
     print(f"Overall approval rate: {stats['overall_approval_rate']:.1%}")
 
-    # Token usage (mock)
+    # Token/Image usage
     if isinstance(ai_client, MockAIClient):
         print(f"\nMock API calls made: {ai_client.call_count}")
+        print(f"Mock images generated: {ai_client.image_count}")
+    else:
+        print(f"\n💰 Note: Real DALL-E images cost $0.04 each (standard quality)")
 
     # Optional: publish approved posts to LinkedIn
     if run_publish:
@@ -453,7 +523,7 @@ async def test_multiple_batches():
 
     print("Running 3 batches...")
     batches = await controller.run_multiple_batches(
-        num_batches=3, batch_size=2, delay_seconds=0.5
+        num_batches=3, batch_size=1, delay_seconds=0.5
     )
 
     metrics = controller.get_performance_metrics()
@@ -482,22 +552,23 @@ def main():
     print("""
     ╔════════════════════════════════════════════════════════╗
     ║  Jesse A. Eisenbalm LinkedIn Content Validation System║
-    ║                    SYSTEM TEST                         ║
+    ║         WITH DALL-E IMAGE GENERATION SUPPORT           ║
     ╚════════════════════════════════════════════════════════╝
     """)
 
     if USE_REAL_API:
         print("🔑 OpenAI API key detected - will use real API")
+        print("💰 DALL-E 3 costs: $0.04 per image (standard quality)")
         resp = input("⚠️  This will make real API calls and incur costs. Continue? (y/n): ")
         if resp.lower() != 'y':
             print("Test cancelled."); return
     else:
-        print("🎭 No OpenAI key found - using mock responses")
+        print("🎭 No OpenAI key found - using mock responses with placeholder images")
 
     print("\nSelect mode:")
-    print("1. Single batch only")
+    print("1. Single batch only (1 post with image)")
     print("2. Single batch + publish to LinkedIn (uses existing token if available)")
-    print("3. Multiple batch test")
+    print("3. Multiple batch test (3 posts with images)")
     print("4. LinkedIn OAuth now (obtain token)")
     print("5. Exit")
 
