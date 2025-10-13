@@ -21,7 +21,7 @@ class ValidationScore(BaseModel):
     score: float = Field(ge=0, le=10)
     approved: bool
     feedback: Optional[str] = None
-    criteria_breakdown: Dict[str, Any] = Field(default_factory=dict)  # Changed from Dict[str, float] to Dict[str, Any]
+    criteria_breakdown: Dict[str, Any] = Field(default_factory=dict)
     validated_at: datetime = Field(default_factory=datetime.utcnow)
     
     @validator('approved')
@@ -38,7 +38,7 @@ class CulturalReference(BaseModel):
     context: str  # How it was used
 
 class LinkedInPost(BaseModel):
-    """Core post model with full lifecycle tracking"""
+    """Core post model with full lifecycle tracking and image support"""
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     # Identity
@@ -50,6 +50,12 @@ class LinkedInPost(BaseModel):
     content: str = Field(min_length=50, max_length=3000)
     hook: Optional[str] = None  # Opening line
     hashtags: List[str] = Field(default_factory=list, max_items=10)
+    
+    # Image Support (NEW)
+    image_url: Optional[str] = None  # DALL-E generated image URL
+    image_prompt: Optional[str] = None  # Original prompt sent to DALL-E
+    image_description: Optional[str] = None  # User-facing description
+    image_revised_prompt: Optional[str] = None  # Safety-filtered prompt from DALL-E
     
     # Targeting
     target_audience: str
@@ -84,6 +90,11 @@ class LinkedInPost(BaseModel):
         """Count number of approvals"""
         return sum(1 for s in self.validation_scores if s.approved)
     
+    @property
+    def has_image(self) -> bool:
+        """Check if post has an image"""
+        return self.image_url is not None
+    
     def is_approved(self, min_approvals: int = 2) -> bool:
         """Check if post meets approval threshold"""
         return self.approval_count >= min_approvals
@@ -97,6 +108,18 @@ class LinkedInPost(BaseModel):
         self.validation_scores.append(score)
         self.updated_at = datetime.utcnow()
     
+    def set_image(self, 
+                  url: str, 
+                  prompt: str, 
+                  description: Optional[str] = None,
+                  revised_prompt: Optional[str] = None) -> None:
+        """Set image data for the post"""
+        self.image_url = url
+        self.image_prompt = prompt
+        self.image_description = description
+        self.image_revised_prompt = revised_prompt
+        self.updated_at = datetime.utcnow()
+    
     def create_revision(self, new_content: str) -> None:
         """Create a revision of the post"""
         if self.original_content is None:
@@ -106,7 +129,8 @@ class LinkedInPost(BaseModel):
             "revision_number": self.revision_count,
             "previous_content": self.content,
             "timestamp": datetime.utcnow().isoformat(),
-            "average_score_before": self.average_score
+            "average_score_before": self.average_score,
+            "had_image": self.has_image
         })
         
         self.content = new_content
@@ -114,3 +138,6 @@ class LinkedInPost(BaseModel):
         self.status = PostStatus.REVISED
         self.validation_scores = []  # Clear for re-validation
         self.updated_at = datetime.utcnow()
+        
+        # Note: Image is preserved during revision unless explicitly changed
+        # You may want to regenerate images for revised content

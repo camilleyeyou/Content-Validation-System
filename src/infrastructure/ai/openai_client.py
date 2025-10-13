@@ -1,5 +1,5 @@
 """
-OpenAI Client with proper JSON response handling
+OpenAI Client with proper JSON response handling and DALL-E Image Generation
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from ..config.config_manager import AppConfig
 logger = structlog.get_logger()
 
 class OpenAIClient:
-    """Async OpenAI API client wrapper with JSON support"""
+    """Async OpenAI API client wrapper with JSON and image generation support"""
     
     def __init__(self, config: AppConfig):
         self.config = config
@@ -118,6 +118,66 @@ class OpenAIClient:
             
         except Exception as e:
             self.logger.error(f"OpenAI API error: {str(e)}")
+            raise
+    
+    async def generate_image(self,
+                           prompt: str,
+                           size: str = "1024x1024",
+                           quality: str = "standard",
+                           style: str = "vivid") -> Dict[str, Any]:
+        """
+        Generate image using DALL-E 3
+        
+        Args:
+            prompt: Detailed image description (max 4000 characters)
+            size: "1024x1024", "1792x1024", or "1024x1792"
+            quality: "standard" or "hd" (hd costs 2x)
+            style: "vivid" (hyper-real, dramatic) or "natural" (more realistic)
+            
+        Returns:
+            Dict with:
+                - url: Image URL (valid for ~1 hour)
+                - revised_prompt: OpenAI's safety-filtered version of your prompt
+                
+        Cost:
+            - Standard 1024x1024: $0.040
+            - HD 1024x1024: $0.080
+        """
+        try:
+            self.logger.info("Generating image with DALL-E 3",
+                           prompt_length=len(prompt),
+                           size=size,
+                           quality=quality,
+                           style=style)
+            
+            # Truncate prompt if too long (DALL-E 3 max is 4000 chars)
+            if len(prompt) > 4000:
+                self.logger.warning("Prompt too long, truncating to 4000 chars",
+                                  original_length=len(prompt))
+                prompt = prompt[:4000]
+            
+            response = await self.client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size=size,
+                quality=quality,
+                style=style,
+                n=1  # DALL-E 3 only supports n=1
+            )
+            
+            result = {
+                "url": response.data[0].url,
+                "revised_prompt": response.data[0].revised_prompt
+            }
+            
+            self.logger.info("Image generated successfully",
+                           url_length=len(result["url"]),
+                           prompt_revised=result["revised_prompt"] != prompt)
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"DALL-E image generation failed: {str(e)}")
             raise
     
     def _extract_json_from_text(self, text: str) -> Optional[Dict]:

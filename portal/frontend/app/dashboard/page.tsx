@@ -1,5 +1,7 @@
+// portal/frontend/app/page.tsx
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8001";
@@ -8,8 +10,16 @@ type PostRow = {
   id: string;
   target_type: "MEMBER" | "ORG";
   lifecycle: string;
-  commentary: string;
+  commentary?: string;
+  content?: string;
   hashtags?: string[];
+  // Image fields (NEW)
+  image_url?: string;
+  image_description?: string;
+  image_prompt?: string;
+  image_revised_prompt?: string;
+  has_image?: boolean;
+  // Status fields
   li_post_id?: string;
   error_message?: string;
   created_at?: string;
@@ -17,13 +27,9 @@ type PostRow = {
 
 export default function Dashboard() {
   const [me, setMe] = useState<any>(null);
-  const [orgs, setOrgs] = useState<any[]>([]);
-  const [commentary, setCommentary] = useState("");
-  const [hashtags, setHashtags] = useState("MyBrand, Update");
-  const [target, setTarget] = useState<"AUTO" | "MEMBER" | "ORG">("AUTO");
-  const [orgId, setOrgId] = useState("");
   const [rows, setRows] = useState<PostRow[]>([]);
   const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function fetchJSON(url: string, opts: any = {}) {
     const r = await fetch(url, { ...opts });
@@ -41,211 +47,274 @@ export default function Dashboard() {
       setMe(await fetchJSON(`${API_BASE}/api/me`));
     } catch {}
   }
-  async function loadOrgs() {
-    try {
-      const data = await fetchJSON(`${API_BASE}/api/orgs`);
-      setOrgs(data.orgs || []);
-    } catch {}
-  }
+
   async function loadPosts() {
     try {
-      setRows(await fetchJSON(`${API_BASE}/api/posts`));
+      setRows(await fetchJSON(`${API_BASE}/api/approved`));
     } catch {}
   }
 
   useEffect(() => {
     loadMe();
-    loadOrgs();
     loadPosts();
   }, []);
 
-  async function publish() {
-    setMsg("");
-    try {
-      const payload = {
-        commentary,
-        hashtags: hashtags.split(",").map((s) => s.trim()).filter(Boolean),
-        target,
-        org_id: target === "ORG" ? orgId : null,
-        publish_now: true, // local publish (no LinkedIn)
-      };
-      const data = await fetchJSON(`${API_BASE}/api/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      setMsg(`Saved locally as ${data.lifecycle}`);
-      setCommentary("");
-      await loadPosts();
-    } catch (e: any) {
-      setMsg(e?.message || "Error");
-    }
-  }
-
   async function runBatch() {
-    setMsg("Running full system…");
+    setMsg("Running content generation with DALL-E images...");
+    setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
-      setMsg(`Batch ${data.batch_id || ""}: approved ${data.approved}, added ${data.added}`);
+      const imageInfo = data.posts_with_images > 0 
+        ? ` (${data.posts_with_images} with images)` 
+        : "";
+      setMsg(
+        `✅ Generated ${data.approved_count || 0} approved posts${imageInfo}! Total in queue: ${
+          data.total_in_queue || 0
+        }`
+      );
       await loadPosts();
     } catch (e: any) {
-      setMsg(e?.message || "Error");
+      setMsg(`❌ Error: ${e?.message || "Unknown error"}`);
+    } finally {
+      setLoading(false);
     }
   }
 
   async function clearAll() {
+    if (!confirm("Clear all posts from queue?")) return;
     setMsg("");
+    setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/approved/clear`, { method: "POST" });
-      setMsg(`Cleared ${data.deleted} items`);
+      setMsg(`✅ Cleared ${data.deleted} posts`);
       await loadPosts();
     } catch (e: any) {
-      setMsg(e?.message || "Error");
+      setMsg(`❌ Error: ${e?.message || "Unknown error"}`);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const subline = me ? (
-    <>
-      Acting as <b>{me.name || me.sub}</b>
-      {orgs.length > 0 ? (
-        <span style={{ color: "#666" }}> • Org ready: {orgs.map((o) => o.id).join(", ")}</span>
-      ) : null}
-    </>
-  ) : (
-    "Loading…"
-  );
+  // Count posts with images
+  const postsWithImages = rows.filter(r => r.has_image).length;
 
   return (
-    <main style={{ padding: 24, display: "grid", gap: 16, maxWidth: 900, margin: "0 auto" }}>
-      <h1>Dashboard</h1>
-      <div style={{ fontSize: 14, color: "#444" }}>{subline}</div>
-
-      <section style={{ display: "grid", gap: 8 }}>
-        <h2>Compose</h2>
-        <textarea
-          value={commentary}
-          onChange={(e) => setCommentary(e.target.value)}
-          placeholder="Write your post…"
-          style={{ width: "100%", height: 140, padding: 12 }}
-        />
-        <input
-          value={hashtags}
-          onChange={(e) => setHashtags(e.target.value)}
-          placeholder="Hashtags (comma)"
-          style={{ padding: 8 }}
-        />
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <label>Target:</label>
-          <select value={target} onChange={(e) => setTarget(e.target.value as any)}>
-            <option value="AUTO">Auto (Org if configured)</option>
-            <option value="MEMBER">Personal</option>
-            <option value="ORG">Company</option>
-          </select>
-
-          {target === "ORG" && (
+    <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Content Dashboard</h1>
+        <p className="text-sm text-zinc-600">
+          {me ? (
             <>
-              <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-                <option value="">-- select org --</option>
-                {orgs.map((o: any) => (
-                  <option key={o.urn} value={o.id}>
-                    {o.id}
-                  </option>
-                ))}
-              </select>
-              <span style={{ fontSize: 12, color: "#666" }}>
-                (or set LINKEDIN_ORG_ID in backend env)
-              </span>
+              Acting as <span className="font-semibold">{me.name || me.sub}</span>
             </>
+          ) : (
+            "Loading..."
           )}
+        </p>
+      </div>
 
-          <button
-            onClick={publish}
-            style={{ padding: "8px 12px", background: "#111", color: "#fff", borderRadius: 8 }}
-          >
-            Save
-          </button>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={runBatch}
-            style={{ padding: "8px 12px", background: "#0A66C2", color: "#fff", borderRadius: 8 }}
+            disabled={loading}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
           >
-            Generate (run full system)
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              "🚀"
+            )}
+            Generate Posts + Images
           </button>
-          <button onClick={clearAll} style={{ padding: "8px 12px", borderRadius: 8 }}>
-            Clear queue
+          <button
+            onClick={clearAll}
+            disabled={loading}
+            className="px-6 py-3 bg-white border border-zinc-300 rounded-lg font-semibold hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            🗑️ Clear Queue
           </button>
+          <Link
+            href="/prompts"
+            className="px-6 py-3 bg-zinc-900 text-white rounded-lg font-semibold hover:bg-zinc-800 transition-all inline-flex items-center gap-2"
+          >
+            🤖 Manage Agent Prompts
+          </Link>
         </div>
 
-        {msg && <div style={{ fontSize: 13 }}>{msg}</div>}
-      </section>
+        {msg && (
+          <div
+            className={`mt-4 p-4 rounded-lg text-sm ${
+              msg.includes("❌")
+                ? "bg-red-50 text-red-800 border border-red-200"
+                : "bg-green-50 text-green-800 border border-green-200"
+            }`}
+          >
+            {msg}
+          </div>
+        )}
+      </div>
 
-      <section>
-        <h2>Recent</h2>
-        <div style={{ display: "grid", gap: 8 }}>
-          {rows.map((r) => {
-            const full =
-              r.commentary +
-              (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
-            return (
-              <div key={r.id} style={{ border: "1px solid #ddd", padding: 12 }}>
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  {r.target_type} • {r.lifecycle} •{" "}
-                  {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
-                </div>
-                <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{r.commentary}</div>
-                {r.hashtags?.length ? (
-                  <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {r.hashtags.map((h, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          fontSize: 12,
-                          background: "#f2f2f2",
-                          padding: "2px 6px",
-                          borderRadius: 999,
-                        }}
-                      >
-                        #{h}
+      {/* Stats */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Statistics</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Total Posts</div>
+            <div className="text-3xl font-bold">{rows.length}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">With Images</div>
+            <div className="text-3xl font-bold text-blue-600">{postsWithImages}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Image Rate</div>
+            <div className="text-lg font-semibold">
+              {rows.length > 0 ? `${Math.round((postsWithImages / rows.length) * 100)}%` : "0%"}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Status</div>
+            <div className={`text-lg font-semibold ${rows.length > 0 ? "text-green-600" : "text-zinc-500"}`}>
+              {rows.length > 0 ? "Ready to Publish" : "No Posts"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Posts List */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Generated Posts ({rows.length})</h2>
+        <div className="space-y-4">
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-zinc-500 text-sm">
+              No posts yet. Click "Generate Posts + Images" to create content using your AI agents.
+            </div>
+          ) : (
+            rows.map((r) => {
+              const displayContent = r.content || r.commentary || "";
+              const full =
+                displayContent +
+                (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
+              return (
+                <div
+                  key={r.id}
+                  className="border border-zinc-200 rounded-lg p-4 bg-zinc-50 hover:shadow-md transition-shadow"
+                >
+                  {/* Header with tags */}
+                  <div className="flex gap-2 flex-wrap mb-3 text-xs">
+                    <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
+                      {r.target_type}
+                    </span>
+                    <span className="px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full font-medium">
+                      {r.lifecycle}
+                    </span>
+                    {r.has_image && (
+                      <span className="px-2 py-1 bg-purple-600 text-white rounded-full font-semibold">
+                        🖼️ Image
                       </span>
-                    ))}
+                    )}
+                    {r.created_at && (
+                      <span className="ml-auto text-zinc-500">
+                        {new Date(r.created_at).toLocaleString()}
+                      </span>
+                    )}
                   </div>
-                ) : null}
-                {r.li_post_id && (
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 6 }}>
-                    LinkedIn ID: {r.li_post_id}
-                  </div>
-                )}
-                {r.error_message && (
-                  <div style={{ fontSize: 12, color: "#B00020", marginTop: 6 }}>
-                    Error: {r.error_message}
-                  </div>
-                )}
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(r.commentary)}
-                    style={{ padding: "6px 10px", borderRadius: 6, marginRight: 8 }}
-                  >
-                    Copy text
-                  </button>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(full)}
-                    style={{ padding: "6px 10px", borderRadius: 6 }}
-                  >
-                    Copy post + tags
-                  </button>
-                </div>
 
-                <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
-                  <a href="/prompts" style={{ color: "#0A66C2", fontWeight: 600 }}>
-                    📝 Manage Agent Prompts
-                  </a>
+                  {/* Image Display (NEW) */}
+                  {r.image_url && (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200">
+                      <img
+                        src={r.image_url}
+                        alt={r.image_description || "Generated image"}
+                        className="w-full h-auto"
+                        loading="lazy"
+                      />
+                      {r.image_description && (
+                        <div className="p-3 bg-zinc-100 text-xs text-zinc-700">
+                          <span className="font-semibold">Image: </span>
+                          {r.image_description}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Content */}
+                  <div className="whitespace-pre-wrap mb-3 leading-relaxed text-sm">
+                    {displayContent}
+                  </div>
+
+                  {/* Hashtags */}
+                  {r.hashtags?.length ? (
+                    <div className="mb-3 flex gap-2 flex-wrap">
+                      {r.hashtags.map((h, i) => (
+                        <span
+                          key={i}
+                          className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium"
+                        >
+                          #{h}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {/* Status Messages */}
+                  {r.li_post_id && (
+                    <div className="text-xs text-green-700 font-medium mb-2">
+                      ✅ Published • LinkedIn ID: {r.li_post_id}
+                    </div>
+                  )}
+                  {r.error_message && (
+                    <div className="text-xs text-red-700 bg-red-50 p-2 rounded mb-2">
+                      ❌ Error: {r.error_message}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(displayContent)}
+                      className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
+                      📋 Copy Text
+                    </button>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(full)}
+                      className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                    >
+                      📋 Copy with Tags
+                    </button>
+                    {r.image_url && (
+                      <>
+                        <button
+                          onClick={() => window.open(r.image_url, '_blank')}
+                          className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                        >
+                          🖼️ Open Image
+                        </button>
+                        {r.image_prompt && (
+                          <button
+                            onClick={() => {
+                              const info = `Image Prompt: ${r.image_prompt}\n\nImage Description: ${r.image_description || 'N/A'}`;
+                              alert(info);
+                            }}
+                            className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                          >
+                            ℹ️ Image Details
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          {rows.length === 0 && <div style={{ color: "#666" }}>Nothing yet. Click Generate.</div>}
+              );
+            })
+          )}
         </div>
-      </section>
+      </div>
     </main>
   );
 }

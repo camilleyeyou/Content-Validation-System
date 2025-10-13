@@ -1,6 +1,6 @@
 """
-Advanced Content Generator - Creates LinkedIn posts using multi-element combination protocol
-Updated with custom prompt loading support
+Advanced Content Generator - Creates LinkedIn posts with DALL-E generated images
+Updated with custom prompt loading support and image generation
 """
 
 import json
@@ -12,7 +12,7 @@ from src.domain.models.post import LinkedInPost, CulturalReference
 from src.infrastructure.config.config_manager import AppConfig
 
 class AdvancedContentGenerator(BaseAgent):
-    """Generates LinkedIn posts using two-element combination strategy"""
+    """Generates LinkedIn posts with images using two-element combination strategy"""
     
     def __init__(self, config: AgentConfig, ai_client, app_config: AppConfig):
         super().__init__("AdvancedContentGenerator", config, ai_client)
@@ -67,14 +67,15 @@ class AdvancedContentGenerator(BaseAgent):
         }
     
     async def process(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Generate a batch of LinkedIn posts using element combination strategy"""
+        """Generate LinkedIn posts with images using element combination strategy"""
         batch_id = input_data.get("batch_id")
-        count = input_data.get("count", 5)
+        count = input_data.get("count", 1)  # Generate 1 post at a time
         avoid_patterns = input_data.get("avoid_patterns", {})
         
         posts = []
         for i in range(count):
             # Generate each post with unique element combination
+            self.logger.info(f"Generating post {i+1}/{count} with image")
             post = await self._generate_single_post(batch_id, i + 1, avoid_patterns)
             if post:
                 posts.append(post)
@@ -86,7 +87,7 @@ class AdvancedContentGenerator(BaseAgent):
         return posts
     
     async def _generate_single_post(self, batch_id: str, post_number: int, avoid_patterns: Dict) -> Dict[str, Any]:
-        """Generate a single post using the protocol"""
+        """Generate a single post with image using the protocol"""
         # Step 1: Select two elements
         elements = self._select_elements(avoid_patterns)
         
@@ -101,6 +102,7 @@ class AdvancedContentGenerator(BaseAgent):
         user_prompt = self._build_generation_prompt(elements, story_arc, length_type)
         
         try:
+            # Generate content + image prompt
             response = await self._call_ai(user_prompt, system_prompt, response_format="json")
             post_data = self._parse_generation_response(response)
             
@@ -110,12 +112,48 @@ class AdvancedContentGenerator(BaseAgent):
                 post_data["elements_used"] = elements
                 post_data["story_arc"] = story_arc
                 post_data["length_type"] = length_type
+                
+                # Generate image using DALL-E
+                if post_data.get("image_prompt"):
+                    await self._generate_and_attach_image(post_data)
+                
                 return post_data
                 
         except Exception as e:
             self.logger.error(f"Failed to generate post: {e}")
             
         return None
+    
+    async def _generate_and_attach_image(self, post_data: Dict[str, Any]) -> None:
+        """Generate DALL-E image and attach to post data"""
+        try:
+            image_prompt = post_data.get("image_prompt", "")
+            if not image_prompt:
+                self.logger.warning("No image prompt provided, skipping image generation")
+                return
+            
+            self.logger.info("Generating image with DALL-E", prompt_length=len(image_prompt))
+            
+            # Call DALL-E
+            image_result = await self._generate_image(
+                prompt=image_prompt,
+                size="1024x1024",
+                quality="standard",  # Use "hd" for higher quality ($0.080 vs $0.040)
+                style="vivid"  # "vivid" for dramatic, "natural" for realistic
+            )
+            
+            # Attach image data to post
+            post_data["image_url"] = image_result.get("url")
+            post_data["image_revised_prompt"] = image_result.get("revised_prompt")
+            
+            self.logger.info("Image generated successfully", 
+                           url_length=len(image_result.get("url", "")))
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate image: {e}")
+            # Don't fail the entire post if image generation fails
+            post_data["image_url"] = None
+            post_data["image_error"] = str(e)
     
     def _select_elements(self, avoid_patterns: Dict) -> Tuple[str, str]:
         """Select two elements, avoiding failed patterns"""
@@ -168,9 +206,9 @@ class AdvancedContentGenerator(BaseAgent):
         )[0]
     
     def _build_system_prompt(self) -> str:
-        """Build the system prompt for advanced content generation"""
+        """Build the system prompt for advanced content generation with images"""
         # Build default prompt
-        default_prompt = f"""You are a LinkedIn content creator for Jesse A. Eisenbalm, a premium lip balm brand.
+        default_prompt = f"""You are a LinkedIn content creator AND visual designer for Jesse A. Eisenbalm, a premium lip balm brand.
 
 BRAND ESSENCE: 
 A physical, analog product that bridges the gap between digital overwhelm and human presence. 
@@ -194,6 +232,16 @@ MANDATORY COMPONENTS FOR EVERY POST:
 2. One "confession" professionals think but don't post
 3. The moment where lip balm becomes necessary
 4. Subtle product integration
+5. DETAILED image prompt for DALL-E generation
+
+IMAGE REQUIREMENTS:
+- Professional lifestyle photography style
+- Modern, clean, sophisticated aesthetic
+- Warm lighting, premium feel
+- Shows product in relatable workplace/self-care contexts
+- NO text in images (DALL-E struggles with text)
+- Consistent brand feel: navy blue and gold accents when appropriate
+- Evokes the post's emotional core visually
 
 You MUST respond with valid JSON format only."""
         
@@ -201,14 +249,14 @@ You MUST respond with valid JSON format only."""
         return self._get_system_prompt(default_prompt)
     
     def _build_generation_prompt(self, elements: Tuple[str, str], story_arc: str, length_type: str) -> str:
-        """Build the user prompt for post generation"""
+        """Build the user prompt for post generation with image"""
         element_descriptions = self._get_element_descriptions(elements)
         arc_structure = self.story_arcs[story_arc]
         min_words, max_words = self.post_lengths[length_type]
         format_template = self._get_format_template(length_type)
         
         # Build default template
-        default_template = f"""Generate a LinkedIn post for Jesse A. Eisenbalm using this exact protocol:
+        default_template = f"""Generate a LinkedIn post with image for Jesse A. Eisenbalm using this exact protocol:
 
 ELEMENTS TO COMBINE:
 1. {element_descriptions[0]}
@@ -234,6 +282,19 @@ REQUIREMENTS:
 - Include specific moment where dry lips become the breaking point
 - Mention $8.99 price naturally if possible
 - End with 2-4 hashtags (mix professional with one absurdist)
+- Create DETAILED image prompt that visually represents the post's core emotion
+
+IMAGE PROMPT GUIDELINES:
+- Be extremely specific (lighting, composition, style, mood, colors)
+- Match the post's tone and emotional trigger
+- Professional LinkedIn-appropriate imagery
+- Include "product photography" or "lifestyle shot" style guidance
+- Mention brand aesthetic: modern, premium, sophisticated
+- NO text in the image description
+- Describe the scene, mood, and visual metaphor
+
+Example image prompt:
+"Professional lifestyle photography of a premium lip balm product on a sleek modern desk with a laptop showing multiple video call windows. Warm natural window lighting from the left, creating soft shadows. Composition: shallow depth of field with the lip balm in sharp focus in foreground, blurred workspace in background. Color palette: navy blue and gold accents, clean white surfaces. The scene conveys the moment of pause in digital chaos - a coffee cup, scattered notes, the lip balm as the centered, grounded element. High-end product photography style, sophisticated and calm despite the busy context."
 
 CRITICAL: Return ONLY this JSON structure:
 {{
@@ -248,10 +309,12 @@ CRITICAL: Return ONLY this JSON structure:
     }},
     "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
     "target_audience": "specific professional segment",
-    "emotional_trigger": "what feeling this targets"
+    "emotional_trigger": "what feeling this targets",
+    "image_prompt": "DETAILED DALL-E PROMPT (150-400 characters, very specific about lighting, composition, style, colors, mood)",
+    "image_description": "Brief user-facing description of what the image shows (1-2 sentences)"
 }}
 
-Generate the post now. Return ONLY valid JSON."""
+Generate the post with image now. Return ONLY valid JSON."""
         
         # Return custom template if exists, otherwise default
         return self._get_user_prompt_template(default_template)
@@ -320,7 +383,7 @@ Call to action: [Join the resistance]"""
         return templates.get(length_type, templates["SHORT_STORY"])
     
     def _parse_generation_response(self, response: Dict) -> Dict[str, Any]:
-        """Parse the AI response into post data"""
+        """Parse the AI response into post data with image"""
         try:
             content = response.get("content", {})
             content = self._ensure_json_dict(content)
@@ -335,7 +398,7 @@ Call to action: [Join the resistance]"""
                 self.logger.error("Generated content too short")
                 return None
             
-            # Build post data
+            # Build post data with image fields
             post_data = {
                 "content": post_content,
                 "hook": content.get("hook", post_content[:50]),
@@ -344,6 +407,11 @@ Call to action: [Join the resistance]"""
                 "target_audience": content.get("target_audience", "Tech professionals"),
                 "emotional_trigger": content.get("emotional_trigger", "workplace anxiety"),
                 "hashtags": content.get("hashtags", ["HumanFirst", "LinkedInLife"]),
+                # Image fields
+                "image_prompt": content.get("image_prompt", ""),
+                "image_description": content.get("image_description", ""),
+                "image_url": None,  # Will be filled by _generate_and_attach_image
+                "image_revised_prompt": None,  # Will be filled by DALL-E response
                 "cultural_reference": None
             }
             
@@ -375,7 +443,9 @@ Because while machines optimize your calendar into oblivion, your lips deserve $
 
 #HumanFirst #MeetingMadness #LinkedInLife #LipBalmResistance""",
                 "elements": ["meeting_mishaps", "ai_workplace_cliche"],
-                "story_arc": "FALSE_SUMMIT"
+                "story_arc": "FALSE_SUMMIT",
+                "image_prompt": "Professional product photography of premium lip balm on a desk with an open laptop showing a calendar full of back-to-back meetings. Warm natural lighting, shallow depth of field, modern minimalist aesthetic. The lip balm is centered and in focus while the chaotic calendar blurs in background. Navy and gold color accents, sophisticated and calm composition.",
+                "image_description": "A premium lip balm centered on a workspace with an overwhelming meeting schedule visible in the background"
             },
             {
                 "content": """Nobody:
@@ -387,7 +457,9 @@ Some things should stay human. Starting with your lips. $8.99.
 
 #StayHuman #AlgorithmBlues #AuthenticContent""",
                 "elements": ["linkedin_algorithm", "ai_workplace_cliche"],
-                "story_arc": "GROUNDHOG_DAY"
+                "story_arc": "GROUNDHOG_DAY",
+                "image_prompt": "Lifestyle shot of hands typing on laptop keyboard with a premium lip balm beside the computer. Overhead view, natural window lighting creating soft shadows. Clean modern workspace with coffee cup. The composition shows human hands actively creating, lip balm as companion. Warm color palette with navy and gold accents, professional photography style.",
+                "image_description": "Hands typing authentically at a laptop with lip balm nearby, representing human creation vs AI automation"
             },
             {
                 "content": """Overheard in Zoom waiting room:
@@ -402,7 +474,9 @@ The only thing that's definitely not artificial? Dry lips from talking to screen
 
 #ZoomLife #RealMoments #DigitalFatigue""",
                 "elements": ["overheard_at_tech", "meeting_mishaps"],
-                "story_arc": "INNOCENT_ABROAD"
+                "story_arc": "INNOCENT_ABROAD",
+                "image_prompt": "Professional lifestyle photography of a video call setup from behind, showing a person's silhouette facing a screen with multiple video squares. Premium lip balm in foreground on desk, perfectly positioned and lit. Warm backlight from window, creating intimate workspace glow. Modern, sophisticated composition with navy and gold tones, emphasizing the contrast between digital and physical.",
+                "image_description": "A video call workspace from behind, showing the physical lip balm as anchor in digital chaos"
             }
         ]
         
@@ -414,6 +488,9 @@ The only thing that's definitely not artificial? Dry lips from talking to screen
             "content": selected["content"],
             "target_audience": "Tech professionals",
             "hashtags": ["HumanFirst", "LinkedInLife", "StayHuman"],
+            "image_prompt": selected["image_prompt"],
+            "image_description": selected["image_description"],
+            "image_url": None,  # Will be generated if system is working
             "cultural_reference": CulturalReference(
                 category="workplace",
                 reference=selected["elements"][0],

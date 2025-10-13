@@ -1,6 +1,6 @@
 # portal/backend/app/main.py
 """
-Complete Content Portal API with Prompt Management
+Complete Content Portal API with Prompt Management and Image Support
 Fixed for both local development and deployment
 """
 
@@ -76,7 +76,7 @@ APPROVED_QUEUE: List[Dict[str, Any]] = []
 
 
 def _approved_from_batch(batch) -> List[Dict[str, Any]]:
-    """Convert the batch's approved posts to the FE 'approved' shape."""
+    """Convert the batch's approved posts to the FE 'approved' shape with images."""
     items: List[Dict[str, Any]] = []
     if not batch or not getattr(batch, "get_approved_posts", None):
         return items
@@ -84,11 +84,25 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
     for post in batch.get_approved_posts():
         content = getattr(post, "content", "") or ""
         hashtags = getattr(post, "hashtags", None) or []
+        
+        # Extract image data (NEW)
+        image_url = getattr(post, "image_url", None)
+        image_description = getattr(post, "image_description", None)
+        image_prompt = getattr(post, "image_prompt", None)
+        image_revised_prompt = getattr(post, "image_revised_prompt", None)
+        
         items.append(
             {
                 "id": uuid.uuid4().hex,
                 "content": content,
                 "hashtags": hashtags,
+                # Image fields (NEW)
+                "image_url": image_url,
+                "image_description": image_description,
+                "image_prompt": image_prompt,
+                "image_revised_prompt": image_revised_prompt,
+                "has_image": image_url is not None,
+                # Status fields
                 "status": "approved",
                 "created_at": datetime.utcnow().isoformat() + "Z",
                 "li_post_id": None,
@@ -105,12 +119,13 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
 def root():
     return {
         "ok": True,
-        "message": "Content Portal API",
+        "message": "Content Portal API with Image Generation",
         "portal_base_url": PORTAL_BASE_URL,
         "cors_allow_origins": _cors,
         "project_root": str(PROJECT_ROOT),
         "features": {
             "content_generation": True,
+            "image_generation": True,  # NEW
             "prompt_management": True,
             "batch_processing": True
         }
@@ -138,17 +153,21 @@ def clear_approved():
 
 @app.post("/api/run-batch")
 async def run_batch():
-    """Run the full content pipeline"""
+    """Run the full content pipeline with image generation"""
     try:
         from tests.test_complete_system import test_complete_system as run_full
         batch = await run_full(run_publish=False)
         newly_approved = _approved_from_batch(batch)
         APPROVED_QUEUE.extend(newly_approved)
 
+        # Count posts with images
+        posts_with_images = sum(1 for p in newly_approved if p.get("has_image"))
+
         return {
             "ok": True,
             "batch_id": getattr(batch, "id", None),
             "approved_count": len(newly_approved),
+            "posts_with_images": posts_with_images,  # NEW
             "total_in_queue": len(APPROVED_QUEUE),
         }
     except ModuleNotFoundError as e:
@@ -190,11 +209,15 @@ async def get_posts():
 
 @app.post("/api/posts")
 async def create_post(payload: Dict[str, Any]):
-    """Create a new post manually"""
+    """Create a new post manually (with optional image URL)"""
     try:
         commentary = payload.get("commentary", "")
         hashtags = payload.get("hashtags", [])
         target = payload.get("target", "AUTO")
+        
+        # NEW: Accept optional image data
+        image_url = payload.get("image_url")
+        image_description = payload.get("image_description")
         
         if not commentary:
             return JSONResponse(
@@ -208,6 +231,11 @@ async def create_post(payload: Dict[str, Any]):
             "lifecycle": "draft",
             "commentary": commentary,
             "hashtags": hashtags,
+            # Image fields (NEW)
+            "image_url": image_url,
+            "image_description": image_description,
+            "has_image": image_url is not None,
+            # Status fields
             "li_post_id": None,
             "error_message": None,
             "created_at": datetime.utcnow().isoformat() + "Z"
@@ -242,6 +270,7 @@ async def startup_event():
     print(f"CORS Origins: {_cors}")
     print(f"Features:")
     print(f"  - Content Generation: ✅")
+    print(f"  - Image Generation (DALL-E 3): ✅")  # NEW
     print(f"  - Prompt Management: ✅")
     print(f"  - Batch Processing: ✅")
     print("="*60)

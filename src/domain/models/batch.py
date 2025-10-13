@@ -5,11 +5,17 @@ from pydantic import BaseModel, Field
 from .post import LinkedInPost, PostStatus
 
 class BatchMetrics(BaseModel):
-    """Metrics for a batch of posts"""
+    """Metrics for a batch of posts with image generation tracking"""
     total_posts: int = 0
     approved_posts: int = 0
     rejected_posts: int = 0
     revised_posts: int = 0
+    
+    # Image metrics (NEW)
+    posts_with_images: int = 0
+    image_generation_rate: float = 0.0
+    image_cost: float = 0.0
+    text_cost: float = 0.0
     
     approval_rate: float = 0.0
     revision_success_rate: float = 0.0
@@ -23,7 +29,7 @@ class BatchMetrics(BaseModel):
     agent_agreement_rate: float = 0.0
     
     def calculate(self, posts: List[LinkedInPost]) -> None:
-        """Calculate metrics from posts"""
+        """Calculate metrics from posts including image statistics"""
         if not posts:
             return
         
@@ -31,6 +37,14 @@ class BatchMetrics(BaseModel):
         self.approved_posts = sum(1 for p in posts if p.status == PostStatus.APPROVED)
         self.rejected_posts = sum(1 for p in posts if p.status == PostStatus.REJECTED)
         self.revised_posts = sum(1 for p in posts if p.revision_count > 0)
+        
+        # Image metrics (NEW)
+        self.posts_with_images = sum(1 for p in posts if hasattr(p, 'image_url') and p.image_url)
+        self.image_generation_rate = self.posts_with_images / self.total_posts if self.total_posts > 0 else 0
+        
+        # Calculate image vs text costs
+        # Standard DALL-E 3 pricing: $0.040 per image
+        self.image_cost = self.posts_with_images * 0.040
         
         self.approval_rate = self.approved_posts / self.total_posts if self.total_posts > 0 else 0
         
@@ -50,6 +64,9 @@ class BatchMetrics(BaseModel):
         
         self.total_tokens_used = sum(p.total_tokens_used for p in posts)
         self.total_cost = sum(p.estimated_cost for p in posts)
+        
+        # Calculate text cost (total - image cost)
+        self.text_cost = max(0, self.total_cost - self.image_cost)
 
 class Batch(BaseModel):
     """Represents a batch of posts being processed"""
@@ -82,3 +99,12 @@ class Batch(BaseModel):
     def get_rejected_posts(self) -> List[LinkedInPost]:
         """Get all rejected posts"""
         return [p for p in self.posts if p.status == PostStatus.REJECTED]
+    
+    def get_posts_with_images(self) -> List[LinkedInPost]:
+        """Get all posts that have generated images"""
+        return [p for p in self.posts if hasattr(p, 'image_url') and p.image_url]
+    
+    def get_approved_posts_with_images(self) -> List[LinkedInPost]:
+        """Get approved posts that have images"""
+        return [p for p in self.posts 
+                if p.status == PostStatus.APPROVED and hasattr(p, 'image_url') and p.image_url]

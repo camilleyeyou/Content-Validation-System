@@ -1,7 +1,6 @@
 # src/domain/agents/base_agent.py
 """
-Base Agent with improved JSON response handling and custom prompt support
-MODIFY your existing base_agent.py to add the prompt loading functionality
+Base Agent with improved JSON response handling, custom prompt support, and image generation
 """
 
 from abc import ABC, abstractmethod
@@ -21,6 +20,14 @@ class AIClientProtocol(Protocol):
                       system_prompt: Optional[str] = None,
                       response_format: str = "json",
                       **kwargs) -> Dict[str, Any]:
+        ...
+    
+    async def generate_image(self,
+                           prompt: str,
+                           size: str = "1024x1024",
+                           quality: str = "standard",
+                           style: str = "vivid") -> Dict[str, Any]:
+        """Generate image using DALL-E"""
         ...
 
 @dataclass
@@ -50,8 +57,9 @@ class BaseAgent(ABC):
         self.logger = logger.bind(agent=name)
         self._call_count = 0
         self._total_tokens = 0
+        self._image_count = 0
         
-        # NEW: Load custom prompts if available
+        # Load custom prompts if available
         self._custom_prompts = self._load_custom_prompts()
         
     def _load_custom_prompts(self) -> Dict[str, str]:
@@ -153,6 +161,48 @@ class BaseAgent(ABC):
                             response_format=response_format)
             raise
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
+    async def _generate_image(self,
+                             prompt: str,
+                             size: str = "1024x1024",
+                             quality: str = "standard",
+                             style: str = "vivid") -> Dict[str, Any]:
+        """Generate image with retry logic and monitoring"""
+        start_time = time.time()
+        self._image_count += 1
+        
+        try:
+            self.logger.info("image_generation_started",
+                           image_number=self._image_count,
+                           prompt_length=len(prompt),
+                           size=size,
+                           quality=quality)
+            
+            result = await self.ai_client.generate_image(
+                prompt=prompt,
+                size=size,
+                quality=quality,
+                style=style
+            )
+            
+            elapsed = time.time() - start_time
+            
+            self.logger.info("image_generation_completed",
+                           duration=elapsed,
+                           image_count=self._image_count,
+                           url_length=len(result.get("url", "")))
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error("image_generation_failed",
+                            error=str(e),
+                            image_number=self._image_count)
+            raise
+    
     def _ensure_json_dict(self, content: Any) -> Dict:
         """Ensure content is a dictionary, parsing if necessary"""
         if isinstance(content, dict):
@@ -173,23 +223,30 @@ class BaseAgent(ABC):
         return {
             "name": self.name,
             "call_count": self._call_count,
+            "image_count": self._image_count,
             "total_tokens": self._total_tokens,
             "estimated_cost": self._estimate_cost(),
             "using_custom_prompts": bool(self._custom_prompts)
         }
     
     def _estimate_cost(self) -> float:
-        """Estimate cost based on tokens used"""
+        """Estimate cost based on tokens used and images generated"""
+        # GPT-4o-mini pricing
         input_price_per_1k = 0.00015
         output_price_per_1k = 0.0006
         
         input_tokens = self._total_tokens * 0.7
         output_tokens = self._total_tokens * 0.3
         
-        cost = (input_tokens / 1000 * input_price_per_1k + 
-                output_tokens / 1000 * output_price_per_1k)
+        text_cost = (input_tokens / 1000 * input_price_per_1k + 
+                    output_tokens / 1000 * output_price_per_1k)
         
-        if self._total_tokens > 0 and cost == 0:
-            cost = 0.0001
+        # DALL-E 3 pricing (standard quality)
+        image_cost = self._image_count * 0.040
         
-        return round(cost, 6)
+        total_cost = text_cost + image_cost
+        
+        if (self._total_tokens > 0 or self._image_count > 0) and total_cost == 0:
+            total_cost = 0.0001
+        
+        return round(total_cost, 6)

@@ -13,6 +13,13 @@ type PostRow = {
   commentary?: string;
   content?: string;
   hashtags?: string[];
+  // Image fields (NEW)
+  image_url?: string;
+  image_description?: string;
+  image_prompt?: string;
+  image_revised_prompt?: string;
+  has_image?: boolean;
+  // Status fields
   li_post_id?: string;
   error_message?: string;
   created_at?: string;
@@ -53,12 +60,15 @@ export default function Dashboard() {
   }, []);
 
   async function runBatch() {
-    setMsg("Running content generation...");
+    setMsg("Running content generation with DALL-E images...");
     setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
+      const imageInfo = data.posts_with_images > 0 
+        ? ` (${data.posts_with_images} with images)` 
+        : "";
       setMsg(
-        `✅ Generated ${data.approved_count || 0} approved posts! Total in queue: ${
+        `✅ Generated ${data.approved_count || 0} approved posts${imageInfo}! Total in queue: ${
           data.total_in_queue || 0
         }`
       );
@@ -84,6 +94,9 @@ export default function Dashboard() {
       setLoading(false);
     }
   }
+
+  // Count posts with images
+  const postsWithImages = rows.filter(r => r.has_image).length;
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
@@ -115,7 +128,7 @@ export default function Dashboard() {
             ) : (
               "🚀"
             )}
-            Generate Posts
+            Generate Posts + Images
           </button>
           <button
             onClick={clearAll}
@@ -148,10 +161,20 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Statistics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
           <div>
             <div className="text-xs text-zinc-600 mb-1">Total Posts</div>
             <div className="text-3xl font-bold">{rows.length}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">With Images</div>
+            <div className="text-3xl font-bold text-blue-600">{postsWithImages}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">Image Rate</div>
+            <div className="text-lg font-semibold">
+              {rows.length > 0 ? `${Math.round((postsWithImages / rows.length) * 100)}%` : "0%"}
+            </div>
           </div>
           <div>
             <div className="text-xs text-zinc-600 mb-1">Status</div>
@@ -168,7 +191,7 @@ export default function Dashboard() {
         <div className="space-y-4">
           {rows.length === 0 ? (
             <div className="text-center py-12 text-zinc-500 text-sm">
-              No posts yet. Click "Generate Posts" to create content using your AI agents.
+              No posts yet. Click "Generate Posts + Images" to create content using your AI agents.
             </div>
           ) : (
             rows.map((r) => {
@@ -181,6 +204,7 @@ export default function Dashboard() {
                   key={r.id}
                   className="border border-zinc-200 rounded-lg p-4 bg-zinc-50 hover:shadow-md transition-shadow"
                 >
+                  {/* Header with tags */}
                   <div className="flex gap-2 flex-wrap mb-3 text-xs">
                     <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
                       {r.target_type}
@@ -188,15 +212,42 @@ export default function Dashboard() {
                     <span className="px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full font-medium">
                       {r.lifecycle}
                     </span>
+                    {r.has_image && (
+                      <span className="px-2 py-1 bg-purple-600 text-white rounded-full font-semibold">
+                        🖼️ Image
+                      </span>
+                    )}
                     {r.created_at && (
                       <span className="ml-auto text-zinc-500">
                         {new Date(r.created_at).toLocaleString()}
                       </span>
                     )}
                   </div>
+
+                  {/* Image Display (NEW) */}
+                  {r.image_url && (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200">
+                      <img
+                        src={r.image_url}
+                        alt={r.image_description || "Generated image"}
+                        className="w-full h-auto"
+                        loading="lazy"
+                      />
+                      {r.image_description && (
+                        <div className="p-3 bg-zinc-100 text-xs text-zinc-700">
+                          <span className="font-semibold">Image: </span>
+                          {r.image_description}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Content */}
                   <div className="whitespace-pre-wrap mb-3 leading-relaxed text-sm">
                     {displayContent}
                   </div>
+
+                  {/* Hashtags */}
                   {r.hashtags?.length ? (
                     <div className="mb-3 flex gap-2 flex-wrap">
                       {r.hashtags.map((h, i) => (
@@ -209,6 +260,8 @@ export default function Dashboard() {
                       ))}
                     </div>
                   ) : null}
+
+                  {/* Status Messages */}
                   {r.li_post_id && (
                     <div className="text-xs text-green-700 font-medium mb-2">
                       ✅ Published • LinkedIn ID: {r.li_post_id}
@@ -219,7 +272,9 @@ export default function Dashboard() {
                       ❌ Error: {r.error_message}
                     </div>
                   )}
-                  <div className="flex gap-2">
+
+                  {/* Actions */}
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => navigator.clipboard.writeText(displayContent)}
                       className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -232,6 +287,27 @@ export default function Dashboard() {
                     >
                       📋 Copy with Tags
                     </button>
+                    {r.image_url && (
+                      <>
+                        <button
+                          onClick={() => window.open(r.image_url, '_blank')}
+                          className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                        >
+                          🖼️ Open Image
+                        </button>
+                        {r.image_prompt && (
+                          <button
+                            onClick={() => {
+                              const info = `Image Prompt: ${r.image_prompt}\n\nImage Description: ${r.image_description || 'N/A'}`;
+                              alert(info);
+                            }}
+                            className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                          >
+                            ℹ️ Image Details
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               );
