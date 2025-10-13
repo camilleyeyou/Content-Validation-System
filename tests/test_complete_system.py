@@ -3,7 +3,7 @@ Complete System Test - Run the entire LinkedIn content validation pipeline
 Now includes:
 - Optional LinkedIn OAuth (via linkedin_oauth_server.py) without hardcoding secrets
 - Publishing approved posts to LinkedIn using LinkedInIntegrationService
-- DALL-E image generation support
+- DALL-E image generation via dedicated ImageGenerationAgent
 """
 
 import asyncio
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('.'))
 # Load .env (do not hardcode any secret)
 load_dotenv()
 
-# --- App imports (unchanged from your system) ---
+# --- App imports ---
 from src.infrastructure.config.config_manager import AppConfig
 from src.infrastructure.logging.logger_config import configure_logging, get_logger
 from src.infrastructure.persistence.export_manager import ExportManager
@@ -28,6 +28,7 @@ from src.infrastructure.analytics.performance_analyzer import PerformanceAnalyze
 
 from src.domain.agents.base_agent import AgentConfig
 from src.domain.agents.advanced_content_generator import AdvancedContentGenerator
+from src.domain.agents.image_generation_agent import ImageGenerationAgent
 from src.domain.agents.validators.sarah_chen_validator import SarahChenValidator
 from src.domain.agents.validators.marcus_williams_validator import MarcusWilliamsValidator
 from src.domain.agents.validators.jordan_park_validator import JordanParkValidator
@@ -37,13 +38,10 @@ from src.domain.agents.revision_generator import RevisionGenerator
 from src.domain.services.validation_orchestrator import ValidationOrchestrator
 from src.domain.services.workflow_controller import WorkflowController
 
-# --- LinkedIn pieces (ours) ---
-# 1) Publisher/Service: will read tokens from env/config and publish
+# --- LinkedIn pieces ---
 from src.infrastructure.social.linkedin_publisher import LinkedInIntegrationService
-# 2) OAuth helper: performs browser auth + token save to config/linkedin_token.json
-#    (This is the file you already have and have been using)
 try:
-    from linkedin_oauth_server import LinkedInOAuthServer  # local module, no secrets inside
+    from linkedin_oauth_server import LinkedInOAuthServer
 except ImportError:
     LinkedInOAuthServer = None
 
@@ -51,7 +49,7 @@ except ImportError:
 configure_logging(level="INFO")
 logger = get_logger("system_test")
 
-# Detect whether to use real OpenAI (same as your original)
+# Detect whether to use real OpenAI
 USE_REAL_API = os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY") != "your-openai-api-key-here"
 
 
@@ -67,10 +65,17 @@ class MockAIClient:
 
     async def generate(self, prompt: str, system_prompt: str = None, **kwargs):
         self.call_count += 1
+        response_format = kwargs.get('response_format', 'json')
 
-        if "Generate" in prompt and "LinkedIn post" in prompt and "image" in prompt.lower():
-            return self._mock_generation_with_image()
-        elif "Generate" in prompt and "LinkedIn posts" in prompt:
+        # Image prompt creation (for ImageGenerationAgent)
+        if "Analyze this LinkedIn post and create a DETAILED image prompt" in prompt:
+            return {
+                "content": "Professional lifestyle photography of premium Jesse A. Eisenbalm lip balm on a modern office desk with laptop and coffee. Warm natural window lighting creating soft shadows, shallow depth of field with lip balm in sharp focus. Sophisticated navy blue and gold color palette, clean white surfaces. The scene conveys a moment of self-care pause during busy professional work. High-end product photography style, modern and elegant.",
+                "usage": {"total_tokens": 100}
+            }
+
+        # Content generation
+        if "Generate" in prompt and ("LinkedIn post" in prompt or "LinkedIn posts" in prompt):
             return self._mock_generation()
         elif "skeptical 28-year-old" in prompt:
             return self._mock_customer_validation()
@@ -102,8 +107,8 @@ class MockAIClient:
             "revised_prompt": f"Mock revised: {prompt[:100]}..."
         }
 
-    def _mock_generation_with_image(self):
-        """Mock generation that includes image prompts"""
+    def _mock_generation(self):
+        """Mock content generation (no image_prompt field - ImageAgent handles that)"""
         import random
         
         posts = [
@@ -116,9 +121,7 @@ class MockAIClient:
                     "reference": "The Office",
                     "context": "Jim's humanity in corporate chaos"
                 },
-                "hashtags": ["HumanFirst", "LinkedInLife", "PremiumSelfCare", "OfficeLife"],
-                "image_prompt": "Professional lifestyle photography of a premium lip balm on a modern office desk with a laptop displaying a spreadsheet. Warm natural lighting from a window creating soft shadows. Composition shows the lip balm in sharp focus in foreground, workspace slightly blurred in background. Color palette: navy blue and gold accents, clean white desk surface. The scene conveys a moment of pause during a busy workday. High-end product photography style, sophisticated and calm.",
-                "image_description": "A premium lip balm centered on a modern workspace, representing a moment of self-care during a busy professional day"
+                "hashtags": ["HumanFirst", "LinkedInLife", "PremiumSelfCare", "OfficeLife"]
             },
             {
                 "content": "That Zoom fatigue hitting different at 3pm? Your fifth back-to-back video call doesn't care about your chapped lips, but you should. Jesse A. Eisenbalm - because for $8.99, you can own one thing that AI can't optimize: your moment to Stop. Breathe. Apply. Stay human, stay smooth.\n\n#RemoteWork #ZoomFatigue #SelfCare #StayHuman",
@@ -129,22 +132,7 @@ class MockAIClient:
                     "reference": "Zoom fatigue",
                     "context": "Modern remote work struggle"
                 },
-                "hashtags": ["RemoteWork", "ZoomFatigue", "SelfCare", "StayHuman"],
-                "image_prompt": "Lifestyle shot of a home office setup from behind, showing a person's silhouette facing a laptop screen with multiple video call windows. Premium lip balm positioned prominently on desk beside wireless headphones and coffee mug. Warm backlight from window, creating intimate workspace atmosphere. Modern minimalist aesthetic with navy and gold tones. The image captures digital exhaustion meeting physical self-care.",
-                "image_description": "A remote worker's desk with video calls in progress and a lip balm ready for a self-care moment"
-            },
-            {
-                "content": "Performance review season got you questioning your humanity? While AI writes your self-assessment, take a moment for an actual self-assessment. Stop. Breathe. Apply. Jesse A. Eisenbalm - $8.99 for the only metric that matters: staying human when everything else is automated.\n\n#CorporateLife #PerformanceReview #HumanTouch #LipCare",
-                "hook": "Performance review season got you questioning your humanity?",
-                "target_audience": "Corporate professionals",
-                "cultural_reference": {
-                    "category": "seasonal",
-                    "reference": "Performance reviews",
-                    "context": "Annual corporate ritual"
-                },
-                "hashtags": ["CorporateLife", "PerformanceReview", "HumanTouch", "LipCare"],
-                "image_prompt": "Professional product photography of a premium lip balm on a clean desk with performance review documents and a pen nearby. Overhead view, natural lighting creating soft shadows. The lip balm is perfectly centered and in focus while papers are slightly out of focus. Color scheme: sophisticated navy, gold, and white. The composition suggests a moment of human pause amid corporate bureaucracy. Clean, modern, high-end aesthetic.",
-                "image_description": "A lip balm and performance review documents, symbolizing human needs amid corporate processes"
+                "hashtags": ["RemoteWork", "ZoomFatigue", "SelfCare", "StayHuman"]
             }
         ]
         
@@ -153,22 +141,6 @@ class MockAIClient:
         return {
             "content": selected,
             "usage": {"total_tokens": 350}
-        }
-
-    def _mock_generation(self):
-        return {
-            "content": {
-                "posts": [
-                    {
-                        "content": "Remember when Jim from The Office taught us that small moments matter? In our AI-obsessed workplace, Jesse A. Eisenbalm ($8.99) is that small moment. Stop. Breathe. Apply. A premium ritual that keeps you grounded when every meeting is 'pivotal' and every email is 'urgent'. Because your humanity isn't a KPI, but your lips deserve premium care.",
-                        "hook": "Remember when Jim from The Office taught us that small moments matter?",
-                        "target_audience": "Tech professionals",
-                        "cultural_reference": {"category": "tv_show","reference": "The Office","context": "Jim's humanity in corporate chaos"},
-                        "hashtags": ["HumanFirst","LinkedInLife","PremiumSelfCare","OfficeLife"]
-                    }
-                ]
-            },
-            "usage": {"total_tokens": 300}
         }
 
     def _mock_customer_validation(self):
@@ -254,11 +226,6 @@ def _load_existing_token_from_file() -> str | None:
 def ensure_linkedin_token(interactive_auth: bool = True) -> bool:
     """
     Ensure we have a LinkedIn access token without hardcoding any secret.
-    Priority:
-      1) env LINKEDIN_ACCESS_TOKEN
-      2) config/linkedin_token.json
-      3) run OAuth (if interactive_auth is True and linkedin_oauth_server is available)
-    Returns True if a token is present in env after this call.
     """
     # 1) Already in env?
     if os.getenv("LINKEDIN_ACCESS_TOKEN"):
@@ -289,7 +256,6 @@ def ensure_linkedin_token(interactive_auth: bool = True) -> bool:
 async def publish_approved_posts_to_linkedin(batch) -> dict | None:
     """
     Publishes approved posts using LinkedInIntegrationService if we have a token.
-    Returns the publish results dict, or None if skipped.
     """
     if not batch or not batch.get_approved_posts():
         print("No approved posts to publish.")
@@ -326,7 +292,7 @@ async def test_complete_system(run_publish: bool = False):
     """Run your full generation/validation flow with images; optionally publish approved posts."""
 
     print("\n" + "="*60)
-    print("🚀 COMPLETE SYSTEM TEST WITH IMAGE GENERATION")
+    print("🚀 COMPLETE SYSTEM TEST WITH IMAGE GENERATION AGENT")
     print("="*60)
 
     # Load configuration
@@ -348,6 +314,10 @@ async def test_complete_system(run_publish: bool = False):
 
     # Agents
     content_generator = AdvancedContentGenerator(agent_config, ai_client, app_config)
+    
+    # NEW: Image generation agent (dedicated)
+    image_generator = ImageGenerationAgent(agent_config, ai_client, app_config)
+    
     validators = [
         SarahChenValidator(agent_config, ai_client, app_config),
         MarcusWilliamsValidator(agent_config, ai_client, app_config),
@@ -356,12 +326,13 @@ async def test_complete_system(run_publish: bool = False):
     feedback_aggregator = FeedbackAggregator(agent_config, ai_client, app_config)
     revision_generator = RevisionGenerator(agent_config, ai_client, app_config)
 
-    # Orchestrator
+    # Orchestrator - NOW WITH IMAGE GENERATOR
     orchestrator = ValidationOrchestrator(
         content_generator,
         validators,
         feedback_aggregator,
         revision_generator,
+        image_generator,  # NEW: Dedicated image generation agent
         app_config
     )
 
@@ -384,6 +355,7 @@ async def test_complete_system(run_publish: bool = False):
     print(f"Total posts: {batch.metrics.total_posts}")
     print(f"Approved: {batch.metrics.approved_posts}")
     print(f"Rejected: {batch.metrics.rejected_posts}")
+    print(f"Posts with images: {batch.metrics.posts_with_images}")
     print(f"Approval rate: {batch.metrics.approval_rate:.1%}")
 
     # Approved preview with images
@@ -400,7 +372,7 @@ async def test_complete_system(run_publish: bool = False):
                 print(f"Cultural Ref: {post.cultural_reference.reference}")
             # Image info
             if hasattr(post, 'image_url') and post.image_url:
-                print(f"🖼️  Image URL: {post.image_url[:60]}...")
+                print(f"🖼️  Image URL: {post.image_url[:80]}...")
                 if hasattr(post, 'image_description') and post.image_description:
                     print(f"   Description: {post.image_description[:80]}...")
             else:
@@ -430,6 +402,9 @@ async def test_complete_system(run_publish: bool = False):
     print(f"Revision success rate: {batch.metrics.revision_success_rate:.1%}")
     print(f"Average processing time: {batch.metrics.average_processing_time:.2f}s")
     print(f"Total cost: ${batch.metrics.total_cost:.4f}")
+    if batch.metrics.posts_with_images > 0:
+        print(f"Image generation cost: ${batch.metrics.image_cost:.4f}")
+        print(f"Text generation cost: ${batch.metrics.text_cost:.4f}")
     print(f"Cost per approved post: ${batch.metrics.total_cost / max(batch.metrics.approved_posts, 1):.4f}")
 
     if analysis.get('recommendations'):
@@ -501,6 +476,8 @@ async def test_multiple_batches():
         ai_client = MockAIClient()
 
     content_generator = AdvancedContentGenerator(agent_config, ai_client, app_config)
+    image_generator = ImageGenerationAgent(agent_config, ai_client, app_config)
+    
     validators = [
         SarahChenValidator(agent_config, ai_client, app_config),
         MarcusWilliamsValidator(agent_config, ai_client, app_config),
@@ -512,6 +489,7 @@ async def test_multiple_batches():
         validators,
         FeedbackAggregator(agent_config, ai_client, app_config),
         RevisionGenerator(agent_config, ai_client, app_config),
+        image_generator,
         app_config
     )
 
@@ -548,11 +526,11 @@ async def test_multiple_batches():
 
 
 def main():
-    """Interactive runner with LinkedIn auth/publish options (no secrets)"""
+    """Interactive runner with LinkedIn auth/publish options"""
     print("""
     ╔════════════════════════════════════════════════════════╗
     ║  Jesse A. Eisenbalm LinkedIn Content Validation System║
-    ║         WITH DALL-E IMAGE GENERATION SUPPORT           ║
+    ║    WITH DEDICATED IMAGE GENERATION AGENT (DALL-E 3)    ║
     ╚════════════════════════════════════════════════════════╝
     """)
 
@@ -577,7 +555,6 @@ def main():
     if choice == "1":
         asyncio.run(test_complete_system(run_publish=False))
     elif choice == "2":
-        # Try to use existing token; if none, prompt to run option 4 first.
         if not ensure_linkedin_token(interactive_auth=False):
             print("\n🔐 No token found. Choose option 4 to authenticate first.")
             return

@@ -1,6 +1,7 @@
 """
 Advanced Content Generator - Creates LinkedIn posts with DALL-E generated images
 Updated with custom prompt loading support and image generation
+FIXED: Added debug logging and fallback image generation
 """
 
 import json
@@ -72,6 +73,10 @@ class AdvancedContentGenerator(BaseAgent):
         count = input_data.get("count", 1)  # Generate 1 post at a time
         avoid_patterns = input_data.get("avoid_patterns", {})
         
+        self.logger.info("Starting content generation with images",
+                        batch_id=batch_id,
+                        count=count)
+        
         posts = []
         for i in range(count):
             # Generate each post with unique element combination
@@ -82,7 +87,12 @@ class AdvancedContentGenerator(BaseAgent):
         
         # If we didn't get enough posts, fill with fallbacks
         while len(posts) < count:
+            self.logger.warning(f"Using fallback post {len(posts)+1}")
             posts.append(self._create_fallback_post(batch_id, len(posts) + 1))
+        
+        self.logger.info("Content generation complete",
+                        posts_generated=len(posts),
+                        posts_with_images=sum(1 for p in posts if p.get("image_url")))
         
         return posts
     
@@ -97,13 +107,24 @@ class AdvancedContentGenerator(BaseAgent):
         # Step 3: Determine length
         length_type = self._determine_length()
         
+        self.logger.info("Post generation parameters",
+                        post_number=post_number,
+                        elements=elements,
+                        story_arc=story_arc,
+                        length=length_type)
+        
         # Build prompts
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_generation_prompt(elements, story_arc, length_type)
         
         try:
             # Generate content + image prompt
+            self.logger.info("Calling AI for content generation")
             response = await self._call_ai(user_prompt, system_prompt, response_format="json")
+            
+            self.logger.info("AI response received",
+                           has_content=bool(response.get("content")))
+            
             post_data = self._parse_generation_response(response)
             
             if post_data:
@@ -114,25 +135,31 @@ class AdvancedContentGenerator(BaseAgent):
                 post_data["length_type"] = length_type
                 
                 # Generate image using DALL-E
-                if post_data.get("image_prompt"):
-                    await self._generate_and_attach_image(post_data)
+                self.logger.info("Attempting image generation",
+                               has_image_prompt=bool(post_data.get("image_prompt")))
+                await self._generate_and_attach_image(post_data)
                 
                 return post_data
                 
         except Exception as e:
-            self.logger.error(f"Failed to generate post: {e}")
+            self.logger.error(f"Failed to generate post: {e}", exc_info=True)
             
         return None
     
     async def _generate_and_attach_image(self, post_data: Dict[str, Any]) -> None:
-        """Generate DALL-E image and attach to post data"""
+        """Generate DALL-E image and attach to post data with fallback"""
         try:
             image_prompt = post_data.get("image_prompt", "")
-            if not image_prompt:
-                self.logger.warning("No image prompt provided, skipping image generation")
-                return
             
-            self.logger.info("Generating image with DALL-E", prompt_length=len(image_prompt))
+            # FALLBACK: If no image_prompt provided, create a generic one
+            if not image_prompt:
+                self.logger.warning("No image prompt in GPT response, creating fallback prompt")
+                image_prompt = self._create_fallback_image_prompt(post_data)
+                post_data["image_prompt"] = image_prompt
+                post_data["image_description"] = "Premium Jesse A. Eisenbalm lip balm on a modern professional workspace"
+            
+            self.logger.info("Generating DALL-E image",
+                           prompt_length=len(image_prompt))
             
             # Call DALL-E
             image_result = await self._generate_image(
@@ -147,13 +174,37 @@ class AdvancedContentGenerator(BaseAgent):
             post_data["image_revised_prompt"] = image_result.get("revised_prompt")
             
             self.logger.info("Image generated successfully", 
-                           url_length=len(image_result.get("url", "")))
+                           url_length=len(image_result.get("url", "")),
+                           image_url=image_result.get("url", "")[:100])
             
         except Exception as e:
-            self.logger.error(f"Failed to generate image: {e}")
+            self.logger.error(f"Failed to generate image: {e}", exc_info=True)
             # Don't fail the entire post if image generation fails
             post_data["image_url"] = None
             post_data["image_error"] = str(e)
+    
+    def _create_fallback_image_prompt(self, post_data: Dict[str, Any]) -> str:
+        """Create a generic fallback image prompt based on post content"""
+        content = post_data.get("content", "")
+        
+        # Determine scene type based on content keywords
+        if any(word in content.lower() for word in ["zoom", "video", "call", "meeting"]):
+            scene = "video call setup with laptop showing multiple meeting windows"
+        elif any(word in content.lower() for word in ["desk", "office", "workspace"]):
+            scene = "modern office desk with laptop and documents"
+        elif any(word in content.lower() for word in ["coffee", "cafe"]):
+            scene = "coffee shop workspace with laptop and coffee cup"
+        else:
+            scene = "sleek modern professional workspace with laptop"
+        
+        return (
+            f"Professional lifestyle photography of premium Jesse A. Eisenbalm lip balm "
+            f"on a {scene}. Warm natural window lighting creating soft shadows, "
+            f"shallow depth of field with lip balm in sharp focus in foreground. "
+            f"Color palette: sophisticated navy blue and gold accents, clean white surfaces. "
+            f"The composition conveys a moment of self-care pause during busy professional work. "
+            f"High-end product photography style, modern and sophisticated aesthetic."
+        )
     
     def _select_elements(self, avoid_patterns: Dict) -> Tuple[str, str]:
         """Select two elements, avoiding failed patterns"""
@@ -232,7 +283,7 @@ MANDATORY COMPONENTS FOR EVERY POST:
 2. One "confession" professionals think but don't post
 3. The moment where lip balm becomes necessary
 4. Subtle product integration
-5. DETAILED image prompt for DALL-E generation
+5. DETAILED image prompt for DALL-E generation (CRITICAL - DO NOT SKIP!)
 
 IMAGE REQUIREMENTS:
 - Professional lifestyle photography style
@@ -243,7 +294,7 @@ IMAGE REQUIREMENTS:
 - Consistent brand feel: navy blue and gold accents when appropriate
 - Evokes the post's emotional core visually
 
-You MUST respond with valid JSON format only."""
+You MUST respond with valid JSON format only. NEVER skip the image_prompt field."""
         
         # Return custom prompt if exists, otherwise default
         return self._get_system_prompt(default_prompt)
@@ -282,9 +333,9 @@ REQUIREMENTS:
 - Include specific moment where dry lips become the breaking point
 - Mention $8.99 price naturally if possible
 - End with 2-4 hashtags (mix professional with one absurdist)
-- Create DETAILED image prompt that visually represents the post's core emotion
+- **CRITICAL**: Create DETAILED image prompt (150-400 characters, very specific)
 
-IMAGE PROMPT GUIDELINES:
+IMAGE PROMPT GUIDELINES (CRITICAL - DO NOT SKIP):
 - Be extremely specific (lighting, composition, style, mood, colors)
 - Match the post's tone and emotional trigger
 - Professional LinkedIn-appropriate imagery
@@ -296,9 +347,9 @@ IMAGE PROMPT GUIDELINES:
 Example image prompt:
 "Professional lifestyle photography of a premium lip balm product on a sleek modern desk with a laptop showing multiple video call windows. Warm natural window lighting from the left, creating soft shadows. Composition: shallow depth of field with the lip balm in sharp focus in foreground, blurred workspace in background. Color palette: navy blue and gold accents, clean white surfaces. The scene conveys the moment of pause in digital chaos - a coffee cup, scattered notes, the lip balm as the centered, grounded element. High-end product photography style, sophisticated and calm despite the busy context."
 
-CRITICAL: Return ONLY this JSON structure:
+CRITICAL: Return ONLY this exact JSON structure (all fields required):
 {{
-    "content": "The complete post text with hashtags...",
+    "content": "The complete post text with hashtags at the end...",
     "hook": "The opening line that stops scroll",
     "confession": "The unspoken professional truth included",
     "lip_balm_moment": "Where the product naturally enters",
@@ -310,9 +361,11 @@ CRITICAL: Return ONLY this JSON structure:
     "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
     "target_audience": "specific professional segment",
     "emotional_trigger": "what feeling this targets",
-    "image_prompt": "DETAILED DALL-E PROMPT (150-400 characters, very specific about lighting, composition, style, colors, mood)",
+    "image_prompt": "DETAILED DALL-E PROMPT HERE (150-400 characters, NEVER leave empty)",
     "image_description": "Brief user-facing description of what the image shows (1-2 sentences)"
 }}
+
+**IMPORTANT**: The image_prompt field is MANDATORY and must be detailed. Do not skip it!
 
 Generate the post with image now. Return ONLY valid JSON."""
         
@@ -388,15 +441,33 @@ Call to action: [Join the resistance]"""
             content = response.get("content", {})
             content = self._ensure_json_dict(content)
             
+            # DEBUG LOGGING
+            self.logger.info("Parsing generation response",
+                           has_content=bool(content),
+                           content_keys=list(content.keys()) if content else [],
+                           content_type=type(content).__name__)
+            
             if not content or "content" not in content:
-                self.logger.error("Response missing content field")
+                self.logger.error("Response missing content field",
+                                raw_response_keys=list(response.keys()) if response else [])
                 return None
             
             # Extract and validate required fields
             post_content = content.get("content", "").strip()
             if len(post_content) < 20:
-                self.logger.error("Generated content too short")
+                self.logger.error("Generated content too short", length=len(post_content))
                 return None
+            
+            # Extract image fields with logging
+            image_prompt = content.get("image_prompt", "")
+            image_description = content.get("image_description", "")
+            
+            # DEBUG LOGGING
+            self.logger.info("Image fields in GPT response",
+                           has_image_prompt=bool(image_prompt),
+                           has_image_description=bool(image_description),
+                           image_prompt_length=len(image_prompt) if image_prompt else 0,
+                           image_prompt_preview=image_prompt[:100] if image_prompt else "MISSING")
             
             # Build post data with image fields
             post_data = {
@@ -408,8 +479,8 @@ Call to action: [Join the resistance]"""
                 "emotional_trigger": content.get("emotional_trigger", "workplace anxiety"),
                 "hashtags": content.get("hashtags", ["HumanFirst", "LinkedInLife"]),
                 # Image fields
-                "image_prompt": content.get("image_prompt", ""),
-                "image_description": content.get("image_description", ""),
+                "image_prompt": image_prompt,
+                "image_description": image_description,
                 "image_url": None,  # Will be filled by _generate_and_attach_image
                 "image_revised_prompt": None,  # Will be filled by DALL-E response
                 "cultural_reference": None
@@ -428,7 +499,7 @@ Call to action: [Join the resistance]"""
             return post_data
             
         except Exception as e:
-            self.logger.error(f"Failed to parse response: {e}")
+            self.logger.error(f"Failed to parse response: {e}", exc_info=True)
             return None
     
     def _create_fallback_post(self, batch_id: str, post_number: int) -> Dict[str, Any]:
