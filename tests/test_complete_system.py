@@ -3,13 +3,14 @@ Complete System Test - Run the entire LinkedIn content validation pipeline
 Now includes:
 - Optional LinkedIn OAuth (via linkedin_oauth_server.py) without hardcoding secrets
 - Publishing approved posts to LinkedIn using LinkedInIntegrationService
-- DALL-E image generation via dedicated ImageGenerationAgent
+- Google Gemini 2.5 Flash Image generation for professional product photography
 """
 
 import asyncio
 import os
 import sys
 import json
+import base64
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -68,7 +69,8 @@ class MockAIClient:
         response_format = kwargs.get('response_format', 'json')
 
         # Image prompt creation (for ImageGenerationAgent)
-        if "Analyze this LinkedIn post and create a DETAILED image prompt" in prompt:
+        if "Analyze this LinkedIn post and create a DETAILED image prompt" in prompt or \
+           "Create a detailed image prompt" in prompt:
             return {
                 "content": "Professional lifestyle photography of premium Jesse A. Eisenbalm lip balm on a modern office desk with laptop and coffee. Warm natural window lighting creating soft shadows, shallow depth of field with lip balm in sharp focus. Sophisticated navy blue and gold color palette, clean white surfaces. The scene conveys a moment of self-care pause during busy professional work. High-end product photography style, modern and elegant.",
                 "usage": {"total_tokens": 100}
@@ -90,25 +92,33 @@ class MockAIClient:
 
         return {"content": "Mock response", "usage": {"total_tokens": 100}}
 
-    async def generate_image(self, prompt: str, size: str = "1024x1024", 
-                           quality: str = "standard", style: str = "vivid"):
-        """Mock DALL-E image generation"""
+    async def generate_image(self, prompt: str, base_image_path: str = None):
+        """Mock Gemini 2.5 Flash Image generation"""
         self.image_count += 1
         
-        # Return a placeholder image URL
-        mock_images = [
-            "https://via.placeholder.com/1024x1024/4A90E2/FFFFFF?text=Jesse+A.+Eisenbalm+Workspace",
-            "https://via.placeholder.com/1024x1024/1E3A5F/FFD700?text=Premium+Lip+Balm+Ritual",
-            "https://via.placeholder.com/1024x1024/2C5F7C/F5F5F5?text=Modern+Professional+Moment"
-        ]
+        # Create a simple 1x1 pixel PNG as base64 (transparent)
+        # This is a minimal valid PNG file
+        mock_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        
+        # Convert to bytes
+        image_bytes = base64.b64decode(mock_image_base64)
+        
+        # Mock file path
+        mock_image_path = f"data/images/mock_image_{self.image_count}.png"
         
         return {
-            "url": mock_images[self.image_count % len(mock_images)],
-            "revised_prompt": f"Mock revised: {prompt[:100]}..."
+            "image_data": image_bytes,
+            "saved_path": mock_image_path,
+            "prompt": prompt,
+            "provider": "google_gemini_mock",
+            "model": "gemini-2.5-flash-image-mock",
+            "cost": 0.039,
+            "generation_time_seconds": 1.5,
+            "size_mb": 0.001
         }
 
     def _mock_generation(self):
-        """Mock content generation (no image_prompt field - ImageAgent handles that)"""
+        """Mock content generation"""
         import random
         
         posts = [
@@ -292,7 +302,7 @@ async def test_complete_system(run_publish: bool = False):
     """Run your full generation/validation flow with images; optionally publish approved posts."""
 
     print("\n" + "="*60)
-    print("🚀 COMPLETE SYSTEM TEST WITH IMAGE GENERATION AGENT")
+    print("🖼️  COMPLETE SYSTEM TEST WITH IMAGE GENERATION AGENT")
     print("="*60)
 
     # Load configuration
@@ -301,11 +311,11 @@ async def test_complete_system(run_publish: bool = False):
 
     # Create AI client
     if USE_REAL_API:
-        print("✅ Using REAL OpenAI API (with DALL-E 3)")
+        print("✅ Using REAL OpenAI API (GPT-4o-mini) + Google Gemini (Images)")
         from src.infrastructure.ai.openai_client import OpenAIClient
         ai_client = OpenAIClient(app_config)
     else:
-        print("🎭 Using MOCK AI client (no OpenAI key found)")
+        print("🎭 Using MOCK AI client (no API keys found)")
         ai_client = MockAIClient()
 
     print("\n" + "-"*60)
@@ -315,7 +325,7 @@ async def test_complete_system(run_publish: bool = False):
     # Agents
     content_generator = AdvancedContentGenerator(agent_config, ai_client, app_config)
     
-    # NEW: Image generation agent (dedicated)
+    # NEW: Image generation agent (Google Gemini 2.5 Flash Image)
     image_generator = ImageGenerationAgent(agent_config, ai_client, app_config)
     
     validators = [
@@ -332,7 +342,7 @@ async def test_complete_system(run_publish: bool = False):
         validators,
         feedback_aggregator,
         revision_generator,
-        image_generator,  # NEW: Dedicated image generation agent
+        image_generator,  # NEW: Dedicated image generation agent (Google Gemini)
         app_config
     )
 
@@ -345,7 +355,7 @@ async def test_complete_system(run_publish: bool = False):
 
     # ---- Run a batch
     print("\n" + "-"*60)
-    print("RUNNING BATCH PROCESSING WITH IMAGE GENERATION")
+    print("RUNNING BATCH PROCESSING WITH IMAGE GENERATION (Google Gemini)")
     print("-"*60)
     print(f"Processing batch of {app_config.batch.posts_per_batch} post(s)...")
     batch = await controller.run_single_batch(batch_size=app_config.batch.posts_per_batch)
@@ -370,11 +380,17 @@ async def test_complete_system(run_publish: bool = False):
             print(f"Revisions: {post.revision_count}")
             if post.cultural_reference:
                 print(f"Cultural Ref: {post.cultural_reference.reference}")
+            
             # Image info
             if hasattr(post, 'image_url') and post.image_url:
                 print(f"🖼️  Image URL: {post.image_url[:80]}...")
                 if hasattr(post, 'image_description') and post.image_description:
                     print(f"   Description: {post.image_description[:80]}...")
+                if hasattr(post, 'image_generation_time'):
+                    gen_time = getattr(post, 'image_generation_time', None)
+                    if gen_time:
+                        print(f"   Generation Time: {gen_time}s")
+                print(f"   💰 Cost: $0.039 (Google Gemini)")
             else:
                 print(f"⚠️  No image generated")
 
@@ -402,9 +418,13 @@ async def test_complete_system(run_publish: bool = False):
     print(f"Revision success rate: {batch.metrics.revision_success_rate:.1%}")
     print(f"Average processing time: {batch.metrics.average_processing_time:.2f}s")
     print(f"Total cost: ${batch.metrics.total_cost:.4f}")
+    
+    # Image cost breakdown
     if batch.metrics.posts_with_images > 0:
-        print(f"Image generation cost: ${batch.metrics.image_cost:.4f}")
-        print(f"Text generation cost: ${batch.metrics.text_cost:.4f}")
+        image_cost = batch.metrics.posts_with_images * 0.039
+        print(f"Image generation cost: ${image_cost:.4f} (Google Gemini)")
+        print(f"Text generation cost: ${batch.metrics.total_cost - image_cost:.4f}")
+    
     print(f"Cost per approved post: ${batch.metrics.total_cost / max(batch.metrics.approved_posts, 1):.4f}")
 
     if analysis.get('recommendations'):
@@ -447,7 +467,8 @@ async def test_complete_system(run_publish: bool = False):
         print(f"\nMock API calls made: {ai_client.call_count}")
         print(f"Mock images generated: {ai_client.image_count}")
     else:
-        print(f"\n💰 Note: Real DALL-E images cost $0.04 each (standard quality)")
+        print(f"\n🖼️  Google Gemini images: $0.039 per image")
+        print(f"💰 OpenAI text generation: ~$0.0001-0.001 per post")
 
     # Optional: publish approved posts to LinkedIn
     if run_publish:
@@ -463,7 +484,7 @@ async def test_complete_system(run_publish: bool = False):
 async def test_multiple_batches():
     """Run multiple batches (no publish in this helper)"""
     print("\n" + "="*60)
-    print("🚀 MULTIPLE BATCH TEST")
+    print("🖼️  MULTIPLE BATCH TEST WITH IMAGE GENERATION")
     print("="*60)
 
     app_config = AppConfig.from_yaml()
@@ -499,7 +520,7 @@ async def test_multiple_batches():
         app_config
     )
 
-    print("Running 3 batches...")
+    print("Running 3 batches with image generation...")
     batches = await controller.run_multiple_batches(
         num_batches=3, batch_size=1, delay_seconds=0.5
     )
@@ -515,6 +536,7 @@ async def test_multiple_batches():
     print(f"Average approval rate: {summary['average_approval_rate']:.1%}")
     print(f"Total cost: ${summary['total_cost']:.4f}")
     print(f"Cost per approved: ${summary['cost_per_approved_post']:.4f}")
+    print(f"🖼️  Image generation cost: ${summary['total_posts'] * 0.039:.4f} (Google Gemini)")
 
     analyzer = PerformanceAnalyzer()
     trend_analysis = analyzer.analyze_multiple_batches(batches)
@@ -530,18 +552,20 @@ def main():
     print("""
     ╔════════════════════════════════════════════════════════╗
     ║  Jesse A. Eisenbalm LinkedIn Content Validation System║
-    ║    WITH DEDICATED IMAGE GENERATION AGENT (DALL-E 3)    ║
+    ║      WITH GOOGLE GEMINI 2.5 FLASH IMAGE GENERATION    ║
+    ║              🖼️  PROFESSIONAL IMAGES! 🖼️               ║
     ╚════════════════════════════════════════════════════════╝
     """)
 
     if USE_REAL_API:
-        print("🔑 OpenAI API key detected - will use real API")
-        print("💰 DALL-E 3 costs: $0.04 per image (standard quality)")
-        resp = input("⚠️  This will make real API calls and incur costs. Continue? (y/n): ")
+        print("🔑 OpenAI API key detected - will use real API for text")
+        print("🖼️  Google Gemini images: $0.039 per image")
+        print("💰 Text generation costs: ~$0.0001-0.001 per post")
+        resp = input("⚠️  This will make real API calls. Continue? (y/n): ")
         if resp.lower() != 'y':
             print("Test cancelled."); return
     else:
-        print("🎭 No OpenAI key found - using mock responses with placeholder images")
+        print("🎭 No API keys found - using mock responses with mock images")
 
     print("\nSelect mode:")
     print("1. Single batch only (1 post with image)")

@@ -1,22 +1,33 @@
 """
-Revision Generator Agent - Creates improved versions of posts based on feedback
+Revision Generator - Creates improved versions based on feedback
 Updated with custom prompt loading support
 """
 
-import json
 from typing import Dict, Any, Tuple
 from src.domain.agents.base_agent import BaseAgent
 from src.domain.models.post import LinkedInPost
 
 class RevisionGenerator(BaseAgent):
-    """Generates revised versions of posts based on aggregated feedback"""
+    """Generates revised post versions based on aggregated feedback"""
     
     def __init__(self, config, ai_client, app_config):
         super().__init__("RevisionGenerator", config, ai_client)
         self.app_config = app_config
         
+        # Import and initialize prompt manager
+        from src.infrastructure.prompts.prompt_manager import get_prompt_manager
+        self.prompt_manager = get_prompt_manager()
+        
     async def process(self, input_data: Tuple[LinkedInPost, Dict[str, Any]]) -> LinkedInPost:
-        """Generate a revised version of a post based on feedback"""
+        """
+        Generate revised version of post based on feedback
+        
+        Args:
+            input_data: Tuple of (post, feedback_dict)
+            
+        Returns:
+            Revised LinkedInPost
+        """
         post, feedback = input_data
         
         system_prompt = self._build_system_prompt()
@@ -24,142 +35,182 @@ class RevisionGenerator(BaseAgent):
         
         try:
             response = await self._call_ai(user_prompt, system_prompt, response_format="json")
-            revised_content = self._parse_revision_response(response)
-            
-            if revised_content:
-                # Create a revised version of the post
-                post.create_revision(revised_content)
-            else:
-                self.logger.error("Failed to generate revision, keeping original")
-                
+            return self._apply_revision(post, response, feedback)
         except Exception as e:
             self.logger.error(f"Revision generation failed: {e}")
-            # Don't create a revision if generation fails
-        
-        return post
+            return self._create_minimal_revision(post)
     
     def _build_system_prompt(self) -> str:
-        """Build the system prompt for revision generation"""
-        # Build default prompt
-        default_prompt = f"""You are a Master Copy Editor specializing in LinkedIn content optimization.
-
-BRAND CONTEXT:
-- Product: {self.app_config.brand.product_name} ({self.app_config.brand.price})
-- Positioning: "{self.app_config.brand.tagline}"
-- Ritual: "{self.app_config.brand.ritual}"
-- Voice: {', '.join(self.app_config.brand.voice_attributes)}
-
-YOUR EXPERTISE:
-- Turn failing content into engaging posts
-- Maintain brand voice while addressing feedback
-- Make surgical edits, not complete rewrites
-- Strengthen hooks without clickbait
-- Balance all validator perspectives
-
-REVISION PRINCIPLES:
-1. Address the priority issue first
-2. Keep what's working
-3. Strengthen without losing authenticity
-4. Make every word earn its place
-5. Ensure the cultural reference lands naturally
-
-SUCCESS CRITERIA:
-The revised post should score 7+ with all validators while maintaining the original's core message.
-
-IMPORTANT: Respond with valid JSON only."""
+        """Build system prompt for revision generation"""
         
-        # Return custom prompt if exists, otherwise default
-        return self._get_system_prompt(default_prompt)
+        # Check for custom prompt first
+        custom_prompts = self.prompt_manager.get_agent_prompts("RevisionGenerator")
+        if custom_prompts.get("system_prompt"):
+            self.logger.info("Using custom system prompt for RevisionGenerator")
+            return custom_prompts["system_prompt"]
+        
+        # Default prompt
+        return f"""You are an expert LinkedIn content editor for {self.app_config.brand.product_name}.
+
+YOUR ROLE:
+Revise LinkedIn posts based on validator feedback while maintaining brand voice and authenticity.
+
+BRAND VOICE: {', '.join(self.app_config.brand.voice_attributes)}
+PRODUCT: {self.app_config.brand.product_name} ({self.app_config.brand.price})
+TAGLINE: {self.app_config.brand.tagline}
+RITUAL: {self.app_config.brand.ritual}
+
+YOUR PROCESS:
+1. Address the priority fix first
+2. Implement specific improvements
+3. Keep elements that worked well
+4. Maintain brand voice throughout
+5. Ensure post flows naturally
+
+PRINCIPLES:
+- Fix issues without losing authenticity
+- Preserve good elements
+- Make changes feel organic, not forced
+- Keep the human voice
+- Maintain LinkedIn appropriateness
+
+OUTPUT:
+Provide revised post with:
+- Improved content addressing feedback
+- Same cultural references if they worked
+- Enhanced hook if needed
+- Clear call-to-action
+- Appropriate hashtags
+
+Be specific and authentic."""
     
-    def _build_revision_prompt(self, post: LinkedInPost, feedback: Dict) -> str:
-        """Build the user prompt for revision generation"""
-        # Extract specific improvements
-        improvements = feedback.get('specific_improvements', {})
-        improvement_list = []
-        for key, value in improvements.items():
-            if value:
-                improvement_list.append(f"- {key}: {value}")
+    def _build_revision_prompt(self, post: LinkedInPost, feedback: Dict[str, Any]) -> str:
+        """Build the revision prompt"""
+        
+        # Check for custom user prompt template
+        custom_prompts = self.prompt_manager.get_agent_prompts("RevisionGenerator")
+        if custom_prompts.get("user_prompt_template"):
+            self.logger.info("Using custom user prompt template for RevisionGenerator")
+            return custom_prompts["user_prompt_template"]
         
         # Build default template
-        default_template = f"""Revise this LinkedIn post based on specific feedback:
+        cultural_ref = ""
+        if post.cultural_reference:
+            cultural_ref = f"\nCultural Reference: {post.cultural_reference.reference}"
+        
+        return f"""Revise this LinkedIn post based on feedback.
 
 ORIGINAL POST:
 {post.content}
 
-TARGET AUDIENCE: {post.target_audience}
+TARGET AUDIENCE: {post.target_audience}{cultural_ref}
 
-MAIN ISSUES TO FIX:
-{chr(10).join('- ' + issue for issue in feedback.get('main_issues', []))}
+AGGREGATED FEEDBACK:
+Priority Fix: {feedback.get('priority_fix', 'General improvement needed')}
 
-PRIORITY FIX:
-{feedback.get('priority_fix', 'Improve overall engagement')}
+Main Issues:
+{self._format_list(feedback.get('main_issues', []))}
 
-SPECIFIC IMPROVEMENTS NEEDED:
-{chr(10).join(improvement_list)}
+Specific Improvements Needed:
+{self._format_dict(feedback.get('specific_improvements', {}))}
 
-KEEP THESE ELEMENTS:
-{', '.join(feedback.get('keep_these_elements', ['brand voice']))}
+Keep These Elements:
+{self._format_list(feedback.get('keep_these_elements', []))}
 
-SUGGESTED HOOK:
-{feedback.get('revised_hook_suggestion', 'Create stronger opening')}
+Suggested New Hook: {feedback.get('revised_hook_suggestion', 'Not provided')}
 
-TONE ADJUSTMENT:
-{feedback.get('tone_adjustment', 'Make more authentic')}
+Tone Adjustment: {feedback.get('tone_adjustment', 'Maintain current tone')}
 
-Create a revised version that:
-1. Addresses all main issues
-2. Maintains 150-200 word count
-3. Keeps the cultural reference natural
-4. Includes "Stop. Breathe. Apply." ritual
-5. Ends with 3-5 hashtags
+REQUIREMENTS:
+1. Address the priority fix
+2. Implement specific improvements
+3. Keep working elements
+4. Maintain brand voice ({', '.join(self.app_config.brand.voice_attributes)})
+5. Include product name, price, and ritual
+6. Keep appropriate hashtags
 
-CRITICAL: Return ONLY this JSON structure:
+Return JSON:
 {{
-    "revised_content": "The complete revised post with improvements and hashtags included...",
-    "changes_made": [
-        "List 3-5 specific changes implemented"
-    ],
+    "revised_content": "The complete revised post with hashtags",
+    "changes_made": ["change 1", "change 2", "change 3"],
     "hook": "The new opening line",
-    "expected_improvement": "Why this version should score higher"
+    "kept_elements": ["element 1", "element 2"],
+    "cultural_reference": {{
+        "category": "tv_show/workplace/seasonal",
+        "reference": "The reference used",
+        "context": "Why it works"
+    }},
+    "hashtags": ["tag1", "tag2", "tag3"]
 }}
 
-Return ONLY valid JSON."""
-        
-        # Return custom template if exists, otherwise default
-        return self._get_user_prompt_template(default_template)
+Make it authentic, engaging, and on-brand."""
     
-    def _parse_revision_response(self, response: Dict) -> str:
-        """Parse the revision response with robust error handling"""
+    def _format_list(self, items: list) -> str:
+        """Format list items for prompt"""
+        if not items:
+            return "- None specified"
+        return "\n".join([f"- {item}" for item in items])
+    
+    def _format_dict(self, items: dict) -> str:
+        """Format dict items for prompt"""
+        if not items:
+            return "- None specified"
+        return "\n".join([f"- {key}: {value}" for key, value in items.items() if value])
+    
+    def _apply_revision(self, post: LinkedInPost, response: Dict, feedback: Dict) -> LinkedInPost:
+        """Apply the revision to the post"""
         try:
             content = response.get("content", {})
-            
-            # Ensure content is a dictionary
             content = self._ensure_json_dict(content)
             
-            if not content:
-                raise ValueError("Empty response content")
+            if not content or "revised_content" not in content:
+                self.logger.warning("No revised content in response, using minimal revision")
+                return self._create_minimal_revision(post)
             
-            # Extract revised content
-            revised_content = content.get("revised_content", "")
+            # Update post content
+            post.content = content.get("revised_content", post.content)
             
-            if not revised_content:
-                self.logger.error("No revised content in response")
-                return ""
+            # Update hashtags if provided
+            if "hashtags" in content and content["hashtags"]:
+                post.hashtags = content["hashtags"]
             
-            # Validate the revised content
-            if len(revised_content) < 100:
-                self.logger.warning("Revised content too short, likely incomplete")
-                return ""
+            # Update cultural reference if provided
+            if "cultural_reference" in content and content["cultural_reference"]:
+                from src.domain.models.post import CulturalReference
+                ref_data = content["cultural_reference"]
+                post.cultural_reference = CulturalReference(
+                    category=ref_data.get("category", "workplace"),
+                    reference=ref_data.get("reference", ""),
+                    context=ref_data.get("context", "")
+                )
             
-            # Log the changes made
-            changes = content.get("changes_made", [])
-            if changes:
-                self.logger.info("Post revised", 
-                               changes_count=len(changes),
-                               expected_improvement=content.get("expected_improvement", ""))
+            # Increment revision count
+            post.revision_count += 1
             
-            return revised_content
+            # Store revision metadata
+            post.revision_history = getattr(post, 'revision_history', [])
+            post.revision_history.append({
+                "revision_number": post.revision_count,
+                "changes_made": content.get("changes_made", []),
+                "feedback_addressed": feedback.get("priority_fix", "")
+            })
+            
+            self.logger.info(
+                "Post revised successfully",
+                post_id=post.id,
+                revision_count=post.revision_count,
+                changes=len(content.get("changes_made", []))
+            )
+            
+            return post
             
         except Exception as e:
-            self.logger.error(f"Failed to parse revision response: {e}")
-            return ""
+            self.logger.error(f"Failed to apply revision: {e}")
+            return self._create_minimal_revision(post)
+    
+    def _create_minimal_revision(self, post: LinkedInPost) -> LinkedInPost:
+        """Create a minimal revision if AI fails"""
+        # Just add revision count and return
+        post.revision_count += 1
+        self.logger.warning(f"Created minimal revision for post {post.id}")
+        return post

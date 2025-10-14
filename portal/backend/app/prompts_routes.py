@@ -1,7 +1,7 @@
 # portal/backend/app/prompts_routes.py
 """
 API routes for prompt management
-Fixed for deployment
+Fixed for deployment with ImageGenerationAgent support
 """
 
 import sys
@@ -45,11 +45,15 @@ class AgentInfo(BaseModel):
     has_custom_prompts: bool
 
 
-# Agent registry
+# Agent registry with ImageGenerationAgent
 AGENT_REGISTRY = {
     "AdvancedContentGenerator": {
         "class": "AdvancedContentGenerator",
         "description": "Generates LinkedIn posts using multi-element combination"
+    },
+    "ImageGenerationAgent": {
+        "class": "ImageGenerationAgent",
+        "description": "Generates professional product images using Google Gemini 2.5 Flash"
     },
     "JordanParkValidator": {
         "class": "JordanParkValidator",
@@ -84,6 +88,8 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
         class MockAIClient:
             async def generate(self, **kwargs):
                 return {"content": {}, "usage": {"total_tokens": 0}}
+            async def generate_image(self, **kwargs):
+                return {"image_data": b"mock", "saved_path": "mock.png"}
         
         app_config = AppConfig.from_yaml()
         agent_config = AgentConfig()
@@ -95,6 +101,37 @@ def get_agent_default_prompts(agent_name: str) -> Dict[str, str]:
             return {
                 "system_prompt": agent._build_system_prompt(),
                 "user_prompt_template": "Generation prompt template (dynamic - varies by elements, arc, and length)"
+            }
+        
+        elif agent_name == "ImageGenerationAgent":
+            from src.domain.agents.image_generation_agent import ImageGenerationAgent
+            from src.domain.models.post import LinkedInPost, CulturalReference
+            agent = ImageGenerationAgent(agent_config, mock_client, app_config)
+            dummy_post = LinkedInPost(
+                id="dummy",
+                batch_id="template_batch",
+                post_number=1,
+                content="Sample post about Jesse A. Eisenbalm premium lip balm for LinkedIn professionals.",
+                hashtags=["Test", "Sample"],
+                target_audience="Tech professionals",
+                cultural_reference=CulturalReference(
+                    category="workplace",
+                    reference="Sample Reference",
+                    context="test context"
+                )
+            )
+            return {
+                "system_prompt": agent._build_system_prompt(),
+                "user_prompt_template": f"""Create a detailed image prompt for a professional product photograph.
+
+Post content:
+{{content}}
+
+Product: Jesse A. Eisenbalm (premium lip balm)
+Brand colors: Navy blue, gold accents, cream
+Aesthetic: Luxury, professional, sophisticated
+
+Create a DETAILED image prompt for professional product photography."""
             }
         
         elif agent_name == "JordanParkValidator":

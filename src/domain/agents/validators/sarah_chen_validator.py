@@ -16,6 +16,10 @@ class SarahChenValidator(BaseAgent):
         super().__init__("SarahChenValidator", config, ai_client)
         self.app_config = app_config
         
+        # Import and initialize prompt manager
+        from src.infrastructure.prompts.prompt_manager import get_prompt_manager
+        self.prompt_manager = get_prompt_manager()
+        
     async def process(self, post: LinkedInPost) -> ValidationScore:
         """Validate a post from Sarah Chen's perspective"""
         system_prompt = self._build_system_prompt()
@@ -59,10 +63,17 @@ class SarahChenValidator(BaseAgent):
     
     def _build_system_prompt(self) -> str:
         """Build Sarah Chen persona system prompt"""
-        context = self._get_current_context()
+        
+        # Check for custom prompt first
+        custom_prompts = self.prompt_manager.get_agent_prompts("SarahChenValidator")
+        if custom_prompts.get("system_prompt"):
+            self.logger.info("Using custom system prompt for SarahChenValidator")
+            return custom_prompts["system_prompt"]
         
         # Build default prompt
-        default_prompt = f"""You are Sarah Chen, a 28-year-old Product Manager at a Series B startup (50-200 employees).
+        context = self._get_current_context()
+        
+        return f"""You are Sarah Chen, a 28-year-old Product Manager at a Series B startup (50-200 employees).
 
 IDENTITY & CURRENT STATE:
 - Title: Product Manager managing 2 junior PMs, reporting to VP Product
@@ -112,20 +123,25 @@ VALUES: Authenticity, efficiency with boundaries, peer recognition, tangible res
 FEARS: Becoming obsolete, being seen as luddite, losing human touch, imposter syndrome
 
 IMPORTANT: Respond with valid JSON only. Evaluate based on Sarah's actual mindset and context."""
-        
-        # Return custom prompt if exists, otherwise default
-        return self._get_system_prompt(default_prompt)
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build the user prompt for Sarah Chen's evaluation"""
+        
+        # Check for custom user prompt template
+        custom_prompts = self.prompt_manager.get_agent_prompts("SarahChenValidator")
+        if custom_prompts.get("user_prompt_template"):
+            self.logger.info("Using custom user prompt template for SarahChenValidator")
+            # Return custom template (could format with post data if needed)
+            return custom_prompts["user_prompt_template"]
+        
+        # Build default template
         cultural_ref = ""
         if post.cultural_reference:
             cultural_ref = f"\nCultural Reference: {post.cultural_reference.reference} ({post.cultural_reference.category})"
         
         hashtags = f"\nHashtags: {', '.join(['#' + tag for tag in post.hashtags])}" if post.hashtags else ""
         
-        # Build default template
-        default_template = f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Sarah Chen.
+        return f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Sarah Chen.
 
 POST CONTENT:
 {post.content}
@@ -170,9 +186,6 @@ Score based on:
 - Actual likelihood you'd try the product (35%)
 
 Return ONLY valid JSON."""
-        
-        # Return custom template if exists, otherwise default
-        return self._get_user_prompt_template(default_template)
     
     def _parse_validation_response(self, response: Dict) -> ValidationScore:
         """Parse Sarah Chen's validation response"""
@@ -219,7 +232,7 @@ Return ONLY valid JSON."""
                     feedback = "Doesn't address actual pain points authentically"
             
             return ValidationScore(
-                agent_name="Sarah Chen (Customer)",
+                agent_name="SarahChen",
                 score=score,
                 approved=approved,
                 feedback=feedback,
@@ -233,7 +246,7 @@ Return ONLY valid JSON."""
     def _create_error_score(self, error_message: str) -> ValidationScore:
         """Create an error validation score"""
         return ValidationScore(
-            agent_name="Sarah Chen (Customer)",
+            agent_name="SarahChen",
             score=0.0,
             approved=False,
             feedback=f"Validation parsing error: {error_message}",

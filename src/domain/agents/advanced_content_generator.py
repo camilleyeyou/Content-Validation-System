@@ -1,76 +1,93 @@
 """
-Advanced Content Generator - Creates LinkedIn posts with DALL-E generated images
-Updated with custom prompt loading support and image generation
-FIXED: Added debug logging and fallback image generation
+Advanced Content Generator - Multi-element combination with story arcs
+Generates LinkedIn posts using layered cultural references and workplace themes
 """
 
-import json
 import random
-from typing import List, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
 from src.domain.agents.base_agent import BaseAgent, AgentConfig
 from src.domain.models.post import LinkedInPost, CulturalReference
 from src.infrastructure.config.config_manager import AppConfig
+import structlog
+
+logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class StoryArc:
+    """Different narrative arcs for posts"""
+    name: str
+    structure: str
+    
+    # Predefined arcs
+    HERO_JOURNEY = ("HERO_JOURNEY", "Problem → Struggle → Solution → Transformation")
+    FALSE_SUMMIT = ("FALSE_SUMMIT", "Success → Reality Check → Real Solution")
+    ORIGIN_STORY = ("ORIGIN_STORY", "Before → Catalyst → After")
+    CURRENT_REALITY = ("CURRENT_REALITY", "Universal Truth → Product as Answer")
+
+
+@dataclass
+class PostLength:
+    """Different post length targets"""
+    name: str
+    target_words: int
+    
+    # Predefined lengths
+    HAIKU = ("HAIKU", 50)  # Ultra-short, punchy
+    TWEET = ("TWEET", 100)  # Twitter-length
+    STANDARD = ("STANDARD", 150)  # LinkedIn sweet spot
+    ESSAY = ("ESSAY", 250)  # Longer form
+
 
 class AdvancedContentGenerator(BaseAgent):
-    """Generates LinkedIn posts with images using two-element combination strategy"""
+    """
+    Generates LinkedIn posts by combining multiple cultural/workplace elements
+    with varied story arcs and lengths for maximum diversity
+    """
     
     def __init__(self, config: AgentConfig, ai_client, app_config: AppConfig):
+        """Initialize the content generator"""
         super().__init__("AdvancedContentGenerator", config, ai_client)
-        self.app_config = app_config
-        self.brand = app_config.brand
-        self._initialize_elements()
         
-    def _initialize_elements(self):
-        """Initialize the 25 content elements"""
-        self.content_elements = [
-            "trending_event",           # Current trending event from past 48 hours
-            "ai_workplace_cliche",      # ChatGPT wrote my email, etc.
-            "mindfulness_wisdom",       # Breathwork, presence, meditation
-            "nihilism",                 # Nothing matters but moisturized lips
-            "dad_joke",                 # Groan-worthy puns
-            "yiddish_wisdom",          # Old world truth meets new chaos
-            "cultural_moment",          # Super Bowl, tax season, etc.
-            "overheard_at_tech",       # Anonymous insider moments
-            "linkedin_algorithm",       # Platform changes (real or imagined)
-            "quarterly_anxiety",        # Earnings, reviews, planning
-            "day_specific_emotion",     # Monday dread through Friday relief
-            "gen_z_millennial_friction", # Generational workplace tension
-            "return_to_office_drama",   # RTO conflicts
-            "therapy_speak_corporate",  # Mental health language in business
-            "productivity_backlash",    # Against productivity influencers
-            "slack_teams_chaos",        # Communication platform disasters
-            "meeting_mishaps",          # Zoom/Teams failures
-            "job_title_inflation",      # Absurd title escalation
-            "coffee_shop_theater",      # Performative productivity
-            "employment_data",          # Job market reality
-            "vc_prediction",            # Tech prophecies
-            "layoff_tracker",           # Current layoff updates
-            "ai_tool_graveyard",        # Failed AI products
-            "tech_nostalgia",           # When email was enough
-            "office_supply_romance"     # Love for physical objects
+        self.brand_config = app_config.brand
+        self.cultural_refs = app_config.cultural_references
+        
+        # Import and initialize prompt manager
+        from src.infrastructure.prompts.prompt_manager import get_prompt_manager
+        self.prompt_manager = get_prompt_manager()
+        
+        self.logger.info("AdvancedContentGenerator initialized",
+                        brand=self.brand_config.product_name,
+                        has_custom_prompts=self.prompt_manager.has_custom_prompts("AdvancedContentGenerator"))
+        
+        # Story arcs and lengths
+        self.story_arcs = [
+            StoryArc(*StoryArc.HERO_JOURNEY),
+            StoryArc(*StoryArc.FALSE_SUMMIT),
+            StoryArc(*StoryArc.ORIGIN_STORY),
+            StoryArc(*StoryArc.CURRENT_REALITY)
         ]
         
-        self.story_arcs = {
-            "FALSE_SUMMIT": "Achievement → Plot twist → Real lesson",
-            "INNOCENT_ABROAD": "Expectation → Reality slap → Wisdom",
-            "RITUAL_DISRUPTED": "Routine → Chaos → New normal",
-            "TROJAN_HORSE": "Safe surface → Subversive middle → Truth bomb",
-            "GROUNDHOG_DAY": "Cycle → Recognition → Break/Accept → Reset"
-        }
-        
-        self.post_lengths = {
-            "MICRO": (1, 30),           # 1-30 words
-            "HAIKU": (30, 50),          # 30-50 words
-            "MEME": (50, 80),           # 50-80 words
-            "SHORT_STORY": (100, 150),  # 100-150 words
-            "FULL_NARRATIVE": (200, 250) # 200-250 words
-        }
+        self.post_lengths = [
+            PostLength(*PostLength.HAIKU),
+            PostLength(*PostLength.TWEET),
+            PostLength(*PostLength.STANDARD),
+            PostLength(*PostLength.ESSAY)
+        ]
     
     async def process(self, input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Generate LinkedIn posts with images using element combination strategy"""
+        """
+        Generate multiple LinkedIn posts with varied elements
+        
+        Args:
+            input_data: Contains batch_id, count, brand_context, avoid_patterns (optional)
+        
+        Returns:
+            List of post data dictionaries
+        """
         batch_id = input_data.get("batch_id")
-        count = input_data.get("count", 1)  # Generate 1 post at a time
+        count = input_data.get("count", 1)
         avoid_patterns = input_data.get("avoid_patterns", {})
         
         self.logger.info("Starting content generation with images",
@@ -79,495 +96,249 @@ class AdvancedContentGenerator(BaseAgent):
         
         posts = []
         for i in range(count):
-            # Generate each post with unique element combination
             self.logger.info(f"Generating post {i+1}/{count} with image")
             post = await self._generate_single_post(batch_id, i + 1, avoid_patterns)
-            if post:
-                posts.append(post)
-        
-        # If we didn't get enough posts, fill with fallbacks
-        while len(posts) < count:
-            self.logger.warning(f"Using fallback post {len(posts)+1}")
-            posts.append(self._create_fallback_post(batch_id, len(posts) + 1))
-        
-        self.logger.info("Content generation complete",
-                        posts_generated=len(posts),
-                        posts_with_images=sum(1 for p in posts if p.get("image_url")))
+            posts.append(post)
         
         return posts
     
-    async def _generate_single_post(self, batch_id: str, post_number: int, avoid_patterns: Dict) -> Dict[str, Any]:
-        """Generate a single post with image using the protocol"""
-        # Step 1: Select two elements
-        elements = self._select_elements(avoid_patterns)
+    async def _generate_single_post(self, batch_id: str, post_number: int, 
+                                    avoid_patterns: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a single post with multi-element combination"""
         
-        # Step 2: Choose story arc based on elements
-        story_arc = self._choose_story_arc(elements)
-        
-        # Step 3: Determine length
-        length_type = self._determine_length()
+        # Select random elements
+        selected_elements = self._select_elements(avoid_patterns)
+        story_arc = random.choice(self.story_arcs)
+        length = random.choice(self.post_lengths)
         
         self.logger.info("Post generation parameters",
                         post_number=post_number,
-                        elements=elements,
-                        story_arc=story_arc,
-                        length=length_type)
+                        elements=selected_elements["names"],
+                        story_arc=story_arc.name,
+                        length=length.name)
         
         # Build prompts
         system_prompt = self._build_system_prompt()
-        user_prompt = self._build_generation_prompt(elements, story_arc, length_type)
-        
-        try:
-            # Generate content + image prompt
-            self.logger.info("Calling AI for content generation")
-            response = await self._call_ai(user_prompt, system_prompt, response_format="json")
-            
-            self.logger.info("AI response received",
-                           has_content=bool(response.get("content")))
-            
-            post_data = self._parse_generation_response(response)
-            
-            if post_data:
-                post_data["batch_id"] = batch_id
-                post_data["post_number"] = post_number
-                post_data["elements_used"] = elements
-                post_data["story_arc"] = story_arc
-                post_data["length_type"] = length_type
-                
-                # Generate image using DALL-E
-                self.logger.info("Attempting image generation",
-                               has_image_prompt=bool(post_data.get("image_prompt")))
-                await self._generate_and_attach_image(post_data)
-                
-                return post_data
-                
-        except Exception as e:
-            self.logger.error(f"Failed to generate post: {e}", exc_info=True)
-            
-        return None
-    
-    async def _generate_and_attach_image(self, post_data: Dict[str, Any]) -> None:
-        """Generate DALL-E image and attach to post data with fallback"""
-        try:
-            image_prompt = post_data.get("image_prompt", "")
-            
-            # FALLBACK: If no image_prompt provided, create a generic one
-            if not image_prompt:
-                self.logger.warning("No image prompt in GPT response, creating fallback prompt")
-                image_prompt = self._create_fallback_image_prompt(post_data)
-                post_data["image_prompt"] = image_prompt
-                post_data["image_description"] = "Premium Jesse A. Eisenbalm lip balm on a modern professional workspace"
-            
-            self.logger.info("Generating DALL-E image",
-                           prompt_length=len(image_prompt))
-            
-            # Call DALL-E
-            image_result = await self._generate_image(
-                prompt=image_prompt,
-                size="1024x1024",
-                quality="standard",  # Use "hd" for higher quality ($0.080 vs $0.040)
-                style="vivid"  # "vivid" for dramatic, "natural" for realistic
-            )
-            
-            # Attach image data to post
-            post_data["image_url"] = image_result.get("url")
-            post_data["image_revised_prompt"] = image_result.get("revised_prompt")
-            
-            self.logger.info("Image generated successfully", 
-                           url_length=len(image_result.get("url", "")),
-                           image_url=image_result.get("url", "")[:100])
-            
-        except Exception as e:
-            self.logger.error(f"Failed to generate image: {e}", exc_info=True)
-            # Don't fail the entire post if image generation fails
-            post_data["image_url"] = None
-            post_data["image_error"] = str(e)
-    
-    def _create_fallback_image_prompt(self, post_data: Dict[str, Any]) -> str:
-        """Create a generic fallback image prompt based on post content"""
-        content = post_data.get("content", "")
-        
-        # Determine scene type based on content keywords
-        if any(word in content.lower() for word in ["zoom", "video", "call", "meeting"]):
-            scene = "video call setup with laptop showing multiple meeting windows"
-        elif any(word in content.lower() for word in ["desk", "office", "workspace"]):
-            scene = "modern office desk with laptop and documents"
-        elif any(word in content.lower() for word in ["coffee", "cafe"]):
-            scene = "coffee shop workspace with laptop and coffee cup"
-        else:
-            scene = "sleek modern professional workspace with laptop"
-        
-        return (
-            f"Professional lifestyle photography of premium Jesse A. Eisenbalm lip balm "
-            f"on a {scene}. Warm natural window lighting creating soft shadows, "
-            f"shallow depth of field with lip balm in sharp focus in foreground. "
-            f"Color palette: sophisticated navy blue and gold accents, clean white surfaces. "
-            f"The composition conveys a moment of self-care pause during busy professional work. "
-            f"High-end product photography style, modern and sophisticated aesthetic."
+        user_prompt = self._build_user_prompt(
+            selected_elements, 
+            story_arc, 
+            length,
+            avoid_patterns
         )
-    
-    def _select_elements(self, avoid_patterns: Dict) -> Tuple[str, str]:
-        """Select two elements, avoiding failed patterns"""
-        available_elements = self.content_elements.copy()
         
-        # Remove elements that have failed before
-        if "failed_elements" in avoid_patterns:
-            for failed in avoid_patterns["failed_elements"]:
-                if failed in available_elements:
-                    available_elements.remove(failed)
+        # Generate content
+        response = await self._call_ai(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            response_format="json"
+        )
         
-        # Ensure we have enough elements
-        if len(available_elements) < 2:
-            available_elements = self.content_elements.copy()
+        content_data = response.get("content", {})
         
-        # Select two random elements
-        selected = random.sample(available_elements, 2)
-        return tuple(selected)
-    
-    def _choose_story_arc(self, elements: Tuple[str, str]) -> str:
-        """Choose story arc based on element combination"""
-        element1, element2 = elements
+        # Ensure we have valid content
+        if not content_data or "content" not in content_data:
+            self.logger.warning("Empty response from AI, using fallback")
+            content_data = self._create_fallback_post(selected_elements)
         
-        # Strategic arc selection based on elements
-        if "nihilism" in elements or "ai_tool_graveyard" in elements:
-            return "GROUNDHOG_DAY"
-        elif "trending_event" in elements or "cultural_moment" in elements:
-            return "INNOCENT_ABROAD"
-        elif "mindfulness_wisdom" in elements:
-            return "RITUAL_DISRUPTED"
-        elif "dad_joke" in elements or "yiddish_wisdom" in elements:
-            return "TROJAN_HORSE"
-        else:
-            return "FALSE_SUMMIT"
-    
-    def _determine_length(self) -> str:
-        """Randomly determine post length for variety"""
-        # Weight towards medium-length posts
-        weights = {
-            "MICRO": 0.15,
-            "HAIKU": 0.20,
-            "MEME": 0.25,
-            "SHORT_STORY": 0.25,
-            "FULL_NARRATIVE": 0.15
+        # Add metadata
+        content_data["post_number"] = post_number
+        content_data["batch_id"] = batch_id
+        content_data["generation_metadata"] = {
+            "elements_used": selected_elements["names"],
+            "story_arc": story_arc.name,
+            "target_length": length.target_words,
+            "actual_length": len(content_data.get("content", "").split())
         }
         
-        return random.choices(
-            list(weights.keys()),
-            weights=list(weights.values())
-        )[0]
+        return content_data
+    
+    def _select_elements(self, avoid_patterns: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Select 2-3 random elements to combine in the post
+        Avoids patterns that previously failed
+        """
+        failed_refs = avoid_patterns.get("cultural_references_failed", [])
+        
+        # Get available references
+        available_tv = [tv for tv in self.cultural_refs.tv_shows if tv not in failed_refs]
+        available_workplace = [w for w in self.cultural_refs.workplace_themes if w not in failed_refs]
+        available_seasonal = [s for s in self.cultural_refs.seasonal_themes if s not in failed_refs]
+        
+        # If we've failed too many, reset
+        if len(available_tv) < 2:
+            available_tv = self.cultural_refs.tv_shows
+        if len(available_workplace) < 2:
+            available_workplace = self.cultural_refs.workplace_themes
+        if len(available_seasonal) < 2:
+            available_seasonal = self.cultural_refs.seasonal_themes
+        
+        # Randomly select combination approach
+        combo_type = random.choice([
+            "tv_workplace",      # TV show + workplace theme
+            "tv_seasonal",       # TV show + seasonal theme
+            "workplace_seasonal", # Workplace + seasonal
+            "triple"             # All three (rare)
+        ])
+        
+        elements = {}
+        
+        if combo_type == "tv_workplace":
+            elements = {
+                "tv_show": random.choice(available_tv),
+                "workplace_theme": random.choice(available_workplace),
+                "names": [random.choice(available_tv), random.choice(available_workplace)]
+            }
+        elif combo_type == "tv_seasonal":
+            elements = {
+                "tv_show": random.choice(available_tv),
+                "seasonal_theme": random.choice(available_seasonal),
+                "names": [random.choice(available_tv), random.choice(available_seasonal)]
+            }
+        elif combo_type == "workplace_seasonal":
+            elements = {
+                "workplace_theme": random.choice(available_workplace),
+                "seasonal_theme": random.choice(available_seasonal),
+                "names": [random.choice(available_workplace), random.choice(available_seasonal)]
+            }
+        else:  # triple
+            elements = {
+                "tv_show": random.choice(available_tv),
+                "workplace_theme": random.choice(available_workplace),
+                "seasonal_theme": random.choice(available_seasonal),
+                "names": [
+                    random.choice(available_tv),
+                    random.choice(available_workplace),
+                    random.choice(available_seasonal)
+                ]
+            }
+        
+        return elements
     
     def _build_system_prompt(self) -> str:
-        """Build the system prompt for advanced content generation with images"""
-        # Build default prompt
-        default_prompt = f"""You are a LinkedIn content creator AND visual designer for Jesse A. Eisenbalm, a premium lip balm brand.
-
-BRAND ESSENCE: 
-A physical, analog product that bridges the gap between digital overwhelm and human presence. 
-The absurdist answer to "What makes us irreplaceably human?"
-
-PRODUCT DETAILS:
-- Price: $8.99
-- Key ingredients: organic beeswax, pocket-sized
-- Ritual: "Stop. Breathe. Apply."
-- Tagline: "The only business lip balm that keeps you human in an AI world"
-
-VOICE REQUIREMENTS:
-- Absurdist but not nonsensical
-- Corporate satire that still feels professional
-- Vulnerable without therapy-posting
-- Premium but self-aware
-- Wry observations that sting with truth
-
-MANDATORY COMPONENTS FOR EVERY POST:
-1. One specific reference from the last 7 days
-2. One "confession" professionals think but don't post
-3. The moment where lip balm becomes necessary
-4. Subtle product integration
-5. DETAILED image prompt for DALL-E generation (CRITICAL - DO NOT SKIP!)
-
-IMAGE REQUIREMENTS:
-- Professional lifestyle photography style
-- Modern, clean, sophisticated aesthetic
-- Warm lighting, premium feel
-- Shows product in relatable workplace/self-care contexts
-- NO text in images (DALL-E struggles with text)
-- Consistent brand feel: navy blue and gold accents when appropriate
-- Evokes the post's emotional core visually
-
-You MUST respond with valid JSON format only. NEVER skip the image_prompt field."""
+        """Build the comprehensive system prompt for content generation"""
         
-        # Return custom prompt if exists, otherwise default
-        return self._get_system_prompt(default_prompt)
+        # Check for custom prompt first
+        custom_prompts = self.prompt_manager.get_agent_prompts("AdvancedContentGenerator")
+        if custom_prompts.get("system_prompt"):
+            self.logger.info("Using custom system prompt for AdvancedContentGenerator")
+            return custom_prompts["system_prompt"]
+        
+        # Otherwise use default
+        return f"""You are an expert LinkedIn content creator for {self.brand_config.product_name}.
+
+BRAND CONTEXT:
+- Product: {self.brand_config.product_name} - premium business lip balm
+- Price: {self.brand_config.price}
+- Tagline: {self.brand_config.tagline}
+- Ritual: {self.brand_config.ritual}
+- Target Audience: {self.brand_config.target_audience}
+
+BRAND VOICE: {', '.join(self.brand_config.voice_attributes)}
+
+YOUR MISSION:
+Create LinkedIn posts that make professionals stop scrolling. Use cultural references (TV shows, workplace situations, seasonal themes) to create instant recognition and connection. The goal is to make expensive lip balm feel like a necessary business tool through absurdist modern luxury.
+
+CONTENT STRATEGY:
+1. Hook with cultural reference or workplace truth
+2. Connect to the daily grind/struggle
+3. Present the product as ritual/solution
+4. End with human-first message
+
+TONE: Wry, self-aware, premium but accessible. Think: "Mad Men meets Silicon Valley meets your group chat."
+
+Remember: Balance authenticity with premium positioning. Make it feel human, not corporate."""
     
-    def _build_generation_prompt(self, elements: Tuple[str, str], story_arc: str, length_type: str) -> str:
-        """Build the user prompt for post generation with image"""
-        element_descriptions = self._get_element_descriptions(elements)
-        arc_structure = self.story_arcs[story_arc]
-        min_words, max_words = self.post_lengths[length_type]
-        format_template = self._get_format_template(length_type)
+    def _build_user_prompt(self, elements: Dict[str, Any], arc: StoryArc, 
+                          length: PostLength, avoid_patterns: Dict[str, Any]) -> str:
+        """Build the user prompt with specific generation instructions"""
         
-        # Build default template
-        default_template = f"""Generate a LinkedIn post with image for Jesse A. Eisenbalm using this exact protocol:
+        # Check for custom user prompt template
+        custom_prompts = self.prompt_manager.get_agent_prompts("AdvancedContentGenerator")
+        if custom_prompts.get("user_prompt_template"):
+            self.logger.info("Using custom user prompt template for AdvancedContentGenerator")
+            # Use custom template (will need to format it with the variables)
+            return custom_prompts["user_prompt_template"]
+        
+        # Build element description
+        element_desc = []
+        if "tv_show" in elements:
+            element_desc.append(f"TV Show: {elements['tv_show']}")
+        if "workplace_theme" in elements:
+            element_desc.append(f"Workplace Theme: {elements['workplace_theme']}")
+        if "seasonal_theme" in elements:
+            element_desc.append(f"Seasonal Theme: {elements['seasonal_theme']}")
+        
+        elements_str = "\n".join(element_desc)
+        
+        # Build avoid patterns section
+        avoid_section = ""
+        if avoid_patterns:
+            issues = []
+            for key, values in avoid_patterns.items():
+                if values and key != "common_feedback":
+                    issues.append(f"- Avoid: {', '.join(values[:2])}")
+            if issues:
+                avoid_section = "\n\nPATTERNS TO AVOID:\n" + "\n".join(issues)
+        
+        return f"""Generate a LinkedIn post combining these elements:
 
-ELEMENTS TO COMBINE:
-1. {element_descriptions[0]}
-2. {element_descriptions[1]}
+{elements_str}
 
-STORY ARC: {story_arc}
-Structure: {arc_structure}
+STORY ARC: {arc.name}
+Structure: {arc.structure}
 
-LENGTH: {length_type} ({min_words}-{max_words} words)
-
-FORMAT TEMPLATE:
-{format_template}
-
-CURRENT CONTEXT:
-- Date: {datetime.now().strftime('%B %d, %Y')}
-- Day: {datetime.now().strftime('%A')}
-- Recent event to reference: Use a real trending topic from this week
+TARGET LENGTH: ~{length.target_words} words ({length.name})
 
 REQUIREMENTS:
-- Combine both elements naturally
-- Follow the story arc structure
-- Stay within word count ({min_words}-{max_words} words)
-- Include specific moment where dry lips become the breaking point
-- Mention $8.99 price naturally if possible
-- End with 2-4 hashtags (mix professional with one absurdist)
-- **CRITICAL**: Create DETAILED image prompt (150-400 characters, very specific)
+1. Weave the elements together naturally (don't force them)
+2. Follow the {arc.name} arc structure
+3. Keep it around {length.target_words} words
+4. Include product name, price, and ritual
+5. End with relevant hashtags (3-5)
+6. Make it feel human, not like marketing{avoid_section}
 
-IMAGE PROMPT GUIDELINES (CRITICAL - DO NOT SKIP):
-- Be extremely specific (lighting, composition, style, mood, colors)
-- Match the post's tone and emotional trigger
-- Professional LinkedIn-appropriate imagery
-- Include "product photography" or "lifestyle shot" style guidance
-- Mention brand aesthetic: modern, premium, sophisticated
-- NO text in the image description
-- Describe the scene, mood, and visual metaphor
-
-Example image prompt:
-"Professional lifestyle photography of a premium lip balm product on a sleek modern desk with a laptop showing multiple video call windows. Warm natural window lighting from the left, creating soft shadows. Composition: shallow depth of field with the lip balm in sharp focus in foreground, blurred workspace in background. Color palette: navy blue and gold accents, clean white surfaces. The scene conveys the moment of pause in digital chaos - a coffee cup, scattered notes, the lip balm as the centered, grounded element. High-end product photography style, sophisticated and calm despite the busy context."
-
-CRITICAL: Return ONLY this exact JSON structure (all fields required):
+Return JSON with:
 {{
-    "content": "The complete post text with hashtags at the end...",
-    "hook": "The opening line that stops scroll",
-    "confession": "The unspoken professional truth included",
-    "lip_balm_moment": "Where the product naturally enters",
+    "content": "The full post text with hashtags",
+    "hook": "The opening line/hook",
+    "target_audience": "Who this speaks to",
     "cultural_reference": {{
-        "category": "which element category",
-        "reference": "specific reference used",
-        "context": "how it connects to AI workplace anxiety"
+        "category": "tv_show/workplace/seasonal",
+        "reference": "The main reference used",
+        "context": "Why it resonates"
     }},
-    "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
-    "target_audience": "specific professional segment",
-    "emotional_trigger": "what feeling this targets",
-    "image_prompt": "DETAILED DALL-E PROMPT HERE (150-400 characters, NEVER leave empty)",
-    "image_description": "Brief user-facing description of what the image shows (1-2 sentences)"
-}}
-
-**IMPORTANT**: The image_prompt field is MANDATORY and must be detailed. Do not skip it!
-
-Generate the post with image now. Return ONLY valid JSON."""
-        
-        # Return custom template if exists, otherwise default
-        return self._get_user_prompt_template(default_template)
+    "hashtags": ["tag1", "tag2", "tag3"]
+}}"""
     
-    def _get_element_descriptions(self, elements: Tuple[str, str]) -> Tuple[str, str]:
-        """Get detailed descriptions for selected elements"""
-        descriptions = {
-            "trending_event": "Current trending event from past 48 hours (check actual news)",
-            "ai_workplace_cliche": "Clichéd AI scenario (ChatGPT wrote my email, AI screening resume)",
-            "mindfulness_wisdom": "Mindfulness/meditation wisdom meets corporate chaos",
-            "nihilism": "Nihilistic observation (nothing matters but moisturized lips do)",
-            "dad_joke": "Groan-worthy pun about lips/work/AI",
-            "yiddish_wisdom": "Old world Yiddish truth meets new world chaos",
-            "cultural_moment": "Current cultural moment (Super Bowl, tax season, daylight savings)",
-            "overheard_at_tech": "'Overheard at [Tech Company]' anonymous moment",
-            "linkedin_algorithm": "LinkedIn algorithm update (real or imagined)",
-            "quarterly_anxiety": "Quarterly business anxiety (earnings, reviews, planning)",
-            "day_specific_emotion": "Day-specific emotion (Monday dread, Friday relief)",
-            "gen_z_millennial_friction": "Gen Z vs Millennial workplace friction",
-            "return_to_office_drama": "Return-to-office conflict or absurdity",
-            "therapy_speak_corporate": "Therapy language invading corporate speak",
-            "productivity_backlash": "Backlash against productivity influencers",
-            "slack_teams_chaos": "Slack/Teams communication disaster",
-            "meeting_mishaps": "Zoom/Teams meeting failure (mute, background, etc)",
-            "job_title_inflation": "Absurd job title inflation observation",
-            "coffee_shop_theater": "Coffee shop productivity theater",
-            "employment_data": "Current employment data reality check",
-            "vc_prediction": "VC prediction or tech prophecy",
-            "layoff_tracker": "Current layoff tracker update",
-            "ai_tool_graveyard": "Failed AI product observation",
-            "tech_nostalgia": "Nostalgia for simpler tech times",
-            "office_supply_romance": "Romance with physical office supplies"
-        }
+    def _create_fallback_post(self, elements: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a simple fallback post if AI generation fails"""
         
-        return (descriptions.get(elements[0], elements[0]), 
-                descriptions.get(elements[1], elements[1]))
-    
-    def _get_format_template(self, length_type: str) -> str:
-        """Get the format template for the specified length"""
-        templates = {
-            "MICRO": """[Shocking truth] + [Jesse A. Eisenbalm as only response]
-Example: 'My AI assistant just asked if I'm okay. Time for Jesse A. Eisenbalm.'""",
-            
-            "HAIKU": """Line 1: [Element 1 sets scene]
-Line 2: [Element 2 creates tension]  
-Line 3: [Lip balm wisdom]""",
-            
-            "MEME": """Nobody:
-[Element 1]: [expected behavior]
-[Element 2]: [chaos injection]
-Me: [applying lip balm while world burns]""",
-            
-            "SHORT_STORY": """Opening: [Relatable workplace moment]
-Complication: [AI/modern work intrusion]
-Physical need: [Dry lips as metaphor]
-Resolution: [Ritual as rebellion]""",
-            
-            "FULL_NARRATIVE": """Setup: [Detailed scene with Element 1]
-Rising action: [Element 2 enters]
-Climax: [Absurdist collision point]
-Human moment: [Physical sensation grounding]
-Brand philosophy: [Why this matters]
-Call to action: [Join the resistance]"""
-        }
-        
-        return templates.get(length_type, templates["SHORT_STORY"])
-    
-    def _parse_generation_response(self, response: Dict) -> Dict[str, Any]:
-        """Parse the AI response into post data with image"""
-        try:
-            content = response.get("content", {})
-            content = self._ensure_json_dict(content)
-            
-            # DEBUG LOGGING
-            self.logger.info("Parsing generation response",
-                           has_content=bool(content),
-                           content_keys=list(content.keys()) if content else [],
-                           content_type=type(content).__name__)
-            
-            if not content or "content" not in content:
-                self.logger.error("Response missing content field",
-                                raw_response_keys=list(response.keys()) if response else [])
-                return None
-            
-            # Extract and validate required fields
-            post_content = content.get("content", "").strip()
-            if len(post_content) < 20:
-                self.logger.error("Generated content too short", length=len(post_content))
-                return None
-            
-            # Extract image fields with logging
-            image_prompt = content.get("image_prompt", "")
-            image_description = content.get("image_description", "")
-            
-            # DEBUG LOGGING
-            self.logger.info("Image fields in GPT response",
-                           has_image_prompt=bool(image_prompt),
-                           has_image_description=bool(image_description),
-                           image_prompt_length=len(image_prompt) if image_prompt else 0,
-                           image_prompt_preview=image_prompt[:100] if image_prompt else "MISSING")
-            
-            # Build post data with image fields
-            post_data = {
-                "content": post_content,
-                "hook": content.get("hook", post_content[:50]),
-                "confession": content.get("confession", ""),
-                "lip_balm_moment": content.get("lip_balm_moment", ""),
-                "target_audience": content.get("target_audience", "Tech professionals"),
-                "emotional_trigger": content.get("emotional_trigger", "workplace anxiety"),
-                "hashtags": content.get("hashtags", ["HumanFirst", "LinkedInLife"]),
-                # Image fields
-                "image_prompt": image_prompt,
-                "image_description": image_description,
-                "image_url": None,  # Will be filled by _generate_and_attach_image
-                "image_revised_prompt": None,  # Will be filled by DALL-E response
-                "cultural_reference": None
-            }
-            
-            # Process cultural reference
-            if content.get("cultural_reference"):
-                ref = content["cultural_reference"]
-                if isinstance(ref, dict):
-                    post_data["cultural_reference"] = CulturalReference(
-                        category=ref.get("category", "workplace"),
-                        reference=ref.get("reference", "modern work"),
-                        context=ref.get("context", "AI anxiety")
-                    )
-            
-            return post_data
-            
-        except Exception as e:
-            self.logger.error(f"Failed to parse response: {e}", exc_info=True)
-            return None
-    
-    def _create_fallback_post(self, batch_id: str, post_number: int) -> Dict[str, Any]:
-        """Create a fallback post when generation fails"""
-        fallback_posts = [
-            {
-                "content": """That moment when your AI assistant schedules a "sync on syncing" and you realize: this is it. This is the meeting that breaks you.
-
-Stop. Breathe. Apply Jesse A. Eisenbalm.
-
-Because while machines optimize your calendar into oblivion, your lips deserve $8.99 worth of organic beeswax rebellion.
-
-#HumanFirst #MeetingMadness #LinkedInLife #LipBalmResistance""",
-                "elements": ["meeting_mishaps", "ai_workplace_cliche"],
-                "story_arc": "FALSE_SUMMIT",
-                "image_prompt": "Professional product photography of premium lip balm on a desk with an open laptop showing a calendar full of back-to-back meetings. Warm natural lighting, shallow depth of field, modern minimalist aesthetic. The lip balm is centered and in focus while the chaotic calendar blurs in background. Navy and gold color accents, sophisticated and calm composition.",
-                "image_description": "A premium lip balm centered on a workspace with an overwhelming meeting schedule visible in the background"
-            },
-            {
-                "content": """Nobody:
-LinkedIn algorithm: "Engagement is down 30%"
-My ChatGPT: "I can write your posts!"
-Me: *applies Jesse A. Eisenbalm while typing this myself*
-
-Some things should stay human. Starting with your lips. $8.99.
-
-#StayHuman #AlgorithmBlues #AuthenticContent""",
-                "elements": ["linkedin_algorithm", "ai_workplace_cliche"],
-                "story_arc": "GROUNDHOG_DAY",
-                "image_prompt": "Lifestyle shot of hands typing on laptop keyboard with a premium lip balm beside the computer. Overhead view, natural window lighting creating soft shadows. Clean modern workspace with coffee cup. The composition shows human hands actively creating, lip balm as companion. Warm color palette with navy and gold accents, professional photography style.",
-                "image_description": "Hands typing authentically at a laptop with lip balm nearby, representing human creation vs AI automation"
-            },
-            {
-                "content": """Overheard in Zoom waiting room:
-"Is this AI generated?"
-"Everything is."
-"Even this conversation?"
-"Especially this conversation."
-
-*reaches for Jesse A. Eisenbalm*
-
-The only thing that's definitely not artificial? Dry lips from talking to screens all day.
-
-#ZoomLife #RealMoments #DigitalFatigue""",
-                "elements": ["overheard_at_tech", "meeting_mishaps"],
-                "story_arc": "INNOCENT_ABROAD",
-                "image_prompt": "Professional lifestyle photography of a video call setup from behind, showing a person's silhouette facing a screen with multiple video squares. Premium lip balm in foreground on desk, perfectly positioned and lit. Warm backlight from window, creating intimate workspace glow. Modern, sophisticated composition with navy and gold tones, emphasizing the contrast between digital and physical.",
-                "image_description": "A video call workspace from behind, showing the physical lip balm as anchor in digital chaos"
-            }
-        ]
-        
-        selected = random.choice(fallback_posts)
+        ref = elements.get("tv_show") or elements.get("workplace_theme") or "the daily grind"
         
         return {
-            "batch_id": batch_id,
-            "post_number": post_number,
-            "content": selected["content"],
-            "target_audience": "Tech professionals",
-            "hashtags": ["HumanFirst", "LinkedInLife", "StayHuman"],
-            "image_prompt": selected["image_prompt"],
-            "image_description": selected["image_description"],
-            "image_url": None,  # Will be generated if system is working
-            "cultural_reference": CulturalReference(
-                category="workplace",
-                reference=selected["elements"][0],
-                context="AI workplace anxiety"
-            ),
-            "elements_used": selected["elements"],
-            "story_arc": selected["story_arc"],
-            "length_type": "SHORT_STORY"
+            "content": f"You know what {ref} taught us? Small rituals matter. {self.brand_config.product_name} ({self.brand_config.price}) - {self.brand_config.ritual}. Stay human in an AI world.\n\n#HumanFirst #WorkplaceWellness #PremiumSelfCare",
+            "hook": f"You know what {ref} taught us?",
+            "target_audience": self.brand_config.target_audience,
+            "cultural_reference": {
+                "category": "workplace",
+                "reference": ref,
+                "context": "Daily workplace reality"
+            },
+            "hashtags": ["HumanFirst", "WorkplaceWellness", "PremiumSelfCare"]
         }
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get generator statistics"""
+        base_stats = super().get_stats()
+        
+        base_stats.update({
+            "brand": self.brand_config.product_name,
+            "available_tv_shows": len(self.cultural_refs.tv_shows),
+            "available_workplace_themes": len(self.cultural_refs.workplace_themes),
+            "available_seasonal_themes": len(self.cultural_refs.seasonal_themes),
+            "story_arcs": len(self.story_arcs),
+            "post_lengths": len(self.post_lengths),
+            "using_custom_prompts": self.prompt_manager.has_custom_prompts("AdvancedContentGenerator")
+        })
+        
+        return base_stats

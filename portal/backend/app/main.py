@@ -85,7 +85,7 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
         content = getattr(post, "content", "") or ""
         hashtags = getattr(post, "hashtags", None) or []
         
-        # Extract image data (NEW)
+        # Extract image data (Google Gemini 2.5 Flash Image)
         image_url = getattr(post, "image_url", None)
         image_description = getattr(post, "image_description", None)
         image_prompt = getattr(post, "image_prompt", None)
@@ -96,7 +96,7 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
                 "id": uuid.uuid4().hex,
                 "content": content,
                 "hashtags": hashtags,
-                # Image fields (NEW)
+                # Image fields (Google Gemini generated)
                 "image_url": image_url,
                 "image_description": image_description,
                 "image_prompt": image_prompt,
@@ -119,13 +119,14 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
 def root():
     return {
         "ok": True,
-        "message": "Content Portal API with Image Generation",
+        "message": "Content Portal API with Google Gemini Image Generation",
         "portal_base_url": PORTAL_BASE_URL,
         "cors_allow_origins": _cors,
         "project_root": str(PROJECT_ROOT),
         "features": {
             "content_generation": True,
-            "image_generation": True,  # NEW
+            "image_generation": True,
+            "image_provider": "google_gemini_2.5_flash",
             "prompt_management": True,
             "batch_processing": True
         }
@@ -153,7 +154,7 @@ def clear_approved():
 
 @app.post("/api/run-batch")
 async def run_batch():
-    """Run the full content pipeline with image generation"""
+    """Run the full content pipeline with Google Gemini image generation"""
     try:
         from tests.test_complete_system import test_complete_system as run_full
         batch = await run_full(run_publish=False)
@@ -167,7 +168,8 @@ async def run_batch():
             "ok": True,
             "batch_id": getattr(batch, "id", None),
             "approved_count": len(newly_approved),
-            "posts_with_images": posts_with_images,  # NEW
+            "posts_with_images": posts_with_images,
+            "image_provider": "google_gemini",
             "total_in_queue": len(APPROVED_QUEUE),
         }
     except ModuleNotFoundError as e:
@@ -215,7 +217,7 @@ async def create_post(payload: Dict[str, Any]):
         hashtags = payload.get("hashtags", [])
         target = payload.get("target", "AUTO")
         
-        # NEW: Accept optional image data
+        # Accept optional image data (can be from Gemini or manual upload)
         image_url = payload.get("image_url")
         image_description = payload.get("image_description")
         
@@ -231,7 +233,7 @@ async def create_post(payload: Dict[str, Any]):
             "lifecycle": "draft",
             "commentary": commentary,
             "hashtags": hashtags,
-            # Image fields (NEW)
+            # Image fields (supports Gemini or manual uploads)
             "image_url": image_url,
             "image_description": image_description,
             "has_image": image_url is not None,
@@ -269,8 +271,8 @@ async def startup_event():
     print(f"Portal Base URL: {PORTAL_BASE_URL}")
     print(f"CORS Origins: {_cors}")
     print(f"Features:")
-    print(f"  - Content Generation: ✅")
-    print(f"  - Image Generation (DALL-E 3): ✅")  # NEW
+    print(f"  - Content Generation (GPT-4o-mini): ✅")
+    print(f"  - Image Generation (Gemini 2.5 Flash): ✅")
     print(f"  - Prompt Management: ✅")
     print(f"  - Batch Processing: ✅")
     print("="*60)

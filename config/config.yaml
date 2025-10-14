@@ -5,8 +5,18 @@ openai:
   max_tokens: 600
   timeout: 30
 
+# Google Gemini configuration for image generation
+google:
+  api_key: ${GOOGLE_API_KEY}
+  
+  # Image model (Gemini 2.5 Flash Image)
+  image_model: gemini-2.5-flash-image
+  
+  # Enable/disable image generation
+  use_images: true  # Set to false to skip image generation
+
 batch:
-  posts_per_batch: 1  # ← CHANGED FROM 5 TO 1
+  posts_per_batch: 1  # Generate 1 post with 1 image at a time
   max_revisions: 2
   target_approval_rate: 0.3
   max_total_attempts: 20

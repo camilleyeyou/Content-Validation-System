@@ -16,11 +16,15 @@ typing_extensions>=4.9
 pandas>=2.1
 numpy>=1.25
 
-# --- OpenAI (real client) ---
+# --- OpenAI (text generation with GPT-4o-mini) ---
 openai>=1.30.0
+
+# --- Google Gemini (image generation with 2.5 Flash Image) ---
+google-genai>=0.7.0
+Pillow>=10.0.0
 
 # --- Retries / robustness ---
 tenacity>=8.2.3
 
-# --- Persistence (NEW) ---
+# --- Persistence ---
 SQLAlchemy>=2.0

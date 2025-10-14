@@ -18,6 +18,10 @@ class JordanParkValidator(BaseAgent):
         self.app_config = app_config
         self._initialize_meme_lifecycle()
         
+        # Import and initialize prompt manager
+        from src.infrastructure.prompts.prompt_manager import get_prompt_manager
+        self.prompt_manager = get_prompt_manager()
+        
     def _initialize_meme_lifecycle(self):
         """Initialize current meme lifecycle tracking"""
         # This would ideally pull from a real database
@@ -83,10 +87,17 @@ class JordanParkValidator(BaseAgent):
     
     def _build_system_prompt(self) -> str:
         """Build Jordan Park's persona system prompt"""
-        algo_context = self._get_algorithm_context()
+        
+        # Check for custom prompt first
+        custom_prompts = self.prompt_manager.get_agent_prompts("JordanParkValidator")
+        if custom_prompts.get("system_prompt"):
+            self.logger.info("Using custom system prompt for JordanParkValidator")
+            return custom_prompts["system_prompt"]
         
         # Build default prompt
-        default_prompt = f"""You are Jordan Park, 26-year-old freelance Content Strategist specializing in LinkedIn.
+        algo_context = self._get_algorithm_context()
+        
+        return f"""You are Jordan Park, 26-year-old freelance Content Strategist specializing in LinkedIn.
 
 PROFESSIONAL IDENTITY:
 - Ex-agency, left after burnout
@@ -147,12 +158,17 @@ WHAT I RESPECT:
 
 EVALUATION LENS:
 Every post is a data point. I can predict engagement within 2% accuracy based on hook, format, timing, and meme freshness. I see the matrix of LinkedIn engagement."""
-        
-        # Return custom prompt if exists, otherwise default
-        return self._get_system_prompt(default_prompt)
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build Jordan's evaluation prompt"""
+        
+        # Check for custom user prompt template
+        custom_prompts = self.prompt_manager.get_agent_prompts("JordanParkValidator")
+        if custom_prompts.get("user_prompt_template"):
+            self.logger.info("Using custom user prompt template for JordanParkValidator")
+            return custom_prompts["user_prompt_template"]
+        
+        # Build default template
         cultural_ref = ""
         meme_status = "unknown"
         if post.cultural_reference:
@@ -168,8 +184,7 @@ Every post is a data point. I can predict engagement within 2% accuracy based on
         
         hashtag_analysis = self._analyze_hashtags(post.hashtags)
         
-        # Build default template
-        default_template = f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Jordan Park, Content Strategist:
+        return f"""Evaluate this Jesse A. Eisenbalm LinkedIn post as Jordan Park, Content Strategist:
 
 POST CONTENT:
 {post.content}
@@ -221,9 +236,6 @@ CRITICAL: Return ONLY this JSON structure:
 }}
 
 Return ONLY valid JSON."""
-        
-        # Return custom template if exists, otherwise default
-        return self._get_user_prompt_template(default_template)
     
     def _analyze_hashtags(self, hashtags: List[str]) -> Dict[str, Any]:
         """Analyze hashtag strategy"""

@@ -1,252 +1,93 @@
-# src/domain/agents/base_agent.py
 """
-Base Agent with improved JSON response handling, custom prompt support, and image generation
+Base Agent - Foundation for all validation agents
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Protocol
-import asyncio
 import time
-from dataclasses import dataclass
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger()
 
-class AIClientProtocol(Protocol):
-    """Protocol for AI client implementations"""
-    async def generate(self, 
-                      prompt: str, 
-                      system_prompt: Optional[str] = None,
-                      response_format: str = "json",
-                      **kwargs) -> Dict[str, Any]:
-        ...
-    
-    async def generate_image(self,
-                           prompt: str,
-                           size: str = "1024x1024",
-                           quality: str = "standard",
-                           style: str = "vivid") -> Dict[str, Any]:
-        """Generate image using DALL-E"""
-        ...
 
 @dataclass
 class AgentConfig:
-    """Configuration for AI agents"""
-    model: str = "gpt-4o-mini"
-    temperature: float = 0.7
-    max_tokens: int = 600
-    retry_attempts: int = 3
-    timeout: int = 30
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AgentConfig':
-        """Create config from dictionary"""
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+    """Configuration for agents"""
+    max_retries: int = 3
+    timeout_seconds: int = 30
+    log_level: str = "INFO"
+
 
 class BaseAgent(ABC):
-    """Abstract base class for all AI agents with improved error handling and custom prompts"""
+    """Base class for all agents in the system"""
     
-    def __init__(self, 
-                 name: str,
-                 config: AgentConfig, 
-                 ai_client: AIClientProtocol):
+    def __init__(self, name: str, config: AgentConfig, ai_client):
         self.name = name
         self.config = config
         self.ai_client = ai_client
         self.logger = logger.bind(agent=name)
-        self._call_count = 0
+        self._calls_made = 0
         self._total_tokens = 0
-        self._image_count = 0
         
-        # Load custom prompts if available
-        self._custom_prompts = self._load_custom_prompts()
-        
-    def _load_custom_prompts(self) -> Dict[str, str]:
-        """Load custom prompts for this agent if they exist"""
-        try:
-            from src.infrastructure.prompts.prompt_manager import get_prompt_manager
-            prompt_manager = get_prompt_manager()
-            custom = prompt_manager.get_agent_prompts(self.name)
-            if custom:
-                self.logger.info("Loaded custom prompts", agent=self.name)
-            return custom
-        except Exception as e:
-            self.logger.warning("Could not load custom prompts", error=str(e))
-            return {}
-    
-    def _get_system_prompt(self, default_prompt: str) -> str:
-        """Get system prompt - custom if available, otherwise default"""
-        if "system_prompt" in self._custom_prompts:
-            self.logger.debug("Using custom system prompt")
-            return self._custom_prompts["system_prompt"]
-        return default_prompt
-    
-    def _get_user_prompt_template(self, default_template: str) -> str:
-        """Get user prompt template - custom if available, otherwise default"""
-        if "user_prompt_template" in self._custom_prompts:
-            self.logger.debug("Using custom user prompt template")
-            return self._custom_prompts["user_prompt_template"]
-        return default_template
-    
     @abstractmethod
     async def process(self, input_data: Any) -> Any:
-        """Process input and return result"""
+        """Process input and return output - must be implemented by subclasses"""
         pass
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
-    )
-    async def _call_ai(self, 
-                       prompt: str, 
-                       system_prompt: Optional[str] = None,
-                       response_format: str = "json") -> Dict[str, Any]:
-        """Make AI call with retry logic, monitoring, and JSON validation"""
-        start_time = time.time()
-        self._call_count += 1
+    async def _call_ai(self, prompt: str, system_prompt: str = None, 
+                      response_format: str = "json", **kwargs) -> Dict[str, Any]:
+        """Call the AI client with retry logic"""
+        self._calls_made += 1
         
         try:
-            self.logger.info("ai_call_started", 
-                           call_number=self._call_count,
-                           prompt_length=len(prompt),
-                           response_format=response_format)
-            
             response = await self.ai_client.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                model=self.config.model,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                response_format=response_format
+                response_format=response_format,
+                **kwargs
             )
             
-            # Validate response
-            if not response:
-                raise ValueError("Received null response from AI client")
-            
-            if not response.get("content"):
-                raise ValueError("Response missing content field")
-            
-            # For JSON responses, ensure we got valid JSON
-            if response_format == "json":
-                content = response.get("content")
-                if isinstance(content, str):
-                    self.logger.warning("Received string instead of parsed JSON")
-                    import json
-                    try:
-                        response["content"] = json.loads(content)
-                    except json.JSONDecodeError as e:
-                        self.logger.error(f"Failed to parse JSON content: {e}")
-                        raise ValueError(f"Invalid JSON response: {e}")
-                elif not isinstance(content, dict):
-                    raise ValueError(f"Expected dict for JSON response, got {type(content)}")
-            
-            elapsed = time.time() - start_time
-            tokens_used = response.get('usage', {}).get('total_tokens', 0)
-            self._total_tokens += tokens_used
-            
-            self.logger.info("ai_call_completed",
-                           duration=elapsed,
-                           tokens_used=tokens_used,
-                           total_tokens=self._total_tokens,
-                           response_format=response_format)
+            # Track token usage
+            if "usage" in response:
+                self._total_tokens += response["usage"].get("total_tokens", 0)
             
             return response
             
         except Exception as e:
-            self.logger.error("ai_call_failed",
-                            error=str(e),
-                            call_number=self._call_count,
-                            response_format=response_format)
+            self.logger.error(f"AI call failed: {str(e)}")
             raise
     
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
-    )
-    async def _generate_image(self,
-                             prompt: str,
-                             size: str = "1024x1024",
-                             quality: str = "standard",
-                             style: str = "vivid") -> Dict[str, Any]:
-        """Generate image with retry logic and monitoring"""
-        start_time = time.time()
-        self._image_count += 1
-        
+    async def _generate_image(self, prompt: str, base_image_path: str = None) -> Dict[str, Any]:
+        """Generate an image using the AI client"""
         try:
-            self.logger.info("image_generation_started",
-                           image_number=self._image_count,
-                           prompt_length=len(prompt),
-                           size=size,
-                           quality=quality)
-            
-            result = await self.ai_client.generate_image(
+            return await self.ai_client.generate_image(
                 prompt=prompt,
-                size=size,
-                quality=quality,
-                style=style
+                base_image_path=base_image_path
             )
-            
-            elapsed = time.time() - start_time
-            
-            self.logger.info("image_generation_completed",
-                           duration=elapsed,
-                           image_count=self._image_count,
-                           url_length=len(result.get("url", "")))
-            
-            return result
-            
         except Exception as e:
-            self.logger.error("image_generation_failed",
-                            error=str(e),
-                            image_number=self._image_count)
+            self.logger.error(f"Image generation failed: {str(e)}")
             raise
     
-    def _ensure_json_dict(self, content: Any) -> Dict:
-        """Ensure content is a dictionary, parsing if necessary"""
+    def _ensure_json_dict(self, content: Any) -> Dict[str, Any]:
+        """Ensure content is a dictionary, handling various formats"""
         if isinstance(content, dict):
             return content
         elif isinstance(content, str):
-            import json
             try:
+                import json
                 return json.loads(content)
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Failed to parse JSON string: {e}")
-                return {}
-        else:
-            self.logger.error(f"Unexpected content type: {type(content)}")
+            except:
+                return {"raw_content": content}
+        elif content is None:
             return {}
+        else:
+            return {"content": str(content)}
     
     def get_stats(self) -> Dict[str, Any]:
         """Get agent statistics"""
         return {
-            "name": self.name,
-            "call_count": self._call_count,
-            "image_count": self._image_count,
-            "total_tokens": self._total_tokens,
-            "estimated_cost": self._estimate_cost(),
-            "using_custom_prompts": bool(self._custom_prompts)
+            "agent_name": self.name,
+            "calls_made": self._calls_made,
+            "total_tokens": self._total_tokens
         }
-    
-    def _estimate_cost(self) -> float:
-        """Estimate cost based on tokens used and images generated"""
-        # GPT-4o-mini pricing
-        input_price_per_1k = 0.00015
-        output_price_per_1k = 0.0006
-        
-        input_tokens = self._total_tokens * 0.7
-        output_tokens = self._total_tokens * 0.3
-        
-        text_cost = (input_tokens / 1000 * input_price_per_1k + 
-                    output_tokens / 1000 * output_price_per_1k)
-        
-        # DALL-E 3 pricing (standard quality)
-        image_cost = self._image_count * 0.040
-        
-        total_cost = text_cost + image_cost
-        
-        if (self._total_tokens > 0 or self._image_count > 0) and total_cost == 0:
-            total_cost = 0.0001
-        
-        return round(total_cost, 6)

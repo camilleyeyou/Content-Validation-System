@@ -13,12 +13,29 @@ type PostRow = {
   commentary?: string;
   content?: string;
   hashtags?: string[];
-  // Image fields (NEW)
+  
+  // Media type field (NEW)
+  media_type?: "text" | "image" | "video";
+  
+  // Image fields (backward compatibility)
   image_url?: string;
   image_description?: string;
   image_prompt?: string;
   image_revised_prompt?: string;
   has_image?: boolean;
+  
+  // Video fields (NEW)
+  video_url?: string;
+  video_description?: string;
+  video_prompt?: string;
+  video_generation_time?: number;
+  video_size_mb?: number;
+  has_video?: boolean;
+  
+  // Media metadata (NEW)
+  media_provider?: string;
+  media_cost?: number;
+  
   // Status fields
   li_post_id?: string;
   error_message?: string;
@@ -60,15 +77,17 @@ export default function Dashboard() {
   }, []);
 
   async function runBatch() {
-    setMsg("Running content generation with DALL-E images...");
+    setMsg("Running content generation with FREE Hugging Face videos...");
     setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
-      const imageInfo = data.posts_with_images > 0 
-        ? ` (${data.posts_with_images} with images)` 
+      const videoInfo = data.posts_with_videos > 0 
+        ? ` (${data.posts_with_videos} with videos)` 
+        : data.posts_with_images > 0
+        ? ` (${data.posts_with_images} with images)`
         : "";
       setMsg(
-        `✅ Generated ${data.approved_count || 0} approved posts${imageInfo}! Total in queue: ${
+        `✅ Generated ${data.approved_count || 0} approved posts${videoInfo}! Total in queue: ${
           data.total_in_queue || 0
         }`
       );
@@ -95,8 +114,10 @@ export default function Dashboard() {
     }
   }
 
-  // Count posts with images
-  const postsWithImages = rows.filter(r => r.has_image).length;
+  // Count posts with media
+  const postsWithVideos = rows.filter(r => r.has_video || r.video_url).length;
+  const postsWithImages = rows.filter(r => r.has_image || (r.image_url && !r.video_url)).length;
+  const postsWithMedia = postsWithVideos + postsWithImages;
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
@@ -126,9 +147,9 @@ export default function Dashboard() {
             {loading ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              "🚀"
+              "🎬"
             )}
-            Generate Posts + Images
+            Generate Posts + Videos
           </button>
           <button
             onClick={clearAll}
@@ -161,19 +182,23 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="bg-white rounded-xl border border-zinc-200 p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Statistics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6">
           <div>
             <div className="text-xs text-zinc-600 mb-1">Total Posts</div>
             <div className="text-3xl font-bold">{rows.length}</div>
           </div>
           <div>
-            <div className="text-xs text-zinc-600 mb-1">With Images</div>
+            <div className="text-xs text-zinc-600 mb-1">With Videos 🎬</div>
+            <div className="text-3xl font-bold text-purple-600">{postsWithVideos}</div>
+          </div>
+          <div>
+            <div className="text-xs text-zinc-600 mb-1">With Images 🖼️</div>
             <div className="text-3xl font-bold text-blue-600">{postsWithImages}</div>
           </div>
           <div>
-            <div className="text-xs text-zinc-600 mb-1">Image Rate</div>
+            <div className="text-xs text-zinc-600 mb-1">Media Rate</div>
             <div className="text-lg font-semibold">
-              {rows.length > 0 ? `${Math.round((postsWithImages / rows.length) * 100)}%` : "0%"}
+              {rows.length > 0 ? `${Math.round((postsWithMedia / rows.length) * 100)}%` : "0%"}
             </div>
           </div>
           <div>
@@ -191,7 +216,7 @@ export default function Dashboard() {
         <div className="space-y-4">
           {rows.length === 0 ? (
             <div className="text-center py-12 text-zinc-500 text-sm">
-              No posts yet. Click "Generate Posts + Images" to create content using your AI agents.
+              No posts yet. Click "Generate Posts + Videos" to create content using your AI agents.
             </div>
           ) : (
             rows.map((r) => {
@@ -199,6 +224,12 @@ export default function Dashboard() {
               const full =
                 displayContent +
                 (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
+              
+              // Determine media type
+              const hasVideo = r.video_url || r.has_video;
+              const hasImage = r.image_url && !hasVideo;
+              const mediaUrl = r.video_url || r.image_url;
+              
               return (
                 <div
                   key={r.id}
@@ -212,9 +243,19 @@ export default function Dashboard() {
                     <span className="px-2 py-1 bg-zinc-200 text-zinc-700 rounded-full font-medium">
                       {r.lifecycle}
                     </span>
-                    {r.has_image && (
+                    {hasVideo && (
                       <span className="px-2 py-1 bg-purple-600 text-white rounded-full font-semibold">
+                        🎬 Video
+                      </span>
+                    )}
+                    {hasImage && (
+                      <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
                         🖼️ Image
+                      </span>
+                    )}
+                    {r.media_provider === "huggingface" && (
+                      <span className="px-2 py-1 bg-green-600 text-white rounded-full font-semibold">
+                        FREE
                       </span>
                     )}
                     {r.created_at && (
@@ -224,8 +265,43 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Image Display (NEW) */}
-                  {r.image_url && (
+                  {/* Video Display (NEW) */}
+                  {hasVideo && r.video_url && (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200 bg-black">
+                      <video
+                        controls
+                        loop
+                        muted
+                        autoPlay
+                        playsInline
+                        className="w-full h-auto"
+                        style={{ maxHeight: '500px' }}
+                      >
+                        <source src={r.video_url} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                      {(r.video_description || r.video_generation_time) && (
+                        <div className="p-3 bg-zinc-100 text-xs text-zinc-700 space-y-1">
+                          {r.video_description && (
+                            <div>
+                              <span className="font-semibold">Video: </span>
+                              {r.video_description}
+                            </div>
+                          )}
+                          {r.video_generation_time && (
+                            <div className="text-zinc-500">
+                              Generated in {r.video_generation_time}s
+                              {r.video_size_mb && ` • ${r.video_size_mb}MB`}
+                              {r.media_cost !== undefined && ` • Cost: $${r.media_cost.toFixed(2)}`}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Image Display (backward compatibility) */}
+                  {hasImage && r.image_url && (
                     <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200">
                       <img
                         src={r.image_url}
@@ -287,7 +363,39 @@ export default function Dashboard() {
                     >
                       📋 Copy with Tags
                     </button>
-                    {r.image_url && (
+                    
+                    {/* Video-specific actions */}
+                    {hasVideo && r.video_url && (
+                      <>
+                        <button
+                          onClick={() => window.open(r.video_url, '_blank')}
+                          className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                        >
+                          🎬 Open Video
+                        </button>
+                        <a
+                          href={r.video_url}
+                          download={`video-${r.id}.mp4`}
+                          className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors inline-flex items-center"
+                        >
+                          💾 Download Video
+                        </a>
+                        {r.video_prompt && (
+                          <button
+                            onClick={() => {
+                              const info = `Video Prompt: ${r.video_prompt}\n\nVideo Description: ${r.video_description || 'N/A'}\n\nGeneration Time: ${r.video_generation_time || 'N/A'}s\n\nSize: ${r.video_size_mb || 'N/A'}MB\n\nProvider: ${r.media_provider || 'N/A'}\n\nCost: $${r.media_cost?.toFixed(2) || '0.00'}`;
+                              alert(info);
+                            }}
+                            className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
+                          >
+                            ℹ️ Video Details
+                          </button>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Image-specific actions (backward compatibility) */}
+                    {hasImage && r.image_url && (
                       <>
                         <button
                           onClick={() => window.open(r.image_url, '_blank')}

@@ -38,7 +38,7 @@ class CulturalReference(BaseModel):
     context: str  # How it was used
 
 class LinkedInPost(BaseModel):
-    """Core post model with full lifecycle tracking and image support"""
+    """Core post model with full lifecycle tracking, video, and image support"""
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     # Identity
@@ -51,11 +51,25 @@ class LinkedInPost(BaseModel):
     hook: Optional[str] = None  # Opening line
     hashtags: List[str] = Field(default_factory=list, max_items=10)
     
-    # Image Support (NEW)
+    # Media Type (NEW)
+    media_type: str = "text"  # "text", "image", or "video"
+    
+    # Video Support (NEW - Priority over images)
+    video_url: Optional[str] = None  # Hugging Face generated video URL (base64 or external)
+    video_prompt: Optional[str] = None  # Original prompt sent to HF
+    video_description: Optional[str] = None  # User-facing description
+    video_generation_time: Optional[float] = None  # Generation time in seconds
+    video_size_mb: Optional[float] = None  # Video file size in MB
+    
+    # Image Support (Backward compatibility - used when video not available)
     image_url: Optional[str] = None  # DALL-E generated image URL
     image_prompt: Optional[str] = None  # Original prompt sent to DALL-E
     image_description: Optional[str] = None  # User-facing description
     image_revised_prompt: Optional[str] = None  # Safety-filtered prompt from DALL-E
+    
+    # Media Metadata (NEW)
+    media_provider: Optional[str] = None  # "huggingface", "openai", etc.
+    media_cost: float = 0.0  # Cost of media generation
     
     # Targeting
     target_audience: str
@@ -91,9 +105,24 @@ class LinkedInPost(BaseModel):
         return sum(1 for s in self.validation_scores if s.approved)
     
     @property
+    def has_video(self) -> bool:
+        """Check if post has a video (NEW)"""
+        return self.video_url is not None
+    
+    @property
     def has_image(self) -> bool:
-        """Check if post has an image"""
-        return self.image_url is not None
+        """Check if post has an image (only counts if no video)"""
+        return self.image_url is not None and not self.has_video
+    
+    @property
+    def has_media(self) -> bool:
+        """Check if post has any media (video or image)"""
+        return self.has_video or (self.image_url is not None)
+    
+    @property
+    def media_url(self) -> Optional[str]:
+        """Get the media URL (video takes priority over image)"""
+        return self.video_url or self.image_url
     
     def is_approved(self, min_approvals: int = 2) -> bool:
         """Check if post meets approval threshold"""
@@ -108,16 +137,44 @@ class LinkedInPost(BaseModel):
         self.validation_scores.append(score)
         self.updated_at = datetime.utcnow()
     
+    def set_video(self, 
+                  url: str, 
+                  prompt: str, 
+                  description: Optional[str] = None,
+                  generation_time: Optional[float] = None,
+                  size_mb: Optional[float] = None,
+                  provider: str = "huggingface",
+                  cost: float = 0.0) -> None:
+        """Set video data for the post (NEW)"""
+        self.video_url = url
+        self.video_prompt = prompt
+        self.video_description = description
+        self.video_generation_time = generation_time
+        self.video_size_mb = size_mb
+        self.media_provider = provider
+        self.media_cost = cost
+        self.media_type = "video"
+        
+        # Also set image_url for backward compatibility with code that expects it
+        self.image_url = url
+        
+        self.updated_at = datetime.utcnow()
+    
     def set_image(self, 
                   url: str, 
                   prompt: str, 
                   description: Optional[str] = None,
-                  revised_prompt: Optional[str] = None) -> None:
-        """Set image data for the post"""
+                  revised_prompt: Optional[str] = None,
+                  provider: str = "openai",
+                  cost: float = 0.04) -> None:
+        """Set image data for the post (DALL-E or other image providers)"""
         self.image_url = url
         self.image_prompt = prompt
         self.image_description = description
         self.image_revised_prompt = revised_prompt
+        self.media_provider = provider
+        self.media_cost = cost
+        self.media_type = "image"
         self.updated_at = datetime.utcnow()
     
     def create_revision(self, new_content: str) -> None:
@@ -130,7 +187,9 @@ class LinkedInPost(BaseModel):
             "previous_content": self.content,
             "timestamp": datetime.utcnow().isoformat(),
             "average_score_before": self.average_score,
-            "had_image": self.has_image
+            "had_video": self.has_video,
+            "had_image": self.has_image,
+            "media_type": self.media_type
         })
         
         self.content = new_content
@@ -139,5 +198,67 @@ class LinkedInPost(BaseModel):
         self.validation_scores = []  # Clear for re-validation
         self.updated_at = datetime.utcnow()
         
-        # Note: Image is preserved during revision unless explicitly changed
-        # You may want to regenerate images for revised content
+        # Note: Video/Image is preserved during revision unless explicitly changed
+        # Media URLs remain intact through revision cycles
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert post to dictionary for serialization"""
+        return {
+            "id": self.id,
+            "batch_id": self.batch_id,
+            "post_number": self.post_number,
+            "content": self.content,
+            "hook": self.hook,
+            "hashtags": self.hashtags,
+            
+            # Media type
+            "media_type": self.media_type,
+            
+            # Video fields
+            "video_url": self.video_url,
+            "video_prompt": self.video_prompt,
+            "video_description": self.video_description,
+            "video_generation_time": self.video_generation_time,
+            "video_size_mb": self.video_size_mb,
+            "has_video": self.has_video,
+            
+            # Image fields
+            "image_url": self.image_url,
+            "image_prompt": self.image_prompt,
+            "image_description": self.image_description,
+            "image_revised_prompt": self.image_revised_prompt,
+            "has_image": self.has_image,
+            
+            # Media metadata
+            "media_provider": self.media_provider,
+            "media_cost": self.media_cost,
+            "has_media": self.has_media,
+            "media_url": self.media_url,
+            
+            # Targeting
+            "target_audience": self.target_audience,
+            "cultural_reference": self.cultural_reference.dict() if self.cultural_reference else None,
+            
+            # Status
+            "status": self.status.value,
+            "validation_scores": [
+                {
+                    "agent_name": s.agent_name,
+                    "score": s.score,
+                    "approved": s.approved,
+                    "feedback": s.feedback,
+                    "criteria_breakdown": s.criteria_breakdown
+                }
+                for s in self.validation_scores
+            ],
+            "revision_count": self.revision_count,
+            "average_score": self.average_score,
+            "approval_count": self.approval_count,
+            
+            # Metadata
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "processing_time_seconds": self.processing_time_seconds,
+            "total_tokens_used": self.total_tokens_used,
+            "estimated_cost": self.estimated_cost
+        }

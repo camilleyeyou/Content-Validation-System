@@ -1,22 +1,47 @@
 """
-OpenAI Client with proper JSON response handling and DALL-E Image Generation
+AI Client with OpenAI for text generation and Google Gemini for image generation
 """
 
 import asyncio
 import json
+import os
+import uuid
+from pathlib import Path
 from typing import Dict, Any, Optional
 from openai import AsyncOpenAI
+from google import genai
+from PIL import Image
+from io import BytesIO
 import structlog
 from ..config.config_manager import AppConfig
 
 logger = structlog.get_logger()
 
 class OpenAIClient:
-    """Async OpenAI API client wrapper with JSON and image generation support"""
+    """Async AI client wrapper with OpenAI (text) and Google Gemini (images)"""
     
     def __init__(self, config: AppConfig):
         self.config = config
-        self.client = AsyncOpenAI(api_key=config.openai.api_key)
+        
+        # OpenAI client (for text generation)
+        self.openai_client = AsyncOpenAI(api_key=config.openai.api_key)
+        
+        # Google Gemini client (for image generation)
+        try:
+            google_api_key = config.google.api_key
+            self.gemini_client = genai.Client(api_key=google_api_key)
+            self.gemini_image_model = config.google.image_model
+            self.use_images = config.google.use_images
+            logger.info("Gemini client initialized successfully")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Gemini client: {e}")
+            self.gemini_client = None
+            self.use_images = False
+        
+        # Setup image output directory
+        self.image_output_dir = Path("data/images")
+        self.image_output_dir.mkdir(parents=True, exist_ok=True)
+        
         self.logger = logger.bind(component="openai_client")
         
     async def generate(self, 
@@ -62,7 +87,7 @@ class OpenAIClient:
             if response_format == "json" and ("gpt-4" in model or "gpt-3.5-turbo" in model):
                 kwargs["response_format"] = {"type": "json_object"}
             
-            response = await self.client.chat.completions.create(**kwargs)
+            response = await self.openai_client.chat.completions.create(**kwargs)
             
             content = response.choices[0].message.content
             
@@ -122,63 +147,96 @@ class OpenAIClient:
     
     async def generate_image(self,
                            prompt: str,
-                           size: str = "1024x1024",
-                           quality: str = "standard",
-                           style: str = "vivid") -> Dict[str, Any]:
+                           base_image_path: Optional[str] = None) -> Dict[str, Any]:
         """
-        Generate image using DALL-E 3
+        Generate image using Google Gemini 2.5 Flash Image
         
         Args:
-            prompt: Detailed image description (max 4000 characters)
-            size: "1024x1024", "1792x1024", or "1024x1792"
-            quality: "standard" or "hd" (hd costs 2x)
-            style: "vivid" (hyper-real, dramatic) or "natural" (more realistic)
+            prompt: Detailed image description
+            base_image_path: Optional path to base image for editing/remixing
             
         Returns:
             Dict with:
-                - url: Image URL (valid for ~1 hour)
-                - revised_prompt: OpenAI's safety-filtered version of your prompt
+                - image_data: Raw image bytes
+                - generation_time_seconds: Time taken to generate
+                - size_mb: File size in megabytes
                 
         Cost:
-            - Standard 1024x1024: $0.040
-            - HD 1024x1024: $0.080
+            - Gemini 2.5 Flash Image: $0.039 per image
         """
+        
+        if not self.use_images:
+            self.logger.warning("Image generation disabled in config")
+            return {"error": "Image generation disabled", "image_data": None}
+        
+        if not self.gemini_client:
+            self.logger.error("Gemini client not initialized")
+            return {"error": "Gemini client not available", "image_data": None}
+        
         try:
-            self.logger.info("Generating image with DALL-E 3",
+            import time
+            start_time = time.time()
+            
+            self.logger.info("Generating image with Gemini 2.5 Flash Image",
                            prompt_length=len(prompt),
-                           size=size,
-                           quality=quality,
-                           style=style)
+                           has_base_image=base_image_path is not None)
             
-            # Truncate prompt if too long (DALL-E 3 max is 4000 chars)
-            if len(prompt) > 4000:
-                self.logger.warning("Prompt too long, truncating to 4000 chars",
-                                  original_length=len(prompt))
-                prompt = prompt[:4000]
+            # Prepare contents for Gemini
+            contents = [prompt]
             
-            response = await self.client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size=size,
-                quality=quality,
-                style=style,
-                n=1  # DALL-E 3 only supports n=1
+            # Add base image if provided (for editing/remixing)
+            if base_image_path and os.path.exists(base_image_path):
+                try:
+                    base_image = Image.open(base_image_path)
+                    contents.append(base_image)
+                    self.logger.info(f"Added base image: {base_image_path}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to load base image: {e}")
+            
+            # Generate image using Gemini
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_image_model,
+                contents=contents,
             )
             
+            # Extract image data from response
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if part.inline_data is not None:
+                    image_data = part.inline_data.data
+                    break
+            
+            if not image_data:
+                self.logger.error("No image data in Gemini response")
+                return {"error": "No image generated", "image_data": None}
+            
+            # Calculate metrics
+            generation_time = time.time() - start_time
+            size_mb = len(image_data) / (1024 * 1024)
+            
             result = {
-                "url": response.data[0].url,
-                "revised_prompt": response.data[0].revised_prompt
+                "image_data": image_data,
+                "generation_time_seconds": round(generation_time, 2),
+                "size_mb": round(size_mb, 3),
+                "provider": "google_gemini",
+                "model": self.gemini_image_model,
+                "cost": 0.039
             }
             
             self.logger.info("Image generated successfully",
-                           url_length=len(result["url"]),
-                           prompt_revised=result["revised_prompt"] != prompt)
+                           generation_time=result["generation_time_seconds"],
+                           size_mb=result["size_mb"])
             
             return result
             
         except Exception as e:
-            self.logger.error(f"DALL-E image generation failed: {str(e)}")
-            raise
+            self.logger.error(f"Gemini image generation failed: {str(e)}", exc_info=True)
+            return {
+                "error": str(e),
+                "image_data": None,
+                "provider": "google_gemini",
+                "model": self.gemini_image_model
+            }
     
     def _extract_json_from_text(self, text: str) -> Optional[Dict]:
         """Try to extract JSON from text that may contain other content"""
@@ -199,4 +257,4 @@ class OpenAIClient:
     
     async def close(self):
         """Close the client"""
-        await self.client.close()
+        await self.openai_client.close()
