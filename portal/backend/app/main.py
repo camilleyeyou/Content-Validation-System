@@ -38,6 +38,7 @@ print(f"🔧 Project root: {PROJECT_ROOT}")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Import the prompts router using relative import
 from .prompts_routes import router as prompts_router
@@ -46,6 +47,21 @@ from .prompts_routes import router as prompts_router
 # Env / Config
 # --------------------------------------------------------------------------------------
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")
+
+# If your backend is behind a different origin than the frontend, set BACKEND_BASE_URL
+# e.g., https://api.content-validation-system.yourdomain.com
+BACKEND_BASE_URL = (os.getenv("BACKEND_BASE_URL") or "").rstrip("/")
+
+# Where images are stored on disk (where the image agent saves files)
+IMAGE_DIR = os.getenv("IMAGE_DIR", "data/images")
+
+# Public route where images are served (mounted below)
+IMAGES_ROUTE = os.getenv("IMAGES_ROUTE", "/images").rstrip("/") or "/images"
+
+# Base URL the FE should use for images:
+# If BACKEND_BASE_URL is set -> {BACKEND_BASE_URL}{IMAGES_ROUTE}
+# Else -> just IMAGES_ROUTE (relative; assumes FE proxies to backend)
+PUBLIC_IMAGES_BASE = f"{BACKEND_BASE_URL}{IMAGES_ROUTE}" if BACKEND_BASE_URL else IMAGES_ROUTE
 
 # CORS: comma-separated list of origins, or "*" (default)
 _cors = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if o.strip()]
@@ -64,6 +80,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static images (serve files from IMAGE_DIR at IMAGES_ROUTE)
+# e.g., GET https://<backend>/images/<filename>.png
+Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
+app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
+
 # --------------------------------------------------------------------------------------
 # Register the prompts router
 # --------------------------------------------------------------------------------------
@@ -75,6 +96,58 @@ app.include_router(prompts_router)
 APPROVED_QUEUE: List[Dict[str, Any]] = []
 
 
+def _images_base() -> str:
+    """Return the base URL (absolute or relative) for served images."""
+    return PUBLIC_IMAGES_BASE  # already normalized above
+
+
+def _to_public_image_url(maybe_path: Optional[str]) -> Optional[str]:
+    """
+    Convert various forms of stored image references into a browser-loadable URL.
+    - If it's already an http(s) URL, return as-is.
+    - If it starts with the mounted route (/images/...), return as-is.
+    - If it's a local filesystem path like data/images/xyz.png, map to /images/xyz.png.
+    - If it's just a filename, map to /images/<filename>.
+    """
+    if not maybe_path:
+        return None
+
+    val = str(maybe_path).strip()
+
+    # Already absolute URL
+    if val.startswith("http://") or val.startswith("https://"):
+        return val
+
+    # Already using the public images route
+    if val.startswith(IMAGES_ROUTE + "/"):
+        # Prepend backend base if configured, else keep relative
+        if BACKEND_BASE_URL:
+            return f"{BACKEND_BASE_URL}{val}"
+        return val
+
+    p = Path(val)
+
+    # If it's a path under IMAGE_DIR (e.g., data/images/file.png), use filename
+    try:
+        # Resolve against current working dir safely
+        if (IMAGE_DIR in val) or (Path(IMAGE_DIR).resolve() in Path(val).resolve().parents):
+            filename = p.name
+            base = _images_base().rstrip("/")
+            return f"{base}/{filename}"
+    except Exception:
+        # If resolve() fails (nonexistent), fall through to filename mapping
+        pass
+
+    # If it's just a filename with an image extension, serve it under images route
+    if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} and p.name == val:
+        base = _images_base().rstrip("/")
+        return f"{base}/{p.name}"
+
+    # Last resort: treat it as a filename
+    base = _images_base().rstrip("/")
+    return f"{base}/{p.name}"
+
+
 def _approved_from_batch(batch) -> List[Dict[str, Any]]:
     """Convert the batch's approved posts to the FE 'approved' shape with images."""
     items: List[Dict[str, Any]] = []
@@ -84,24 +157,27 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
     for post in batch.get_approved_posts():
         content = getattr(post, "content", "") or ""
         hashtags = getattr(post, "hashtags", None) or []
-        
-        # Extract image data (Google Gemini 2.5 Flash Image)
-        image_url = getattr(post, "image_url", None)
+
+        # Extract possible image data from the post
+        raw_image_url = getattr(post, "image_url", None)  # may be a filesystem path or a public URL
         image_description = getattr(post, "image_description", None)
         image_prompt = getattr(post, "image_prompt", None)
         image_revised_prompt = getattr(post, "image_revised_prompt", None)
-        
+
+        # Normalize the image URL so FE can render it (map local paths -> served URLs)
+        public_image_url = _to_public_image_url(raw_image_url)
+
         items.append(
             {
                 "id": uuid.uuid4().hex,
                 "content": content,
                 "hashtags": hashtags,
                 # Image fields (Google Gemini generated)
-                "image_url": image_url,
+                "image_url": public_image_url,
                 "image_description": image_description,
                 "image_prompt": image_prompt,
                 "image_revised_prompt": image_revised_prompt,
-                "has_image": image_url is not None,
+                "has_image": public_image_url is not None,
                 # Status fields
                 "status": "approved",
                 "created_at": datetime.utcnow().isoformat() + "Z",
@@ -121,6 +197,9 @@ def root():
         "ok": True,
         "message": "Content Portal API with Google Gemini Image Generation",
         "portal_base_url": PORTAL_BASE_URL,
+        "backend_base_url": BACKEND_BASE_URL or "(relative)",
+        "images_route": IMAGES_ROUTE,
+        "public_images_base": _images_base(),
         "cors_allow_origins": _cors,
         "project_root": str(PROJECT_ROOT),
         "features": {
@@ -216,17 +295,20 @@ async def create_post(payload: Dict[str, Any]):
         commentary = payload.get("commentary", "")
         hashtags = payload.get("hashtags", [])
         target = payload.get("target", "AUTO")
-        
+
         # Accept optional image data (can be from Gemini or manual upload)
-        image_url = payload.get("image_url")
+        raw_image_url = payload.get("image_url")
         image_description = payload.get("image_description")
-        
+
         if not commentary:
             return JSONResponse(
                 status_code=400,
                 content={"detail": "Commentary is required"}
             )
-        
+
+        # Normalize any provided image URL/path to a public URL
+        public_image_url = _to_public_image_url(raw_image_url) if raw_image_url else None
+
         new_post = {
             "id": uuid.uuid4().hex,
             "target_type": target if target != "AUTO" else "MEMBER",
@@ -234,23 +316,23 @@ async def create_post(payload: Dict[str, Any]):
             "commentary": commentary,
             "hashtags": hashtags,
             # Image fields (supports Gemini or manual uploads)
-            "image_url": image_url,
+            "image_url": public_image_url,
             "image_description": image_description,
-            "has_image": image_url is not None,
+            "has_image": public_image_url is not None,
             # Status fields
             "li_post_id": None,
             "error_message": None,
             "created_at": datetime.utcnow().isoformat() + "Z"
         }
-        
+
         APPROVED_QUEUE.append(new_post)
-        
+
         return {
             "ok": True,
             "post": new_post,
             "lifecycle": "draft"
         }
-        
+
     except Exception as e:
         return JSONResponse(
             status_code=500,
@@ -269,6 +351,10 @@ async def startup_event():
     print("="*60)
     print(f"Project Root: {PROJECT_ROOT}")
     print(f"Portal Base URL: {PORTAL_BASE_URL}")
+    print(f"Backend Base URL: {BACKEND_BASE_URL or '(relative)'}")
+    print(f"Images Dir: {IMAGE_DIR}")
+    print(f"Images Route: {IMAGES_ROUTE}")
+    print(f"Public Images Base: {_images_base()}")
     print(f"CORS Origins: {_cors}")
     print(f"Features:")
     print(f"  - Content Generation (GPT-4o-mini): ✅")
@@ -276,11 +362,11 @@ async def startup_event():
     print(f"  - Prompt Management: ✅")
     print(f"  - Batch Processing: ✅")
     print("="*60)
-    
+
     # Ensure config directory exists at project root
     config_dir = PROJECT_ROOT / "config"
     config_dir.mkdir(exist_ok=True)
-    
+
     # Initialize prompts file if it doesn't exist
     prompts_file = config_dir / "prompts.json"
     if not prompts_file.exists():
@@ -296,7 +382,7 @@ async def startup_event():
 # --------------------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
