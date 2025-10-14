@@ -13,51 +13,73 @@ type PostRow = {
   commentary?: string;
   content?: string;
   hashtags?: string[];
-  
-  // Media type field (NEW)
+
+  // Media type field
   media_type?: "text" | "image" | "video";
-  
+
   // Image fields (backward compatibility)
   image_url?: string;
   image_description?: string;
   image_prompt?: string;
   image_revised_prompt?: string;
   has_image?: boolean;
-  
-  // Video fields (NEW)
+
+  // Video fields
   video_url?: string;
   video_description?: string;
   video_prompt?: string;
   video_generation_time?: number;
   video_size_mb?: number;
   has_video?: boolean;
-  
-  // Media metadata (NEW)
+
+  // Media metadata
   media_provider?: string;
   media_cost?: number;
-  
+
   // Status fields
   li_post_id?: string;
   error_message?: string;
   created_at?: string;
 };
 
+/** Normalize any media URL to the public images route on the API origin.
+ * Accepts:
+ *  - absolute URLs → returned as-is
+ *  - `/images/<file>` → prefixed with API_BASE
+ *  - `data/images/<file>` or any fs-like path → mapped to `${API_BASE}/images/<file>`
+ *  - `<file>` (bare filename) → mapped to `${API_BASE}/images/<file>`
+ */
+function resolveMediaUrl(raw?: string): string | undefined {
+  if (!raw) return undefined;
+
+  // Absolute URL? Use as-is.
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  // Already on the public route
+  if (raw.startsWith("/images/")) return `${API_BASE}${raw}`;
+
+  // Map filesystem-looking paths or bare filenames to /images/<file>
+  const parts = raw.split("/");
+  const filename = parts[parts.length - 1] || raw;
+  return `${API_BASE}/images/${filename}`;
+}
+
+async function fetchJSON(url: string, opts: RequestInit = {}) {
+  const r = await fetch(url, { ...opts });
+  const text = await r.text();
+  if (!r.ok) throw new Error(text || `${r.status} ${r.statusText}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 export default function Dashboard() {
   const [me, setMe] = useState<any>(null);
   const [rows, setRows] = useState<PostRow[]>([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-
-  async function fetchJSON(url: string, opts: any = {}) {
-    const r = await fetch(url, { ...opts });
-    const text = await r.text();
-    if (!r.ok) throw new Error(text || `${r.status} ${r.statusText}`);
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  }
 
   async function loadMe() {
     try {
@@ -77,17 +99,18 @@ export default function Dashboard() {
   }, []);
 
   async function runBatch() {
-    setMsg("Running content generation with FREE Hugging Face videos...");
+    setMsg("Running content generation with image support…");
     setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
-      const videoInfo = data.posts_with_videos > 0 
-        ? ` (${data.posts_with_videos} with videos)` 
-        : data.posts_with_images > 0
-        ? ` (${data.posts_with_images} with images)`
-        : "";
+      const mediaInfo =
+        data.posts_with_videos > 0
+          ? ` (${data.posts_with_videos} with videos)`
+          : data.posts_with_images > 0
+          ? ` (${data.posts_with_images} with images)`
+          : "";
       setMsg(
-        `✅ Generated ${data.approved_count || 0} approved posts${videoInfo}! Total in queue: ${
+        `✅ Generated ${data.approved_count || 0} approved posts${mediaInfo}! Total in queue: ${
           data.total_in_queue || 0
         }`
       );
@@ -115,8 +138,8 @@ export default function Dashboard() {
   }
 
   // Count posts with media
-  const postsWithVideos = rows.filter(r => r.has_video || r.video_url).length;
-  const postsWithImages = rows.filter(r => r.has_image || (r.image_url && !r.video_url)).length;
+  const postsWithVideos = rows.filter((r) => r.has_video || r.video_url).length;
+  const postsWithImages = rows.filter((r) => r.has_image || (r.image_url && !r.video_url)).length;
   const postsWithMedia = postsWithVideos + postsWithImages;
 
   return (
@@ -147,9 +170,9 @@ export default function Dashboard() {
             {loading ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
-              "🎬"
+              "✨"
             )}
-            Generate Posts + Videos
+            Generate Posts + Media
           </button>
           <button
             onClick={clearAll}
@@ -216,27 +239,29 @@ export default function Dashboard() {
         <div className="space-y-4">
           {rows.length === 0 ? (
             <div className="text-center py-12 text-zinc-500 text-sm">
-              No posts yet. Click "Generate Posts + Videos" to create content using your AI agents.
+              No posts yet. Click <span className="font-medium">“Generate Posts + Media”</span> to create content.
             </div>
           ) : (
             rows.map((r) => {
               const displayContent = r.content || r.commentary || "";
               const full =
-                displayContent +
-                (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
-              
-              // Determine media type
-              const hasVideo = r.video_url || r.has_video;
-              const hasImage = r.image_url && !hasVideo;
-              const mediaUrl = r.video_url || r.image_url;
-              
+                displayContent + (r.hashtags?.length ? "\n\n" + r.hashtags.map((h) => `#${h}`).join(" ") : "");
+
+              // Normalize media URLs
+              const hasVideo = !!r.video_url || !!r.has_video;
+              const videoUrl = hasVideo ? resolveMediaUrl(r.video_url) : undefined;
+
+              const rawImageUrl = r.image_url;
+              const imageUrl = !hasVideo ? resolveMediaUrl(rawImageUrl) : undefined;
+              const hasImage = !!imageUrl && !hasVideo;
+
               return (
                 <div
                   key={r.id}
                   className="border border-zinc-200 rounded-lg p-4 bg-zinc-50 hover:shadow-md transition-shadow"
                 >
                   {/* Header with tags */}
-                  <div className="flex gap-2 flex-wrap mb-3 text-xs">
+                  <div className="flex gap-2 flex-wrap mb-3 text-xs items-center">
                     <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
                       {r.target_type}
                     </span>
@@ -244,40 +269,31 @@ export default function Dashboard() {
                       {r.lifecycle}
                     </span>
                     {hasVideo && (
-                      <span className="px-2 py-1 bg-purple-600 text-white rounded-full font-semibold">
-                        🎬 Video
-                      </span>
+                      <span className="px-2 py-1 bg-purple-600 text-white rounded-full font-semibold">🎬 Video</span>
                     )}
                     {hasImage && (
-                      <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">
-                        🖼️ Image
-                      </span>
+                      <span className="px-2 py-1 bg-blue-600 text-white rounded-full font-semibold">🖼️ Image</span>
                     )}
                     {r.media_provider === "huggingface" && (
-                      <span className="px-2 py-1 bg-green-600 text-white rounded-full font-semibold">
-                        FREE
-                      </span>
+                      <span className="px-2 py-1 bg-green-600 text-white rounded-full font-semibold">FREE</span>
                     )}
                     {r.created_at && (
-                      <span className="ml-auto text-zinc-500">
-                        {new Date(r.created_at).toLocaleString()}
-                      </span>
+                      <span className="ml-auto text-zinc-500">{new Date(r.created_at).toLocaleString()}</span>
                     )}
                   </div>
 
-                  {/* Video Display (NEW) */}
-                  {hasVideo && r.video_url && (
+                  {/* Video Display */}
+                  {hasVideo && videoUrl && (
                     <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200 bg-black">
                       <video
                         controls
                         loop
                         muted
-                        autoPlay
                         playsInline
                         className="w-full h-auto"
-                        style={{ maxHeight: '500px' }}
+                        style={{ maxHeight: "520px" }}
                       >
-                        <source src={r.video_url} type="video/mp4" />
+                        <source src={videoUrl} type="video/mp4" />
                         Your browser does not support the video tag.
                       </video>
                       {(r.video_description || r.video_generation_time) && (
@@ -300,15 +316,27 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Image Display (backward compatibility) */}
-                  {hasImage && r.image_url && (
-                    <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200">
-                      <img
-                        src={r.image_url}
-                        alt={r.image_description || "Generated image"}
-                        className="w-full h-auto"
-                        loading="lazy"
-                      />
+                  {/* Image Display */}
+                  {hasImage && imageUrl && (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-zinc-200 bg-white">
+                      <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+                        <img
+                          src={imageUrl}
+                          alt={r.image_description || "Generated image"}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => {
+                            // Fallback: try without API_BASE if cross-origin pathing is odd
+                            const el = e.currentTarget as HTMLImageElement & { dataset: any };
+                            const fname = (rawImageUrl?.split("/").pop() || "") as string;
+                            if (fname && !el.dataset.fallback) {
+                              el.dataset.fallback = "1";
+                              el.src = `/images/${fname}`;
+                            }
+                          }}
+                        />
+                      </div>
                       {r.image_description && (
                         <div className="p-3 bg-zinc-100 text-xs text-zinc-700">
                           <span className="font-semibold">Image: </span>
@@ -319,9 +347,7 @@ export default function Dashboard() {
                   )}
 
                   {/* Content */}
-                  <div className="whitespace-pre-wrap mb-3 leading-relaxed text-sm">
-                    {displayContent}
-                  </div>
+                  <div className="whitespace-pre-wrap mb-3 leading-relaxed text-sm">{displayContent}</div>
 
                   {/* Hashtags */}
                   {r.hashtags?.length ? (
@@ -363,18 +389,18 @@ export default function Dashboard() {
                     >
                       📋 Copy with Tags
                     </button>
-                    
+
                     {/* Video-specific actions */}
-                    {hasVideo && r.video_url && (
+                    {hasVideo && videoUrl && (
                       <>
                         <button
-                          onClick={() => window.open(r.video_url, '_blank')}
+                          onClick={() => window.open(videoUrl, "_blank")}
                           className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
                         >
                           🎬 Open Video
                         </button>
                         <a
-                          href={r.video_url}
+                          href={videoUrl}
                           download={`video-${r.id}.mp4`}
                           className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors inline-flex items-center"
                         >
@@ -383,7 +409,13 @@ export default function Dashboard() {
                         {r.video_prompt && (
                           <button
                             onClick={() => {
-                              const info = `Video Prompt: ${r.video_prompt}\n\nVideo Description: ${r.video_description || 'N/A'}\n\nGeneration Time: ${r.video_generation_time || 'N/A'}s\n\nSize: ${r.video_size_mb || 'N/A'}MB\n\nProvider: ${r.media_provider || 'N/A'}\n\nCost: $${r.media_cost?.toFixed(2) || '0.00'}`;
+                              const info = `Video Prompt: ${r.video_prompt}\n\nVideo Description: ${
+                                r.video_description || "N/A"
+                              }\n\nGeneration Time: ${r.video_generation_time || "N/A"}s\n\nSize: ${
+                                r.video_size_mb || "N/A"
+                              }MB\n\nProvider: ${r.media_provider || "N/A"}\n\nCost: $${
+                                r.media_cost?.toFixed(2) || "0.00"
+                              }`;
                               alert(info);
                             }}
                             className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
@@ -393,12 +425,12 @@ export default function Dashboard() {
                         )}
                       </>
                     )}
-                    
-                    {/* Image-specific actions (backward compatibility) */}
-                    {hasImage && r.image_url && (
+
+                    {/* Image-specific actions */}
+                    {hasImage && imageUrl && (
                       <>
                         <button
-                          onClick={() => window.open(r.image_url, '_blank')}
+                          onClick={() => window.open(imageUrl, "_blank")}
                           className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
                         >
                           🖼️ Open Image
@@ -406,7 +438,9 @@ export default function Dashboard() {
                         {r.image_prompt && (
                           <button
                             onClick={() => {
-                              const info = `Image Prompt: ${r.image_prompt}\n\nImage Description: ${r.image_description || 'N/A'}`;
+                              const info = `Image Prompt: ${r.image_prompt}\n\nImage Description: ${
+                                r.image_description || "N/A"
+                              }`;
                               alert(info);
                             }}
                             className="px-3 py-2 text-xs border border-zinc-300 rounded-lg hover:bg-zinc-100 transition-colors"
