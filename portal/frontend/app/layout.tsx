@@ -46,7 +46,7 @@ export default function RootLayout({
         {/* Footer */}
         <footer className="bg-zinc-100 border-t border-zinc-200 py-4 text-center text-xs text-zinc-600">
           <div className="max-w-7xl mx-auto px-6">
-            Jesse A. Eisenbalm Content Portal • Powered by Claude & OpenAI
+            Jesse A. Eisenbalm Content Portal • Powered by Gemini & OpenAI
           </div>
         </footer>
       </body>
