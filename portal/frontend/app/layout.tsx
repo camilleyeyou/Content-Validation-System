@@ -20,7 +20,7 @@ export default function RootLayout({
         <header className="bg-zinc-900 text-white shadow-lg">
           <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-8">
-              <h1 className="text-xl font-bold">Jesse A. Eisenbalm</h1>
+              <h1 className="text-xl font-bold">Content Manager</h1>
               <div className="flex gap-6">
                 <Link
                   href="/"
