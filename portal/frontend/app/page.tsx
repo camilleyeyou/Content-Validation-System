@@ -77,37 +77,13 @@ export default function Dashboard() {
     loadPosts();
   }, []);
 
-  async function runBatch() {
-    setMsg("🔄 Running AI-powered content generation pipeline...");
-    setLoading(true);
-    try {
-      const data = await fetchJSON(`${API_BASE}/api/run-batch`, { method: "POST" });
-      const mediaInfo =
-        data.posts_with_videos > 0
-          ? ` (${data.posts_with_videos} with AI-generated videos)`
-          : data.posts_with_images > 0
-          ? ` (${data.posts_with_images} with AI-generated images)`
-          : "";
-      setMsg(
-        `✅ Successfully generated ${data.approved_count || 0} approved posts${mediaInfo}! Total in queue: ${
-          data.total_in_queue || 0
-        }`
-      );
-      await loadPosts();
-    } catch (e: any) {
-      setMsg(`❌ Generation Error: ${e?.message || "Unknown error"}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function clearAll() {
-    if (!confirm("⚠️ This will permanently delete all posts from the queue. Continue?")) return;
+    if (!confirm("⚠️ This will permanently delete all saved posts. Continue?")) return;
     setMsg("");
     setLoading(true);
     try {
       const data = await fetchJSON(`${API_BASE}/api/approved/clear`, { method: "POST" });
-      setMsg(`✅ Successfully cleared ${data.deleted} posts from the queue`);
+      setMsg(`✅ Successfully cleared ${data.deleted} posts`);
       await loadPosts();
     } catch (e: any) {
       setMsg(`❌ Clear Error: ${e?.message || "Unknown error"}`);
@@ -133,9 +109,9 @@ export default function Dashboard() {
                   AI
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-zinc-900">AI Content Generation Portal</h1>
+                  <h1 className="text-3xl font-bold text-zinc-900">LinkedIn Content Wizard</h1>
                   <p className="text-sm text-zinc-600 mt-1">
-                    Multi-Agent LinkedIn Content Creation & Management System
+                    AI-Powered Guided Content Creation for Jesse A. Eisenbalm
                   </p>
                 </div>
               </div>
@@ -174,10 +150,10 @@ export default function Dashboard() {
                         1
                       </div>
                       <div>
-                        <h4 className="font-semibold text-zinc-900 mb-1">Multi-Agent Generation</h4>
+                        <h4 className="font-semibold text-zinc-900 mb-1">5-Step Guided Creation</h4>
                         <p className="text-sm text-zinc-600">
-                          Multiple specialized AI agents analyze your requirements and generate targeted LinkedIn
-                          content for different audiences (Members vs Organizations) and lifecycle stages
+                          Follow our intuitive wizard to customize brand voice, select inspiration sources, 
+                          set style preferences, and optionally define your target buyer persona
                         </p>
                       </div>
                     </div>
@@ -189,10 +165,10 @@ export default function Dashboard() {
                         2
                       </div>
                       <div>
-                        <h4 className="font-semibold text-zinc-900 mb-1">AI Media Generation</h4>
+                        <h4 className="font-semibold text-zinc-900 mb-1">AI-Powered Content</h4>
                         <p className="text-sm text-zinc-600">
-                          Each post can include AI-generated images or videos that are contextually relevant to the
-                          content, enhancing engagement and visual appeal
+                          Choose from trending news, memes, philosophical quotes, or poetry to inspire your content. 
+                          Our AI weaves these elements into compelling LinkedIn posts
                         </p>
                       </div>
                     </div>
@@ -204,10 +180,10 @@ export default function Dashboard() {
                         3
                       </div>
                       <div>
-                        <h4 className="font-semibold text-zinc-900 mb-1">Quality Validation</h4>
+                        <h4 className="font-semibold text-zinc-900 mb-1">Professional Images</h4>
                         <p className="text-sm text-zinc-600">
-                          Content passes through validation agents that ensure quality, tone, compliance, and brand
-                          alignment before being approved for the queue
+                          Every post includes a custom AI-generated image with your brand's CTA ("Stop, Breathe, Balm") 
+                          and product information prominently displayed
                         </p>
                       </div>
                     </div>
@@ -221,10 +197,10 @@ export default function Dashboard() {
                         4
                       </div>
                       <div>
-                        <h4 className="font-semibold text-zinc-900 mb-1">Customizable Prompts</h4>
+                        <h4 className="font-semibold text-zinc-900 mb-1">Quality Validation</h4>
                         <p className="text-sm text-zinc-600">
-                          Fine-tune agent behavior and output style by customizing system and user prompts without
-                          changing any code - perfect for testing different strategies
+                          Content passes through three expert validators (Sarah Chen, Marcus Williams, Jordan Park) 
+                          ensuring quality, tone, compliance, and brand alignment
                         </p>
                       </div>
                     </div>
@@ -238,8 +214,8 @@ export default function Dashboard() {
                       <div>
                         <h4 className="font-semibold text-zinc-900 mb-1">Review & Publish</h4>
                         <p className="text-sm text-zinc-600">
-                          Review generated content with full media preview, copy to clipboard, and manage your content
-                          queue before publishing to LinkedIn
+                          Review your generated content with full image preview, copy to clipboard, 
+                          and publish directly to LinkedIn when ready
                         </p>
                       </div>
                     </div>
@@ -251,8 +227,7 @@ export default function Dashboard() {
                       <div>
                         <h4 className="font-semibold text-amber-900 mb-1 text-sm">Pro Tip</h4>
                         <p className="text-xs text-amber-800">
-                          Use the Agent Prompts Manager to test different content strategies and refine your AI's
-                          output quality without touching the codebase
+                          Customize AI behavior in Settings to match your unique voice and style preferences
                         </p>
                       </div>
                     </div>
@@ -263,42 +238,37 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Quick Actions with Enhanced Descriptions */}
+        {/* Quick Actions - Wizard-Only Mode */}
         <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-zinc-900">Content Generation Controls</h2>
-              <p className="text-sm text-zinc-600 mt-1">Trigger AI workflows and manage your content pipeline</p>
+              <h2 className="text-xl font-bold text-zinc-900">Content Creation</h2>
+              <p className="text-sm text-zinc-600 mt-1">Create perfect LinkedIn posts with our guided wizard</p>
             </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3 mb-6">
-            <button
-              onClick={runBatch}
-              disabled={loading}
-              className="group relative overflow-hidden px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+            <Link
+              href="/wizard"
+              className="group px-8 py-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
             >
               <div className="flex items-center justify-center gap-3">
-                {loading ? (
-                  <span className="inline-block w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <span className="text-2xl">✨</span>
-                )}
+                <span className="text-3xl">🎨</span>
                 <div className="text-left">
-                  <div className="font-bold">Generate Content</div>
-                  <div className="text-xs text-blue-100 font-normal">Run AI multi-agent pipeline</div>
+                  <div className="text-lg font-bold">Create New Post</div>
+                  <div className="text-xs text-purple-100 font-normal">5-step guided wizard</div>
                 </div>
               </div>
-            </button>
+            </Link>
 
             <Link
               href="/prompts"
-              className="group px-6 py-4 bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-xl font-semibold hover:from-zinc-800 hover:to-zinc-700 transition-all shadow-lg hover:shadow-xl"
+              className="group px-6 py-6 bg-gradient-to-r from-zinc-900 to-zinc-800 text-white rounded-xl font-semibold hover:from-zinc-800 hover:to-zinc-700 transition-all shadow-lg hover:shadow-xl"
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="text-2xl">🤖</span>
+                <span className="text-3xl">🤖</span>
                 <div className="text-left">
-                  <div className="font-bold">Agent Prompts</div>
+                  <div className="font-bold">AI Settings</div>
                   <div className="text-xs text-zinc-300 font-normal">Customize AI behavior</div>
                 </div>
               </div>
@@ -307,13 +277,13 @@ export default function Dashboard() {
             <button
               onClick={clearAll}
               disabled={loading}
-              className="group px-6 py-4 bg-white border-2 border-zinc-300 text-zinc-900 rounded-xl font-semibold hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="group px-6 py-6 bg-white border-2 border-zinc-300 text-zinc-900 rounded-xl font-semibold hover:bg-zinc-50 hover:border-zinc-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <div className="flex items-center justify-center gap-3">
-                <span className="text-2xl">🗑️</span>
+                <span className="text-3xl">🗑️</span>
                 <div className="text-left">
-                  <div className="font-bold">Clear Queue</div>
-                  <div className="text-xs text-zinc-600 font-normal">Remove all posts</div>
+                  <div className="font-bold">Clear All</div>
+                  <div className="text-xs text-zinc-600 font-normal">Remove saved posts</div>
                 </div>
               </div>
             </button>
@@ -334,7 +304,7 @@ export default function Dashboard() {
 
         {/* Enhanced Statistics with Visual Metrics */}
         <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-zinc-900 mb-5">Queue Analytics</h2>
+          <h2 className="text-xl font-bold text-zinc-900 mb-5">Your Saved Posts</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
               <div className="text-3xl font-bold text-blue-900">{rows.length}</div>
@@ -366,9 +336,9 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-zinc-900">Approved Content Queue</h2>
+              <h2 className="text-xl font-bold text-zinc-900">Your Generated Posts</h2>
               <p className="text-sm text-zinc-600 mt-1">
-                Review and manage AI-generated posts ready for publishing
+                Review and manage your wizard-created content
               </p>
             </div>
             <div className="px-4 py-2 bg-blue-50 text-blue-900 rounded-lg text-sm font-semibold border border-blue-200">
@@ -379,21 +349,19 @@ export default function Dashboard() {
           {rows.length === 0 ? (
             <div className="text-center py-16 px-6">
               <div className="w-24 h-24 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-5xl">📭</span>
+                <span className="text-5xl">🎨</span>
               </div>
-              <h3 className="text-xl font-bold text-zinc-900 mb-2">No Content in Queue</h3>
+              <h3 className="text-xl font-bold text-zinc-900 mb-2">Ready to Create Your First Post?</h3>
               <p className="text-zinc-600 mb-6 max-w-md mx-auto">
-                Click the "Generate Content" button above to run the AI pipeline and create new posts with your
-                configured agent prompts
+                Use our guided 5-step wizard to craft the perfect LinkedIn post with AI-generated images
               </p>
-              <button
-                onClick={runBatch}
-                disabled={loading}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-all inline-flex items-center gap-2"
+              <Link
+                href="/wizard"
+                className="inline-flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl text-lg"
               >
-                <span className="text-xl">✨</span>
-                Generate Your First Batch
-              </button>
+                <span className="text-2xl">✨</span>
+                Start Creating
+              </Link>
             </div>
           ) : (
             <div className="space-y-4">

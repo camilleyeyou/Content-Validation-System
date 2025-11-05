@@ -8,7 +8,13 @@ def configure_logging(level: str = "INFO", log_dir: str = "data/logs") -> None:
     """Configure structured logging for the application"""
     
     # Create log directory
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    log_path = Path(log_dir)
+    if not log_path.is_absolute():
+        # Convert relative path to absolute from project root
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent.parent
+        log_path = project_root / log_dir
+    log_path.mkdir(parents=True, exist_ok=True)
     
     # Configure Python's logging
     logging.basicConfig(

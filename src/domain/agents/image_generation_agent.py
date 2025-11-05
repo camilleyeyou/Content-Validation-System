@@ -50,7 +50,9 @@ class ImageGenerationAgent(BaseAgent):
             self.use_images = True
         
         # Setup output directory for images
-        self.output_dir = Path("data/images")
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent.parent  # Go up 4 levels
+        self.output_dir = project_root / "data" / "images"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.logger.info(

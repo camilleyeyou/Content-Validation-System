@@ -1,7 +1,8 @@
 # portal/backend/app/main.py
 """
-Complete Content Portal API with Prompt Management and Image Support
+Complete Content Portal API with Prompt Management, Image Support, and Wizard
 Fixed for both local development and deployment
+NOW WITH: Guided wizard for single-post creation
 """
 
 import os
@@ -40,8 +41,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# Import the prompts router using relative import
+# Import routers using relative import
 from .prompts_routes import router as prompts_router
+from .wizard_routes import router as wizard_router
 
 # --------------------------------------------------------------------------------------
 # Env / Config
@@ -53,7 +55,14 @@ PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000")
 BACKEND_BASE_URL = (os.getenv("BACKEND_BASE_URL") or "").rstrip("/")
 
 # Where images are stored on disk (where the image agent saves files)
-IMAGE_DIR = os.getenv("IMAGE_DIR", "data/images")
+# Convert to absolute path based on PROJECT_ROOT to avoid working directory issues
+IMAGE_DIR_RAW = os.getenv("IMAGE_DIR", "data/images")
+if Path(IMAGE_DIR_RAW).is_absolute():
+    IMAGE_DIR = IMAGE_DIR_RAW
+else:
+    IMAGE_DIR = str(PROJECT_ROOT / IMAGE_DIR_RAW)
+    
+print(f"🔧 Images directory: {IMAGE_DIR}")
 
 # Public route where images are served (mounted below)
 IMAGES_ROUTE = os.getenv("IMAGES_ROUTE", "/images").rstrip("/") or "/images"
@@ -70,7 +79,7 @@ ALLOW_ALL = _cors == ["*"]
 # --------------------------------------------------------------------------------------
 # App
 # --------------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API", version="1.0.0")
+app = FastAPI(title="Content Portal API with Wizard", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,9 +95,10 @@ Path(IMAGE_DIR).mkdir(parents=True, exist_ok=True)
 app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
 
 # --------------------------------------------------------------------------------------
-# Register the prompts router
+# Register routers
 # --------------------------------------------------------------------------------------
 app.include_router(prompts_router)
+app.include_router(wizard_router)  # NEW: Wizard routes for guided creation
 
 # --------------------------------------------------------------------------------------
 # In-memory global queue
@@ -195,7 +205,7 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
 def root():
     return {
         "ok": True,
-        "message": "Content Portal API with Google Gemini Image Generation",
+        "message": "Content Portal API with Google Gemini Image Generation + Wizard",
         "portal_base_url": PORTAL_BASE_URL,
         "backend_base_url": BACKEND_BASE_URL or "(relative)",
         "images_route": IMAGES_ROUTE,
@@ -207,7 +217,8 @@ def root():
             "image_generation": True,
             "image_provider": "google_gemini_2.5_flash",
             "prompt_management": True,
-            "batch_processing": True
+            "batch_processing": True,
+            "wizard_mode": True  # NEW
         }
     }
 
@@ -215,6 +226,26 @@ def root():
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "time": int(time.time())}
+
+
+@app.get("/api/debug/images")
+def debug_images():
+    """Debug endpoint to check image directory and list files"""
+    import os
+    from pathlib import Path
+    
+    image_path = Path(IMAGE_DIR)
+    
+    return {
+        "image_dir": IMAGE_DIR,
+        "image_dir_exists": image_path.exists(),
+        "image_dir_is_dir": image_path.is_dir(),
+        "images_route": IMAGES_ROUTE,
+        "public_images_base": PUBLIC_IMAGES_BASE,
+        "cwd": os.getcwd(),
+        "files": [f.name for f in image_path.glob("*.png")] if image_path.exists() else [],
+        "file_count": len(list(image_path.glob("*.png"))) if image_path.exists() else 0
+    }
 
 
 @app.get("/api/approved")
@@ -361,6 +392,7 @@ async def startup_event():
     print(f"  - Image Generation (Gemini 2.5 Flash): ✅")
     print(f"  - Prompt Management: ✅")
     print(f"  - Batch Processing: ✅")
+    print(f"  - Wizard Mode (Guided Creation): ✅")
     print("="*60)
 
     # Ensure config directory exists at project root
@@ -384,7 +416,7 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=8001,
         reload=True,

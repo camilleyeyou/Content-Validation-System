@@ -39,7 +39,12 @@ class OpenAIClient:
             self.use_images = False
         
         # Setup image output directory
-        self.image_output_dir = Path("data/images")
+        # Use absolute path to ensure images are saved to the correct location
+        # This file is at: Content-Validation-System/src/infrastructure/ai/openai_client.py
+        # We need: Content-Validation-System/data/images
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent.parent  # Go up 4 levels to project root
+        self.image_output_dir = project_root / "data" / "images"
         self.image_output_dir.mkdir(parents=True, exist_ok=True)
         
         self.logger = logger.bind(component="openai_client")
