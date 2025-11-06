@@ -98,7 +98,7 @@ app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
 # Register routers
 # --------------------------------------------------------------------------------------
 app.include_router(prompts_router)
-app.include_router(wizard_router)  # NEW: Wizard routes for guided creation
+app.include_router(wizard_router, prefix="/api/wizard", tags=["wizard"])  # FIXED: Added prefix!
 
 # --------------------------------------------------------------------------------------
 # In-memory global queue
