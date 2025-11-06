@@ -12,8 +12,7 @@ import structlog
 logger = structlog.get_logger()
 
 # Create router
-router = APIRouter(prefix="/api/wizard", tags=["wizard"])
-
+router = APIRouter(tags=["wizard"])
 # ==================================================================================
 # Pydantic Models for Request/Response
 # ==================================================================================
