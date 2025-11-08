@@ -100,28 +100,32 @@ export default function WizardPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-pink-50">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <main className="min-h-screen bg-black" style={{ background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)' }}>
+      <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-12 md:py-16">
         {/* Header */}
-        <div className="bg-white rounded-2xl border border-purple-200 p-6 shadow-lg mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                ✨
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <div className="w-16 h-16 bg-gradient-to-br from-[#d4af37] via-[#f4e4c1] to-[#d4af37] rounded-sm flex items-center justify-center shadow-lg flex-shrink-0">
+                  <span className="text-black text-3xl font-serif font-bold">✨</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-serif font-light text-white tracking-wide">
+                    Content Creation Wizard
+                  </h1>
+                  <p className="text-sm text-gray-400 mt-1 font-light leading-relaxed">
+                    Guided creation for perfectly tailored LinkedIn posts
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Content Creation Wizard</h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  Guided creation for perfectly tailored LinkedIn posts
-                </p>
-              </div>
+              <Link
+                href="/"
+                className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-sm text-sm font-light uppercase tracking-wider border border-white/10 hover:border-[#d4af37]/30 transition-all duration-300 inline-flex items-center justify-center gap-2"
+              >
+                ← Back to Dashboard
+              </Link>
             </div>
-            <Link
-              href="/"
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-all"
-            >
-              ← Back to Dashboard
-            </Link>
           </div>
         </div>
 
@@ -130,13 +134,21 @@ export default function WizardPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-900 text-sm">
-            <strong>Error:</strong> {error}
+          <div className="bg-red-900/20 backdrop-blur-sm rounded-sm border border-red-500/30 shadow-2xl overflow-hidden mb-8">
+            <div className="p-6 md:p-8">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">❌</span>
+                <div>
+                  <div className="font-serif text-red-300 text-lg mb-1 font-light">Error</div>
+                  <div className="text-sm text-red-400 font-light leading-relaxed">{error}</div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Step Content */}
-        <div className="bg-white rounded-2xl border border-purple-200 shadow-lg overflow-hidden">
+        {/* Step Content - No wrapper card needed as steps have their own backgrounds */}
+        <div>
           {state.currentStep === 1 && (
             <Step1Brand
               state={state}
@@ -187,73 +199,76 @@ export default function WizardPage() {
         </div>
 
         {/* Help Text */}
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>💡 Tip: You can click on any completed step above to go back and make changes</p>
+        <div className="mt-8 text-center text-xs text-gray-600 font-light uppercase tracking-widest">
+          💡 Tip: Click on any completed step above to go back and make changes
         </div>
       </div>
     </main>
   );
 }
 
-// Stepper Component
+// Luxury Stepper Component
 function StepIndicator({ currentStep, onStepClick }: { currentStep: number; onStepClick: (step: number) => void }) {
   const steps = [
-    { num: 1, name: "Brand", icon: "🎨" },
-    { num: 2, name: "Inspiration", icon: "💡" },
-    { num: 3, name: "Style", icon: "✍️" },
-    { num: 4, name: "Persona", icon: "👤" },
-    { num: 5, name: "Generate", icon: "🚀" },
+    { num: 1, name: "Brand", icon: "I" },
+    { num: 2, name: "Inspiration", icon: "II" },
+    { num: 3, name: "Style", icon: "III" },
+    { num: 4, name: "Persona", icon: "IV" },
+    { num: 5, name: "Generate", icon: "V" },
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-purple-200 p-6 shadow-lg mb-6">
-      <div className="flex items-center justify-between">
-        {steps.map((step, idx) => (
-          <div key={step.num} className="flex items-center flex-1">
-            {/* Step Circle */}
-            <button
-              onClick={() => step.num < currentStep ? onStepClick(step.num) : null}
-              disabled={step.num > currentStep}
-              className={`
-                relative w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold transition-all
-                ${step.num === currentStep
-                  ? "bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-lg scale-110"
-                  : step.num < currentStep
-                  ? "bg-green-500 text-white cursor-pointer hover:scale-105"
-                  : "bg-gray-200 text-gray-400"
-                }
-              `}
-            >
-              {step.num < currentStep ? "✓" : step.icon}
-              
-              {/* Step Label */}
-              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-                <span
-                  className={`text-xs font-semibold ${
-                    step.num === currentStep
-                      ? "text-purple-700"
+    <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+      <div className="p-6 md:p-8">
+        <div className="flex items-center justify-between gap-2 md:gap-4">
+          {steps.map((step, idx) => (
+            <div key={step.num} className="flex items-center flex-1">
+              <div className="flex flex-col items-center flex-1">
+                {/* Step Circle */}
+                <button
+                  onClick={() => step.num < currentStep ? onStepClick(step.num) : null}
+                  disabled={step.num > currentStep}
+                  className={`
+                    relative w-10 h-10 md:w-12 md:h-12 rounded-sm border-2 flex items-center justify-center 
+                    font-serif text-sm md:text-base transition-all duration-300
+                    ${step.num === currentStep
+                      ? "bg-[#d4af37] border-[#d4af37] text-black shadow-lg shadow-[#d4af37]/30 scale-110"
                       : step.num < currentStep
-                      ? "text-green-700"
-                      : "text-gray-400"
-                  }`}
+                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer hover:scale-105 hover:bg-emerald-500/30"
+                      : "bg-black/40 border-white/20 text-gray-600 cursor-not-allowed"
+                    }
+                  `}
                 >
-                  {step.name}
-                </span>
+                  {step.num < currentStep ? "✓" : step.icon}
+                </button>
+                
+                {/* Step Label */}
+                <div className="mt-2 text-xs md:text-sm font-light text-center">
+                  <span
+                    className={`transition-colors duration-300 ${
+                      step.num === currentStep
+                        ? "text-[#d4af37]"
+                        : step.num < currentStep
+                        ? "text-emerald-400"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {step.name}
+                  </span>
+                </div>
               </div>
-            </button>
 
-            {/* Connector Line */}
-            {idx < steps.length - 1 && (
-              <div className="flex-1 h-1 mx-2">
-                <div
-                  className={`h-full rounded transition-all ${
-                    step.num < currentStep ? "bg-green-500" : "bg-gray-200"
-                  }`}
-                />
-              </div>
-            )}
-          </div>
-        ))}
+              {/* Connector Line */}
+              {idx < steps.length - 1 && (
+                <div className={`h-0.5 flex-1 mx-2 transition-colors duration-300 ${
+                  step.num < currentStep
+                    ? "bg-emerald-500/50"
+                    : "bg-white/10"
+                }`} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

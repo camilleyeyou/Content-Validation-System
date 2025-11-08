@@ -36,142 +36,157 @@ export default function Step3Style({ state, setState, onNext, onBack }: Props) {
   };
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Content Length & Style</h2>
-        <p className="text-gray-600">
-          Choose your target length and optional style modifiers to shape your post.
-        </p>
-      </div>
-
-      {/* Length Selection */}
-      <div className="mb-10">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Target Length</h3>
-        <div className="grid md:grid-cols-4 gap-4">
-          {lengths.map(length => (
-            <button
-              key={length.value}
-              onClick={() => setState(prev => ({ ...prev, length: length.value }))}
-              className={`relative p-5 rounded-xl border-2 transition-all text-left ${
-                state.length === length.value
-                  ? "border-purple-600 bg-purple-50 shadow-lg scale-105"
-                  : "border-gray-200 bg-white hover:border-purple-300 hover:shadow-md"
-              }`}
-            >
-              {length.recommended && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-gradient-to-r from-yellow-400 to-orange-400 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-                    RECOMMENDED
-                  </span>
-                </div>
-              )}
-
-              <div className="text-3xl mb-3">{length.icon}</div>
-              <div className="font-bold text-gray-900 mb-1">{length.label}</div>
-              <div className="text-sm text-purple-700 font-semibold mb-2">{length.words}</div>
-              <div className="text-xs text-gray-600">{length.description}</div>
-
-              {/* Selection Indicator */}
-              {state.length === length.value && (
-                <div className="absolute top-3 right-3 w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">✓</span>
-                </div>
-              )}
-            </button>
-          ))}
+    <div className="min-h-screen bg-black" style={{ background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)' }}>
+      <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-12 md:py-16">
+        {/* Header Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <h2 className="text-3xl md:text-4xl font-serif font-light text-white mb-3 tracking-wide">
+              Content Length & Style
+            </h2>
+            <p className="text-sm md:text-base text-gray-400 font-light leading-relaxed">
+              Choose your target length and optional style modifiers to shape your post.
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Style Flags */}
-      <div className="mb-8">
-        <h3 className="text-lg font-bold text-gray-900 mb-2">Style Modifiers</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Optional: Select any that apply to add unique flavor to your content
-        </p>
-        <div className="grid md:grid-cols-3 gap-3">
-          {styleOptions.map(option => {
-            const isSelected = state.styleFlags.includes(option.value);
-            return (
-              <button
-                key={option.value}
-                onClick={() => toggleStyleFlag(option.value)}
-                className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 shadow-md"
-                    : "border-gray-200 bg-white hover:border-blue-300"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-2xl">{option.icon}</span>
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300"
-                  }`}>
-                    {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+        {/* Length Selection Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <h3 className="text-2xl font-serif font-light text-white mb-6 tracking-wide">Target Length</h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+              {lengths.map(length => (
+                <button
+                  key={length.value}
+                  onClick={() => setState(prev => ({ ...prev, length: length.value }))}
+                  className={`relative p-6 md:p-7 rounded-sm border transition-all duration-300 text-left ${
+                    state.length === length.value
+                      ? "border-[#d4af37] bg-[#d4af37]/10 shadow-lg shadow-[#d4af37]/20"
+                      : "border-white/10 bg-black/40 hover:border-[#d4af37]/30 hover:bg-black/60"
+                  }`}
+                >
+                  {length.recommended && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-gradient-to-r from-[#d4af37] to-[#b8941f] text-black text-[10px] font-light px-3 py-1 rounded-sm shadow-lg uppercase tracking-widest">
+                        Recommended
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-3xl mb-4">{length.icon}</div>
+                  <div className="font-serif text-white mb-2 text-lg font-light">{length.label}</div>
+                  <div className="text-sm text-[#d4af37] font-light mb-3">{length.words}</div>
+                  <div className="text-xs text-gray-400 font-light leading-relaxed">{length.description}</div>
+
+                  {/* Selection Indicator */}
+                  {state.length === length.value && (
+                    <div className="absolute top-4 right-4 w-6 h-6 bg-[#d4af37] rounded-sm flex items-center justify-center shadow-lg">
+                      <span className="text-black text-sm font-normal">✓</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Style Flags Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <h3 className="text-2xl font-serif font-light text-white mb-3 tracking-wide">Style Modifiers</h3>
+            <p className="text-sm text-gray-400 mb-6 font-light leading-relaxed">
+              Optional: Select any that apply to add unique flavor to your content
+            </p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {styleOptions.map(option => {
+                const isSelected = state.styleFlags.includes(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => toggleStyleFlag(option.value)}
+                    className={`p-5 md:p-6 rounded-sm border transition-all duration-300 text-left ${
+                      isSelected
+                        ? "border-blue-500/50 bg-blue-500/10 shadow-lg shadow-blue-500/20"
+                        : "border-white/10 bg-black/40 hover:border-blue-500/30 hover:bg-black/60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <span className="text-2xl">{option.icon}</span>
+                      <div className={`w-6 h-6 rounded-sm border flex items-center justify-center transition-all duration-300 ${
+                        isSelected ? "bg-blue-500 border-blue-500 shadow-lg shadow-blue-500/30" : "border-white/20 bg-black/40"
+                      }`}>
+                        {isSelected && <span className="text-white text-xs font-normal">✓</span>}
+                      </div>
+                    </div>
+                    <div className="font-serif text-white text-base mb-2 font-light">{option.label}</div>
+                    <div className="text-xs text-gray-400 font-light leading-relaxed">{option.description}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Preview Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <h4 className="font-serif text-white mb-5 flex items-center gap-3 text-xl font-light tracking-wide">
+              <span className="text-2xl">✦</span>
+              Your Content Profile
+            </h4>
+            <div className="space-y-4 text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <span className="font-light text-gray-400 uppercase tracking-wider text-xs">Length:</span>
+                <span className="text-[#d4af37] font-light text-base">
+                  {lengths.find(l => l.value === state.length)?.label} 
+                  <span className="text-gray-500 font-light ml-2">
+                    ({lengths.find(l => l.value === state.length)?.words})
+                  </span>
+                </span>
+              </div>
+              {state.styleFlags.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
+                  <span className="font-light text-gray-400 uppercase tracking-wider text-xs">Styles:</span>
+                  <div className="flex flex-wrap gap-2">
+                    {state.styleFlags.map(flag => {
+                      const option = styleOptions.find(o => o.value === flag);
+                      return (
+                        <span 
+                          key={flag} 
+                          className="text-blue-300 bg-blue-500/10 px-3 py-1.5 rounded-sm text-xs font-light uppercase tracking-wider border border-blue-500/30"
+                        >
+                          {option?.icon} {option?.label}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="font-bold text-gray-900 text-sm mb-1">{option.label}</div>
-                <div className="text-xs text-gray-600">{option.description}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Preview */}
-      <div className="mb-8 p-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border-2 border-purple-200">
-        <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-          <span className="text-xl">👀</span>
-          Your Content Profile
-        </h4>
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-700">Length:</span>
-            <span className="text-purple-700 font-bold">
-              {lengths.find(l => l.value === state.length)?.label} 
-              <span className="text-gray-600 font-normal ml-1">
-                ({lengths.find(l => l.value === state.length)?.words})
-              </span>
-            </span>
+              )}
+              {state.styleFlags.length === 0 && (
+                <div className="text-gray-500 italic text-xs font-light pt-2 border-t border-white/10">
+                  No style modifiers selected — post will use natural flow
+                </div>
+              )}
+            </div>
           </div>
-          {state.styleFlags.length > 0 && (
-            <div className="flex items-start gap-2">
-              <span className="font-semibold text-gray-700">Styles:</span>
-              <div className="flex flex-wrap gap-2">
-                {state.styleFlags.map(flag => {
-                  const option = styleOptions.find(o => o.value === flag);
-                  return (
-                    <span key={flag} className="text-blue-700 bg-blue-100 px-2 py-1 rounded text-xs font-medium">
-                      {option?.icon} {option?.label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {state.styleFlags.length === 0 && (
-            <div className="text-gray-500 italic text-xs">
-              No style modifiers selected - post will use natural flow
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <button
-          onClick={onBack}
-          className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all"
-        >
-          ← Back
-        </button>
-        <button
-          onClick={onNext}
-          className="px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold hover:from-purple-700 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-        >
-          Continue to Persona
-          <span className="text-xl">→</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          <button
+            onClick={onBack}
+            className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-sm font-light tracking-wider uppercase text-sm border border-white/10 hover:border-white/20 transition-all duration-300"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={onNext}
+            className="px-12 py-4 bg-gradient-to-br from-[#d4af37] to-[#b8941f] text-black rounded-sm font-light tracking-wider uppercase text-sm hover:shadow-2xl hover:shadow-[#d4af37]/20 transition-all duration-500 flex items-center justify-center gap-3"
+          >
+            Continue to Persona
+            <span className="text-lg">→</span>
+          </button>
+        </div>
       </div>
     </div>
   );

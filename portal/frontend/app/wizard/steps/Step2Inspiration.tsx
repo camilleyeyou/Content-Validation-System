@@ -77,211 +77,243 @@ export default function Step2Inspiration({ state, setState, onNext, onBack, load
 
   if (loading && !sources) {
     return (
-      <div className="p-8">
-        <div className="text-center py-16">
-          <div className="inline-block w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4" />
-          <p className="text-gray-600">Loading inspiration sources...</p>
+      <div className="min-h-screen bg-black" style={{ background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)' }}>
+        <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-12 md:py-16">
+          <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden">
+            <div className="p-16 text-center">
+              <div className="inline-block w-16 h-16 border-4 border-[#d4af37]/20 border-t-[#d4af37] rounded-full animate-spin mb-6" />
+              <p className="text-gray-400 font-light tracking-wide">Loading inspiration sources...</p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Inspiration</h2>
-        <p className="text-gray-600">
-          Select 1-3 sources that will fuel your content. Mix and match for unique angles!
-        </p>
-      </div>
-
-      {/* Selection Counter */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-700">Selected:</span>
-          <span className={`text-lg font-bold ${
-            state.inspirationSelections.length === 0 ? "text-gray-400" :
-            state.inspirationSelections.length < 3 ? "text-blue-600" : "text-green-600"
-          }`}>
-            {state.inspirationSelections.length}/3
-          </span>
-        </div>
-        {state.inspirationSelections.length > 0 && (
-          <button
-            onClick={() => setState(prev => ({ ...prev, inspirationSelections: [] }))}
-            className="text-sm text-red-600 hover:text-red-700 font-medium"
-          >
-            Clear All
-          </button>
-        )}
-      </div>
-
-      {/* Selected Pills */}
-      {state.inspirationSelections.length > 0 && (
-        <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
-          <div className="flex flex-wrap gap-2">
-            {state.inspirationSelections.map((sel, idx) => (
-              <div key={idx} className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border-2 border-green-400 shadow-sm">
-                <span className="text-lg">
-                  {sel.type === "news" && "📰"}
-                  {sel.type === "memes" && "😄"}
-                  {sel.type === "philosopher" && "🧠"}
-                  {sel.type === "poet" && "✍️"}
-                </span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {sel.preview?.title || sel.preview?.name || sel.selected_id}
-                </span>
-                <button
-                  onClick={() => toggleSelection(sel.type, sel.selected_id, sel.preview)}
-                  className="ml-2 text-red-600 hover:text-red-700 font-bold"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+    <div className="min-h-screen bg-black" style={{ background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)' }}>
+      <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-12 md:py-16">
+        {/* Header Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-8 md:p-10">
+            <h2 className="text-3xl md:text-4xl font-serif font-light text-white mb-3 tracking-wide">
+              Choose Your Inspiration
+            </h2>
+            <p className="text-sm md:text-base text-gray-400 font-light leading-relaxed">
+              Select 1-3 sources that will fuel your content. Mix and match for unique angles.
+            </p>
           </div>
         </div>
-      )}
 
-      {/* Tabs */}
-      <div className="mb-6 flex gap-2 border-b border-gray-200">
-        {[
-          { key: "news", label: "📰 News", count: sources?.news?.length || 0 },
-          { key: "memes", label: "😄 Memes", count: sources?.memes?.length || 0 },
-          { key: "philosophers", label: "🧠 Philosophy", count: sources?.philosophers?.length || 0 },
-          { key: "poets", label: "✍️ Poetry", count: sources?.poets?.length || 0 },
-        ].map(tab => (
+        {/* Selection Counter & Clear Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-light text-gray-400 uppercase tracking-wider">Selected:</span>
+              <span className={`text-2xl font-serif font-light ${
+                state.inspirationSelections.length === 0 ? "text-gray-600" :
+                state.inspirationSelections.length < 3 ? "text-[#d4af37]" : "text-emerald-400"
+              }`}>
+                {state.inspirationSelections.length}/3
+              </span>
+            </div>
+            {state.inspirationSelections.length > 0 && (
+              <button
+                onClick={() => setState(prev => ({ ...prev, inspirationSelections: [] }))}
+                className="text-sm text-red-400 hover:text-red-300 font-light uppercase tracking-wider transition-colors duration-300"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Selected Pills Card */}
+        {state.inspirationSelections.length > 0 && (
+          <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-emerald-500/30 shadow-2xl overflow-hidden mb-8">
+            <div className="p-6 md:p-8">
+              <h3 className="font-serif text-white text-lg font-light tracking-wide mb-4 flex items-center gap-2">
+                <span className="text-xl">✦</span>
+                Your Selections
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {state.inspirationSelections.map((sel, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex items-center gap-3 bg-emerald-500/10 px-5 py-2.5 rounded-sm border border-emerald-500/30 hover:border-emerald-500/50 transition-all duration-300"
+                  >
+                    <span className="text-lg">
+                      {sel.type === "news" && "📰"}
+                      {sel.type === "memes" && "😄"}
+                      {sel.type === "philosopher" && "🧠"}
+                      {sel.type === "poet" && "✍️"}
+                    </span>
+                    <span className="text-sm font-light text-white">
+                      {sel.preview?.title || sel.preview?.name || sel.selected_id}
+                    </span>
+                    <button
+                      onClick={() => toggleSelection(sel.type, sel.selected_id, sel.preview)}
+                      className="ml-2 text-red-400 hover:text-red-300 font-light text-lg transition-colors duration-300"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs Card */}
+        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+          <div className="p-6 md:p-8 border-b border-white/10">
+            <div className="flex flex-wrap gap-3">
+              {[
+                { key: "news", label: "News", icon: "📰", count: sources?.news?.length || 0 },
+                { key: "memes", label: "Memes", icon: "😄", count: sources?.memes?.length || 0 },
+                { key: "philosophers", label: "Philosophy", icon: "🧠", count: sources?.philosophers?.length || 0 },
+                { key: "poets", label: "Poetry", icon: "✍️", count: sources?.poets?.length || 0 },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as any)}
+                  className={`px-6 py-3 font-light tracking-wider uppercase text-xs rounded-sm transition-all duration-300 ${
+                    activeTab === tab.key
+                      ? "bg-[#d4af37] text-black"
+                      : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-300 border border-white/10"
+                  }`}
+                >
+                  <span className="mr-2">{tab.icon}</span>
+                  {tab.label} ({tab.count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="p-6 md:p-8 max-h-[600px] overflow-y-auto">
+            {activeTab === "news" && (
+              <div className="space-y-4">
+                {sources?.news?.map((item: any) => (
+                  <InspirationCard
+                    key={item.id}
+                    type="news"
+                    item={item}
+                    isSelected={isSelected("news", item.id)}
+                    onToggle={() => toggleSelection("news", item.id, item)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {activeTab === "memes" && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {sources?.memes?.map((item: any) => (
+                  <InspirationCard
+                    key={item.id}
+                    type="memes"
+                    item={item}
+                    isSelected={isSelected("memes", item.id)}
+                    onToggle={() => toggleSelection("memes", item.id, item)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {activeTab === "philosophers" && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {sources?.philosophers?.map((item: any) => (
+                  <InspirationCard
+                    key={item.id}
+                    type="philosopher"
+                    item={item}
+                    isSelected={isSelected("philosopher", item.id)}
+                    onToggle={() => toggleSelection("philosopher", item.id, item)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {activeTab === "poets" && (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {sources?.poets?.map((item: any) => (
+                  <InspirationCard
+                    key={item.id}
+                    type="poet"
+                    item={item}
+                    isSelected={isSelected("poet", item.id)}
+                    onToggle={() => toggleSelection("poet", item.id, item)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
-            className={`px-6 py-3 font-semibold transition-all ${
-              activeTab === tab.key
-                ? "border-b-4 border-purple-600 text-purple-700"
-                : "text-gray-500 hover:text-gray-700"
+            onClick={onBack}
+            className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-sm font-light tracking-wider uppercase text-sm border border-white/10 hover:border-white/20 transition-all duration-300"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={onNext}
+            disabled={!canContinue}
+            className={`px-12 py-4 rounded-sm font-light tracking-wider uppercase text-sm transition-all duration-500 flex items-center justify-center gap-3 ${
+              canContinue
+                ? "bg-gradient-to-br from-[#d4af37] to-[#b8941f] text-black hover:shadow-2xl hover:shadow-[#d4af37]/20"
+                : "bg-white/5 text-gray-600 cursor-not-allowed border border-white/10"
             }`}
           >
-            {tab.label} ({tab.count})
+            Continue to Style
+            <span className="text-lg">→</span>
           </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="mb-8 max-h-[500px] overflow-y-auto pr-2">
-        {activeTab === "news" && (
-          <div className="space-y-3">
-            {sources?.news?.map((item: any) => (
-              <InspirationCard
-                key={item.id}
-                type="news"
-                item={item}
-                isSelected={isSelected("news", item.id)}
-                onToggle={() => toggleSelection("news", item.id, item)}
-              />
-            ))}
-          </div>
-        )}
-
-        {activeTab === "memes" && (
-          <div className="grid md:grid-cols-2 gap-4">
-            {sources?.memes?.map((item: any) => (
-              <InspirationCard
-                key={item.id}
-                type="memes"
-                item={item}
-                isSelected={isSelected("memes", item.id)}
-                onToggle={() => toggleSelection("memes", item.id, item)}
-              />
-            ))}
-          </div>
-        )}
-
-        {activeTab === "philosophers" && (
-          <div className="grid md:grid-cols-2 gap-4">
-            {sources?.philosophers?.map((item: any) => (
-              <InspirationCard
-                key={item.id}
-                type="philosopher"
-                item={item}
-                isSelected={isSelected("philosopher", item.id)}
-                onToggle={() => toggleSelection("philosopher", item.id, item)}
-              />
-            ))}
-          </div>
-        )}
-
-        {activeTab === "poets" && (
-          <div className="grid md:grid-cols-2 gap-4">
-            {sources?.poets?.map((item: any) => (
-              <InspirationCard
-                key={item.id}
-                type="poet"
-                item={item}
-                isSelected={isSelected("poet", item.id)}
-                onToggle={() => toggleSelection("poet", item.id, item)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-        <button
-          onClick={onBack}
-          className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all"
-        >
-          ← Back
-        </button>
-        <button
-          onClick={onNext}
-          disabled={!canContinue}
-          className={`px-8 py-3 rounded-xl font-bold transition-all flex items-center gap-2 ${
-            canContinue
-              ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed"
-          }`}
-        >
-          Continue to Style
-          <span className="text-xl">→</span>
-        </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// Inspiration Card Component
+// Luxury Inspiration Card Component
 function InspirationCard({ type, item, isSelected, onToggle }: any) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
     <button
       onClick={onToggle}
-      className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+      className={`w-full text-left p-5 md:p-6 rounded-sm border transition-all duration-300 ${
         isSelected
-          ? "border-green-500 bg-green-50 shadow-lg"
-          : "border-gray-200 bg-white hover:border-purple-300 hover:shadow-md"
+          ? "border-emerald-500/50 bg-emerald-500/10 shadow-lg shadow-emerald-500/20"
+          : "border-white/10 bg-black/40 hover:border-[#d4af37]/30 hover:bg-black/60"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           {type === "news" && (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-light text-blue-300 bg-blue-500/10 px-3 py-1 rounded-sm uppercase tracking-wider border border-blue-500/30">
                   {item.source}
                 </span>
               </div>
-              <h4 className="font-bold text-gray-900 mb-1 line-clamp-2">{item.title}</h4>
-              <p className="text-sm text-gray-600 line-clamp-2">{item.description}</p>
+              <h4 className="font-serif text-white mb-2 line-clamp-2 text-lg font-light leading-relaxed">
+                {item.title}
+              </h4>
+              <p className="text-sm text-gray-400 line-clamp-2 font-light leading-relaxed">
+                {item.description}
+              </p>
             </>
           )}
 
           {type === "memes" && (
             <>
-              <h4 className="font-bold text-gray-900 mb-2">{item.name}</h4>
-              <p className="text-sm text-gray-600 mb-2">{item.context}</p>
-              <p className="text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded inline-block">
+              <h4 className="font-serif text-white mb-3 text-lg font-light">
+                {item.name}
+              </h4>
+              <p className="text-sm text-gray-400 mb-3 font-light leading-relaxed">
+                {item.context}
+              </p>
+              <p className="text-xs text-purple-300 bg-purple-500/10 px-3 py-1.5 rounded-sm inline-block uppercase tracking-wider border border-purple-500/30 font-light">
                 {item.usage}
               </p>
             </>
@@ -289,12 +321,14 @@ function InspirationCard({ type, item, isSelected, onToggle }: any) {
 
           {type === "philosopher" && (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <h4 className="font-bold text-gray-900">{item.name}</h4>
-                <span className="text-xs text-gray-500">({item.era})</span>
+              <div className="flex items-center gap-3 mb-3">
+                <h4 className="font-serif text-white text-lg font-light">{item.name}</h4>
+                <span className="text-xs text-gray-500 font-light">({item.era})</span>
               </div>
-              <p className="text-sm text-gray-600 mb-2">{item.bio}</p>
-              <div className="text-xs text-blue-600">
+              <p className="text-sm text-gray-400 mb-3 font-light leading-relaxed">
+                {item.bio}
+              </p>
+              <div className="text-xs text-[#d4af37] font-light">
                 {item.quote_count} workplace-relevant {item.quote_count === 1 ? "quote" : "quotes"}
               </div>
             </>
@@ -302,22 +336,24 @@ function InspirationCard({ type, item, isSelected, onToggle }: any) {
 
           {type === "poet" && (
             <>
-              <div className="flex items-center gap-2 mb-2">
-                <h4 className="font-bold text-gray-900">{item.name}</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="font-serif text-white text-lg font-light">{item.name}</h4>
               </div>
-              <p className="text-sm text-gray-600 mb-2">{item.bio}</p>
-              <p className="text-xs text-purple-600">{item.style}</p>
+              <p className="text-sm text-gray-400 mb-3 font-light leading-relaxed">
+                {item.bio}
+              </p>
+              <p className="text-xs text-purple-300 font-light italic">{item.style}</p>
             </>
           )}
         </div>
 
-        {/* Selection Checkbox */}
-        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+        {/* Luxury Selection Indicator */}
+        <div className={`w-7 h-7 rounded-sm border flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
           isSelected
-            ? "bg-green-500 border-green-500"
-            : "border-gray-300"
+            ? "bg-emerald-500 border-emerald-500 shadow-lg shadow-emerald-500/30"
+            : "border-white/20 bg-black/40"
         }`}>
-          {isSelected && <span className="text-white text-sm font-bold">✓</span>}
+          {isSelected && <span className="text-black text-sm font-normal">✓</span>}
         </div>
       </div>
     </button>
