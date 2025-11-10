@@ -100,28 +100,36 @@ export default function WizardPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black" style={{ background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)' }}>
-      <div className="max-w-[1400px] mx-auto px-6 md:px-8 py-12 md:py-16">
+    <main 
+      className="min-h-screen"
+      style={{ background: 'linear-gradient(180deg, #f6f9fc 0%, #ffffff 100%)' }}
+    >
+      <div className="max-w-6xl mx-auto px-6 md:px-8 py-12 md:py-16">
         {/* Header */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden mb-8">
           <div className="p-8 md:p-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-5">
-                <div className="w-16 h-16 bg-gradient-to-br from-[#d4af37] via-[#f4e4c1] to-[#d4af37] rounded-sm flex items-center justify-center shadow-lg flex-shrink-0">
-                  <span className="text-black text-3xl font-serif font-bold">✨</span>
+                <div 
+                  className="w-14 h-14 rounded-lg flex items-center justify-center shadow-lg flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  }}
+                >
+                  <span className="text-white text-2xl">✨</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-serif font-light text-white tracking-wide">
+                  <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">
                     Content Creation Wizard
                   </h1>
-                  <p className="text-sm text-gray-400 mt-1 font-light leading-relaxed">
+                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">
                     Guided creation for perfectly tailored LinkedIn posts
                   </p>
                 </div>
               </div>
               <Link
                 href="/"
-                className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-sm text-sm font-light uppercase tracking-wider border border-white/10 hover:border-[#d4af37]/30 transition-all duration-300 inline-flex items-center justify-center gap-2"
+                className="px-6 py-3 bg-gray-50 hover:bg-gray-100 text-gray-900 rounded-lg text-sm font-medium border border-gray-200 hover:border-gray-300 transition-all duration-200 inline-flex items-center justify-center gap-2"
               >
                 ← Back to Dashboard
               </Link>
@@ -134,13 +142,15 @@ export default function WizardPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-900/20 backdrop-blur-sm rounded-sm border border-red-500/30 shadow-2xl overflow-hidden mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden mb-8">
             <div className="p-6 md:p-8">
               <div className="flex items-start gap-3">
-                <span className="text-2xl">❌</span>
-                <div>
-                  <div className="font-serif text-red-300 text-lg mb-1 font-light">Error</div>
-                  <div className="text-sm text-red-400 font-light leading-relaxed">{error}</div>
+                <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl">❌</span>
+                </div>
+                <div className="flex-1">
+                  <div className="font-semibold text-red-900 text-lg mb-1">Error</div>
+                  <div className="text-sm text-red-700 leading-relaxed">{error}</div>
                 </div>
               </div>
             </div>
@@ -199,7 +209,7 @@ export default function WizardPage() {
         </div>
 
         {/* Help Text */}
-        <div className="mt-8 text-center text-xs text-gray-600 font-light uppercase tracking-widest">
+        <div className="mt-8 text-center text-xs text-gray-500 font-medium">
           💡 Tip: Click on any completed step above to go back and make changes
         </div>
       </div>
@@ -207,18 +217,18 @@ export default function WizardPage() {
   );
 }
 
-// Luxury Stepper Component
+// Stripe-style Stepper Component
 function StepIndicator({ currentStep, onStepClick }: { currentStep: number; onStepClick: (step: number) => void }) {
   const steps = [
-    { num: 1, name: "Brand", icon: "I" },
-    { num: 2, name: "Inspiration", icon: "II" },
-    { num: 3, name: "Style", icon: "III" },
-    { num: 4, name: "Persona", icon: "IV" },
-    { num: 5, name: "Generate", icon: "V" },
+    { num: 1, name: "Brand", icon: "1" },
+    { num: 2, name: "Inspiration", icon: "2" },
+    { num: 3, name: "Style", icon: "3" },
+    { num: 4, name: "Persona", icon: "4" },
+    { num: 5, name: "Generate", icon: "5" },
   ];
 
   return (
-    <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden mb-8">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden mb-8">
       <div className="p-6 md:p-8">
         <div className="flex items-center justify-between gap-2 md:gap-4">
           {steps.map((step, idx) => (
@@ -229,28 +239,31 @@ function StepIndicator({ currentStep, onStepClick }: { currentStep: number; onSt
                   onClick={() => step.num < currentStep ? onStepClick(step.num) : null}
                   disabled={step.num > currentStep}
                   className={`
-                    relative w-10 h-10 md:w-12 md:h-12 rounded-sm border-2 flex items-center justify-center 
-                    font-serif text-sm md:text-base transition-all duration-300
+                    relative w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center 
+                    text-sm md:text-base font-semibold transition-all duration-300
                     ${step.num === currentStep
-                      ? "bg-[#d4af37] border-[#d4af37] text-black shadow-lg shadow-[#d4af37]/30 scale-110"
+                      ? "border-purple-600 text-white shadow-lg scale-110"
                       : step.num < currentStep
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 cursor-pointer hover:scale-105 hover:bg-emerald-500/30"
-                      : "bg-black/40 border-white/20 text-gray-600 cursor-not-allowed"
+                      ? "bg-green-100 border-green-500 text-green-700 cursor-pointer hover:scale-105 hover:bg-green-200"
+                      : "bg-gray-50 border-gray-300 text-gray-400 cursor-not-allowed"
                     }
                   `}
+                  style={step.num === currentStep ? {
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  } : {}}
                 >
                   {step.num < currentStep ? "✓" : step.icon}
                 </button>
                 
                 {/* Step Label */}
-                <div className="mt-2 text-xs md:text-sm font-light text-center">
+                <div className="mt-3 text-xs md:text-sm font-medium text-center">
                   <span
                     className={`transition-colors duration-300 ${
                       step.num === currentStep
-                        ? "text-[#d4af37]"
+                        ? "text-purple-600"
                         : step.num < currentStep
-                        ? "text-emerald-400"
-                        : "text-gray-600"
+                        ? "text-green-600"
+                        : "text-gray-400"
                     }`}
                   >
                     {step.name}
@@ -260,10 +273,10 @@ function StepIndicator({ currentStep, onStepClick }: { currentStep: number; onSt
 
               {/* Connector Line */}
               {idx < steps.length - 1 && (
-                <div className={`h-0.5 flex-1 mx-2 transition-colors duration-300 ${
+                <div className={`h-0.5 flex-1 mx-2 transition-colors duration-300 rounded-full ${
                   step.num < currentStep
-                    ? "bg-emerald-500/50"
-                    : "bg-white/10"
+                    ? "bg-green-500"
+                    : "bg-gray-200"
                 }`} />
               )}
             </div>

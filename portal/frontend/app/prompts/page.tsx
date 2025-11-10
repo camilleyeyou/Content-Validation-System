@@ -126,19 +126,24 @@ export default function PromptsManager() {
     (systemPrompt !== prompts.system_prompt || userPrompt !== prompts.user_prompt_template);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-purple-50/20 to-zinc-50">
+    <main style={{ background: 'linear-gradient(180deg, #f6f9fc 0%, #ffffff 100%)' }} className="min-h-screen">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         {/* Enhanced Header */}
-        <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
           <div className="flex items-start justify-between gap-6 mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                <div 
+                  className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-2xl font-bold shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  }}
+                >
                   🤖
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-zinc-900">AI Agent Prompts Manager</h1>
-                  <p className="text-sm text-zinc-600 mt-1">
+                  <h1 className="text-3xl font-bold text-gray-900">AI Agent Prompts Manager</h1>
+                  <p className="text-sm text-gray-600 mt-1">
                     Fine-tune agent behavior and customize content generation strategies
                   </p>
                 </div>
@@ -148,14 +153,17 @@ export default function PromptsManager() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowGuide(!showGuide)}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-all flex items-center gap-2"
+                className="px-4 py-2 text-white rounded-lg text-sm font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                style={{
+                  background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                }}
               >
                 <span className="text-lg">📖</span>
                 {showGuide ? "Hide" : "Show"} Guide
               </button>
               <Link
                 href="/"
-                className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800 transition-all flex items-center gap-2"
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-all flex items-center gap-2"
               >
                 <span className="text-lg">←</span>
                 Dashboard
@@ -166,18 +174,18 @@ export default function PromptsManager() {
           {/* Prompt Engineering Guide */}
           {showGuide && (
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200 mt-4">
-              <h3 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="text-2xl">💡</span>
                 Understanding AI Agent Prompts
               </h3>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <div className="bg-white rounded-lg p-4 border border-zinc-200">
-                    <h4 className="font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
                       <span className="text-lg">🎯</span>
                       System Prompt
                     </h4>
-                    <p className="text-sm text-zinc-700 mb-3">
+                    <p className="text-sm text-gray-700 mb-3">
                       Defines the agent's core identity, expertise, role, and behavioral guidelines. This is like
                       giving the AI its "personality" and "job description."
                     </p>
@@ -192,12 +200,12 @@ export default function PromptsManager() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg p-4 border border-zinc-200">
-                    <h4 className="font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
                       <span className="text-lg">📝</span>
                       User Prompt Template
                     </h4>
-                    <p className="text-sm text-zinc-700 mb-3">
+                    <p className="text-sm text-gray-700 mb-3">
                       The structured template used for each specific task. Contains placeholders for dynamic content
                       that gets filled in during generation.
                     </p>
@@ -220,14 +228,19 @@ export default function PromptsManager() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-white rounded-lg p-4 border border-zinc-200">
-                    <h4 className="font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
                       <span className="text-lg">🔄</span>
                       How It Works
                     </h4>
-                    <div className="space-y-3 text-sm text-zinc-700">
+                    <div className="space-y-3 text-sm text-gray-700">
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        <div 
+                          className="w-6 h-6 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
+                          style={{
+                            background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                          }}
+                        >
                           1
                         </div>
                         <p>
@@ -236,7 +249,12 @@ export default function PromptsManager() {
                         </p>
                       </div>
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        <div 
+                          className="w-6 h-6 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
+                          style={{
+                            background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                          }}
+                        >
                           2
                         </div>
                         <p>
@@ -245,7 +263,12 @@ export default function PromptsManager() {
                         </p>
                       </div>
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        <div 
+                          className="w-6 h-6 text-white rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
+                          style={{
+                            background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                          }}
+                        >
                           3
                         </div>
                         <p>
@@ -287,10 +310,10 @@ export default function PromptsManager() {
         </div>
 
         {/* Agent Selector with Enhanced UI */}
-        <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="mb-5">
-            <h2 className="text-xl font-bold text-zinc-900 mb-1">Select Agent to Configure</h2>
-            <p className="text-sm text-zinc-600">
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Select Agent to Configure</h2>
+            <p className="text-sm text-gray-600">
               Choose an agent to view and customize its prompts
             </p>
           </div>
@@ -302,20 +325,20 @@ export default function PromptsManager() {
                 className={`relative px-5 py-4 rounded-xl border-2 transition-all text-left ${
                   selectedAgent === agent.name
                     ? "border-purple-600 bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg"
-                    : "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-md"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-md"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-base text-zinc-900">{agent.name}</span>
+                      <span className="font-bold text-base text-gray-900">{agent.name}</span>
                       {agent.has_custom_prompts && (
                         <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold">
                           CUSTOM
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-600 leading-relaxed">{agent.description}</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">{agent.description}</p>
                   </div>
                   {selectedAgent === agent.name && (
                     <div className="w-5 h-5 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
@@ -329,24 +352,27 @@ export default function PromptsManager() {
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-2xl border border-zinc-200 p-16 text-center shadow-sm">
-            <div className="inline-block w-12 h-12 border-4 border-zinc-200 border-t-purple-600 rounded-full animate-spin" />
-            <p className="mt-6 text-lg font-semibold text-zinc-900">Loading agent prompts...</p>
-            <p className="mt-2 text-sm text-zinc-600">Please wait while we fetch the configuration</p>
+          <div className="bg-white rounded-xl border border-gray-200 p-16 text-center shadow-sm">
+            <div className="inline-block w-12 h-12 border-4 border-gray-200 border-t-purple-600 rounded-full animate-spin" />
+            <p className="mt-6 text-lg font-semibold text-gray-900">Loading agent prompts...</p>
+            <p className="mt-2 text-sm text-gray-600">Please wait while we fetch the configuration</p>
           </div>
         ) : prompts ? (
           <>
             {/* Control Panel */}
-            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex gap-3 items-center flex-wrap mb-5">
                 <button
                   onClick={savePrompts}
                   disabled={!hasChanges || saving}
-                  className={`px-8 py-3 rounded-xl font-bold transition-all shadow-lg ${
+                  className={`px-8 py-3 rounded-lg font-bold transition-all shadow-lg ${
                     hasChanges
-                      ? "bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 shadow-purple-500/30"
-                      : "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+                      ? "text-white hover:shadow-xl"
+                      : "bg-gray-200 text-gray-500 cursor-not-allowed shadow-none"
                   }`}
+                  style={hasChanges ? {
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  } : {}}
                 >
                   {saving ? (
                     <span className="flex items-center gap-2">
@@ -361,34 +387,34 @@ export default function PromptsManager() {
                 <button
                   onClick={resetToDefaults}
                   disabled={!prompts.has_custom}
-                  className={`px-8 py-3 border-2 rounded-xl font-bold transition-all ${
+                  className={`px-8 py-3 border-2 rounded-lg font-bold transition-all ${
                     prompts.has_custom
-                      ? "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50 hover:border-zinc-400"
-                      : "border-zinc-200 text-zinc-400 cursor-not-allowed bg-zinc-50"
+                      ? "border-gray-300 bg-white text-gray-900 hover:bg-gray-50 hover:border-gray-400"
+                      : "border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50"
                   }`}
                 >
                   🔄 Reset to Defaults
                 </button>
 
-                <label className="flex items-center gap-2 ml-auto cursor-pointer px-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 hover:bg-zinc-100 transition-all">
+                <label className="flex items-center gap-2 ml-auto cursor-pointer px-4 py-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-all">
                   <input
                     type="checkbox"
                     checked={showDefaults}
                     onChange={(e) => setShowDefaults(e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-2 focus:ring-purple-500"
+                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-2 focus:ring-purple-500"
                   />
-                  <span className="text-sm font-medium text-zinc-900">Show default prompts</span>
+                  <span className="text-sm font-medium text-gray-900">Show default prompts</span>
                 </label>
 
                 {prompts.has_custom && (
-                  <div className="px-4 py-2 bg-purple-100 text-purple-900 rounded-xl text-sm font-bold border border-purple-200">
+                  <div className="px-4 py-2 bg-purple-100 text-purple-900 rounded-lg text-sm font-bold border border-purple-200">
                     ✨ Using custom prompts
                   </div>
                 )}
               </div>
 
               {hasChanges && (
-                <div className="mb-5 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
+                <div className="mb-5 p-4 bg-amber-50 border-2 border-amber-200 rounded-lg">
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">⚠️</span>
                     <div>
@@ -404,7 +430,7 @@ export default function PromptsManager() {
 
               {msg && (
                 <div
-                  className={`p-4 rounded-xl text-sm font-medium border-2 ${
+                  className={`p-4 rounded-lg text-sm font-medium border-2 ${
                     msg.includes("❌")
                       ? "bg-red-50 text-red-900 border-red-200"
                       : "bg-green-50 text-green-900 border-green-200"
@@ -416,15 +442,15 @@ export default function PromptsManager() {
             </div>
 
             {/* System Prompt Editor */}
-            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="mb-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-8 h-8 bg-purple-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
                     S
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-zinc-900">System Prompt</h2>
-                    <p className="text-sm text-zinc-600">
+                    <h2 className="text-xl font-bold text-gray-900">System Prompt</h2>
+                    <p className="text-sm text-gray-600">
                       Defines the agent's identity, expertise, and behavioral guidelines
                     </p>
                   </div>
@@ -436,24 +462,24 @@ export default function PromptsManager() {
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="Enter the system prompt that defines the agent's core behavior..."
-                  className={`w-full min-h-[350px] p-5 font-mono text-sm border-2 rounded-xl focus:outline-none focus:ring-4 transition-all resize-y ${
+                  className={`w-full min-h-[350px] p-5 font-mono text-sm border-2 rounded-lg focus:outline-none focus:ring-4 transition-all resize-y ${
                     prompts.has_custom
                       ? "border-purple-600 focus:ring-purple-500/20 bg-purple-50/30"
-                      : "border-zinc-300 focus:ring-purple-500/20"
+                      : "border-gray-300 focus:ring-purple-500/20"
                   }`}
                 />
-                <div className="absolute top-3 right-3 text-xs text-zinc-400 font-mono bg-white px-2 py-1 rounded border border-zinc-200">
+                <div className="absolute top-3 right-3 text-xs text-gray-400 font-mono bg-white px-2 py-1 rounded border border-gray-200">
                   {systemPrompt.length} chars
                 </div>
               </div>
 
               {showDefaults && (
                 <details className="mt-5">
-                  <summary className="cursor-pointer font-bold text-zinc-900 hover:text-purple-600 transition-colors px-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 hover:border-purple-300">
+                  <summary className="cursor-pointer font-bold text-gray-900 hover:text-purple-600 transition-colors px-4 py-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-purple-300">
                     📄 View Default System Prompt
                   </summary>
-                  <div className="mt-3 bg-zinc-900 p-5 rounded-xl border border-zinc-700">
-                    <pre className="text-xs text-zinc-100 overflow-auto whitespace-pre-wrap leading-relaxed font-mono">
+                  <div className="mt-3 bg-gray-900 p-5 rounded-lg border border-gray-700">
+                    <pre className="text-xs text-gray-100 overflow-auto whitespace-pre-wrap leading-relaxed font-mono">
                       {prompts.default_system_prompt}
                     </pre>
                   </div>
@@ -462,22 +488,22 @@ export default function PromptsManager() {
             </div>
 
             {/* User Prompt Template Editor */}
-            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="mb-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
                     U
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-zinc-900">User Prompt Template</h2>
-                    <p className="text-sm text-zinc-600">
+                    <h2 className="text-xl font-bold text-gray-900">User Prompt Template</h2>
+                    <p className="text-sm text-gray-600">
                       The structured template for task-specific instructions with dynamic placeholders
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-900 font-medium mb-2">
                   💡 Available Placeholders (automatically replaced at runtime):
                 </p>
@@ -503,24 +529,24 @@ export default function PromptsManager() {
                   value={userPrompt}
                   onChange={(e) => setUserPrompt(e.target.value)}
                   placeholder="Enter the user prompt template with placeholders..."
-                  className={`w-full min-h-[350px] p-5 font-mono text-sm border-2 rounded-xl focus:outline-none focus:ring-4 transition-all resize-y ${
+                  className={`w-full min-h-[350px] p-5 font-mono text-sm border-2 rounded-lg focus:outline-none focus:ring-4 transition-all resize-y ${
                     prompts.has_custom
                       ? "border-purple-600 focus:ring-purple-500/20 bg-purple-50/30"
-                      : "border-zinc-300 focus:ring-purple-500/20"
+                      : "border-gray-300 focus:ring-purple-500/20"
                   }`}
                 />
-                <div className="absolute top-3 right-3 text-xs text-zinc-400 font-mono bg-white px-2 py-1 rounded border border-zinc-200">
+                <div className="absolute top-3 right-3 text-xs text-gray-400 font-mono bg-white px-2 py-1 rounded border border-gray-200">
                   {userPrompt.length} chars
                 </div>
               </div>
 
               {showDefaults && (
                 <details className="mt-5">
-                  <summary className="cursor-pointer font-bold text-zinc-900 hover:text-purple-600 transition-colors px-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 hover:border-purple-300">
+                  <summary className="cursor-pointer font-bold text-gray-900 hover:text-purple-600 transition-colors px-4 py-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-purple-300">
                     📄 View Default User Prompt Template
                   </summary>
-                  <div className="mt-3 bg-zinc-900 p-5 rounded-xl border border-zinc-700">
-                    <pre className="text-xs text-zinc-100 overflow-auto whitespace-pre-wrap leading-relaxed font-mono">
+                  <div className="mt-3 bg-gray-900 p-5 rounded-lg border border-gray-700">
+                    <pre className="text-xs text-gray-100 overflow-auto whitespace-pre-wrap leading-relaxed font-mono">
                       {prompts.default_user_prompt_template}
                     </pre>
                   </div>

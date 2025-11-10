@@ -92,50 +92,42 @@ export default function Dashboard() {
     }
   }
 
-  // Count posts with media
-  const postsWithVideos = rows.filter((r) => r.has_video || r.video_url).length;
-  const postsWithImages = rows.filter((r) => r.has_image || (r.image_url && !r.video_url)).length;
-  const postsWithMedia = postsWithVideos + postsWithImages;
-
   return (
     <main 
       className="min-h-screen relative overflow-x-hidden"
       style={{
-        background: 'linear-gradient(to bottom, #000000 0%, #0a0a0a 50%, #000000 100%)',
+        background: 'linear-gradient(180deg, #f6f9fc 0%, #ffffff 100%)',
       }}
     >
-      {/* Subtle grain texture overlay */}
-      <div className="fixed inset-0 opacity-[0.015] pointer-events-none" 
-        style={{
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 400 400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\'/%3E%3C/svg%3E")',
-        }}
-      ></div>
-
-      <div className="relative max-w-[1400px] mx-auto px-8 py-16 space-y-12">
-        {/* Elegant Header */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden">
-          <div className="p-12">
-            <div className="flex items-start justify-between gap-8 mb-8">
+      <div className="relative max-w-7xl mx-auto px-6 py-12 space-y-8">
+        {/* Stripe-style Header */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+          <div className="p-8 md:p-12">
+            <div className="flex items-start justify-between gap-8 mb-6">
               <div className="flex-1">
-                <div className="flex items-center gap-5 mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-[#d4af37] via-[#f4e4c1] to-[#d4af37] rounded-sm flex items-center justify-center shadow-lg">
-                    <span className="text-black text-3xl font-serif font-bold">JE</span>
+                <div className="flex items-center gap-4 mb-3">
+                  <div 
+                    className="w-12 h-12 rounded-lg flex items-center justify-center shadow-sm"
+                    style={{
+                      background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                    }}
+                  >
+                    <span className="text-white text-xl font-semibold">JE</span>
                   </div>
                   <div>
-                    <h1 className="text-5xl font-serif font-light text-white tracking-wider mb-2">
+                    <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-1">
                       Content Studio
                     </h1>
-                    <p className="text-[#d4af37] text-sm tracking-[0.2em] uppercase font-light">
+                    <p className="text-sm text-gray-500">
                       Jesse A. Eisenbalm · LinkedIn Content Creation
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-sm text-gray-400 mt-6 ml-[84px]">
-                  <div className="flex items-center gap-3 px-4 py-2 bg-[#d4af37]/10 rounded-sm border border-[#d4af37]/30">
-                    <div className="w-1.5 h-1.5 bg-[#d4af37] rounded-full"></div>
-                    <span className="font-light">
-                      <span className="text-gray-500">Authenticated as</span>{" "}
-                      <span className="font-normal text-[#d4af37]">{me?.name || me?.sub || "Loading..."}</span>
+                <div className="flex items-center gap-2 text-sm text-gray-600 mt-4 ml-16">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-md border border-gray-200">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span>
+                      {me?.name || me?.sub || "Loading..."}
                     </span>
                   </div>
                 </div>
@@ -143,101 +135,88 @@ export default function Dashboard() {
 
               <button
                 onClick={() => setShowWorkflowGuide(!showWorkflowGuide)}
-                className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-sm text-sm font-light tracking-wider uppercase border border-white/10 hover:border-[#d4af37]/50 transition-all duration-300"
+                className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium border border-gray-300 transition-all duration-200"
               >
                 {showWorkflowGuide ? "Hide" : "Show"} Workflow
               </button>
             </div>
 
-            {/* Refined Workflow Guide */}
+            {/* Stripe-style Workflow Guide */}
             {showWorkflowGuide && (
-              <div className="bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-sm p-8 border border-[#d4af37]/20 mt-8">
-                <h3 className="text-2xl font-serif font-light text-white mb-8 tracking-wide">
-                  The Process
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-8 border border-purple-100 mt-6">
+                <h3 className="text-2xl font-semibold text-gray-900 mb-6">
+                  How it works
                 </h3>
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div className="bg-black/40 backdrop-blur-sm rounded-sm p-6 border border-white/5 hover:border-[#d4af37]/30 transition-all duration-300">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 border border-[#d4af37] text-[#d4af37] rounded-sm flex items-center justify-center font-serif text-sm flex-shrink-0">
-                          I
-                        </div>
-                        <div>
-                          <h4 className="font-serif text-white mb-2 text-lg">Guided Creation</h4>
-                          <p className="text-sm text-gray-400 font-light leading-relaxed">
-                            Follow our intuitive five-step wizard to customize brand voice, select inspiration sources, 
-                            and define your target audience with precision
-                          </p>
-                        </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-start gap-4">
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)' }}
+                      >
+                        1
                       </div>
-                    </div>
-
-                    <div className="bg-black/40 backdrop-blur-sm rounded-sm p-6 border border-white/5 hover:border-[#d4af37]/30 transition-all duration-300">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 border border-[#d4af37] text-[#d4af37] rounded-sm flex items-center justify-center font-serif text-sm flex-shrink-0">
-                          II
-                        </div>
-                        <div>
-                          <h4 className="font-serif text-white mb-2 text-lg">AI-Powered Content</h4>
-                          <p className="text-sm text-gray-400 font-light leading-relaxed">
-                            Choose from trending topics, cultural references, or philosophical themes. 
-                            Our AI transforms these into compelling narratives
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-black/40 backdrop-blur-sm rounded-sm p-6 border border-white/5 hover:border-[#d4af37]/30 transition-all duration-300">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 border border-[#d4af37] text-[#d4af37] rounded-sm flex items-center justify-center font-serif text-sm flex-shrink-0">
-                          III
-                        </div>
-                        <div>
-                          <h4 className="font-serif text-white mb-2 text-lg">Bespoke Imagery</h4>
-                          <p className="text-sm text-gray-400 font-light leading-relaxed">
-                            Each post features custom AI-generated visuals incorporating your brand's 
-                            signature messaging and aesthetic
-                          </p>
-                        </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900 mb-2">Guided Creation</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          Follow our intuitive five-step wizard to customize brand voice, select inspiration sources, 
+                          and define your target audience with precision
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="bg-black/40 backdrop-blur-sm rounded-sm p-6 border border-white/5 hover:border-[#d4af37]/30 transition-all duration-300">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 border border-[#d4af37] text-[#d4af37] rounded-sm flex items-center justify-center font-serif text-sm flex-shrink-0">
-                          IV
-                        </div>
-                        <div>
-                          <h4 className="font-serif text-white mb-2 text-lg">Expert Validation</h4>
-                          <p className="text-sm text-gray-400 font-light leading-relaxed">
-                            Content undergoes rigorous review by three expert validators ensuring 
-                            quality, tone, compliance, and brand alignment
-                          </p>
-                        </div>
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-start gap-4">
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #6366F1 100%)' }}
+                      >
+                        2
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900 mb-2">AI-Powered Content</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          Choose from trending topics, cultural references, or philosophical themes. 
+                          Our AI transforms these into compelling narratives
+                        </p>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="bg-black/40 backdrop-blur-sm rounded-sm p-6 border border-white/5 hover:border-[#d4af37]/30 transition-all duration-300">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 border border-[#d4af37] text-[#d4af37] rounded-sm flex items-center justify-center font-serif text-sm flex-shrink-0">
-                          V
-                        </div>
-                        <div>
-                          <h4 className="font-serif text-white mb-2 text-lg">Seamless Publishing</h4>
-                          <p className="text-sm text-gray-400 font-light leading-relaxed">
-                            Review your curated content with full preview capabilities, 
-                            then publish directly to LinkedIn when ready
-                          </p>
-                        </div>
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-start gap-4">
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%)' }}
+                      >
+                        3
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900 mb-2">Bespoke Imagery</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          Each post features custom AI-generated visuals incorporating your brand's 
+                          signature messaging and aesthetic
+                        </p>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="bg-gradient-to-br from-[#d4af37]/10 to-transparent rounded-sm p-6 border border-[#d4af37]/30">
-                      <p className="text-xs text-[#d4af37] font-light leading-relaxed italic">
-                        "Customize AI behavior in Settings to match your unique voice and style preferences"
-                      </p>
+                  <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-start gap-4">
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-semibold"
+                        style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}
+                      >
+                        4
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900 mb-2">Expert Validation</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          Content undergoes rigorous review by three expert validators ensuring 
+                          quality, tone, compliance, and brand alignment
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -246,50 +225,53 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Refined Actions */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden">
-          <div className="p-10">
-            <div className="mb-10">
-              <h2 className="text-3xl font-serif font-light text-white tracking-wide mb-2">Create</h2>
-              <p className="text-sm text-gray-400 font-light tracking-wide">Craft exceptional LinkedIn content</p>
+        {/* Stripe-style Actions */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+          <div className="p-8 md:p-12">
+            <div className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Create content</h2>
+              <p className="text-gray-600">Craft exceptional LinkedIn content with AI</p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <Link
                 href="/wizard"
-                className="group relative px-10 py-12 bg-gradient-to-br from-[#d4af37] to-[#b8941f] text-black rounded-sm font-light hover:shadow-2xl hover:shadow-[#d4af37]/20 transition-all duration-500 overflow-hidden"
+                className="group relative px-6 py-8 rounded-xl font-medium text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                }}
               >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
-                  <div className="text-xl font-serif mb-3 tracking-wide">New Post</div>
-                  <div className="text-xs uppercase tracking-widest opacity-70">Guided Creation</div>
+                  <div className="text-lg font-semibold mb-1">New Post</div>
+                  <div className="text-sm opacity-90">Guided Creation</div>
                 </div>
               </Link>
 
               <Link
                 href="/prompts"
-                className="group px-10 py-12 bg-white/5 hover:bg-white/10 text-white rounded-sm font-light border border-white/10 hover:border-[#d4af37]/50 transition-all duration-500"
+                className="group px-6 py-8 bg-gray-50 hover:bg-gray-100 text-gray-900 rounded-xl font-medium border border-gray-200 hover:border-gray-300 transition-all duration-300"
               >
-                <div className="text-xl font-serif mb-3 tracking-wide">Settings</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400">AI Configuration</div>
+                <div className="text-lg font-semibold mb-1">Settings</div>
+                <div className="text-sm text-gray-600">AI Configuration</div>
               </Link>
 
               <button
                 onClick={clearAll}
                 disabled={loading}
-                className="group px-10 py-12 bg-white/5 hover:bg-red-900/20 text-white rounded-sm font-light border border-white/10 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-500"
+                className="group px-6 py-8 bg-gray-50 hover:bg-red-50 text-gray-900 rounded-xl font-medium border border-gray-200 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
               >
-                <div className="text-xl font-serif mb-3 tracking-wide">Clear All</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400">Remove Posts</div>
+                <div className="text-lg font-semibold mb-1">Clear All</div>
+                <div className="text-sm text-gray-600 group-hover:text-red-600">Remove Posts</div>
               </button>
             </div>
 
             {msg && (
               <div
-                className={`mt-8 p-5 rounded-sm text-sm font-light border ${
+                className={`mt-6 p-4 rounded-lg text-sm font-medium border ${
                   msg.includes("❌")
-                    ? "bg-red-900/20 text-red-300 border-red-500/30"
-                    : "bg-emerald-900/20 text-emerald-300 border-emerald-500/30"
+                    ? "bg-red-50 text-red-800 border-red-200"
+                    : "bg-green-50 text-green-800 border-green-200"
                 }`}
               >
                 {msg}
@@ -298,65 +280,158 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Elegant Statistics */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden">
-          <div className="p-10">
-            <h2 className="text-3xl font-serif font-light text-white tracking-wide mb-8">Overview</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-[#d4af37]/10 to-transparent rounded-sm p-6 border border-[#d4af37]/20 hover:border-[#d4af37]/40 transition-all duration-300">
-                <div className="text-5xl font-serif font-light text-[#d4af37] mb-2">{rows.length}</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400 mb-1">Total Posts</div>
-                <div className="text-[10px] text-gray-500 font-light">In queue</div>
+        {/* Beautiful Explanation Section - The Paradox */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+          <div className="p-8 md:p-12">
+            <div className="max-w-4xl mx-auto">
+              {/* Main Heading */}
+              <div className="text-center mb-12">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-full mb-6">
+                  <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+                  <span className="text-sm font-medium text-purple-700">The Beautiful Paradox</span>
+                </div>
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                  Using AI to Keep You Human
+                </h2>
+                <p className="text-lg text-gray-600 leading-relaxed max-w-2xl mx-auto">
+                  Welcome to the Content Studio for <span className="font-semibold text-purple-600">Jesse A. Eisenbalm</span> — 
+                  the only business lip balm that keeps you human in an AI world.
+                </p>
               </div>
 
-              <div className="bg-white/5 rounded-sm p-6 border border-white/10 hover:border-purple-500/30 transition-all duration-300">
-                <div className="text-5xl font-serif font-light text-purple-300 mb-2">{postsWithVideos}</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400 mb-1">Videos</div>
-                <div className="text-[10px] text-gray-500 font-light">AI-generated</div>
+              {/* The Irony Box */}
+              <div className="bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 rounded-2xl p-8 mb-8 border border-purple-100">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="text-4xl">🤖💫</div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">The Irony Isn't Lost on Us</h3>
+                    <p className="text-gray-700 leading-relaxed mb-4">
+                      Yes, we're using AI to create content about staying human in an AI-saturated world. 
+                      That's the whole point. This portal is where technology meets humanity — where algorithms 
+                      serve authenticity, not replace it.
+                    </p>
+                    <p className="text-gray-700 leading-relaxed">
+                      We built this system because you shouldn't have to choose between scaling your message 
+                      and keeping your humanity. Let the machines handle the mechanics while you focus on 
+                      the meaning.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="bg-white/5 rounded-sm p-6 border border-white/10 hover:border-blue-500/30 transition-all duration-300">
-                <div className="text-5xl font-serif font-light text-blue-300 mb-2">{postsWithImages}</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400 mb-1">Images</div>
-                <div className="text-[10px] text-gray-500 font-light">AI-generated</div>
+              {/* What This Portal Does */}
+              <div className="grid md:grid-cols-2 gap-6 mb-8">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center mb-4">
+                    <span className="text-2xl">✨</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">AI-Powered Generation</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Our multi-agent AI system creates compelling LinkedIn posts that capture Jesse A. Eisenbalm's 
+                    unique voice: absurdist, wry, and deeply human. Each post is crafted to resonate with young 
+                    professionals navigating the anxiety of workplace automation.
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center mb-4">
+                    <span className="text-2xl">🎨</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Custom Visual Content</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Every post comes with AI-generated imagery or video that brings the message to life. 
+                    From DALL-E to Hugging Face, we use cutting-edge tools to create visuals that are as 
+                    distinctive as the brand itself.
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4">
+                    <span className="text-2xl">🎯</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Triple Validation System</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Three expert AI validators review every piece of content from customer, business, and social 
+                    perspectives. Only posts that pass our rigorous standards make it to your queue — ensuring 
+                    quality, tone, and brand alignment.
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center mb-4">
+                    <span className="text-2xl">🚀</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Seamless Publishing</h4>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Review your curated content library, preview posts with full media support, and publish 
+                    directly to LinkedIn when you're ready. The portal handles all the OAuth complexity — 
+                    you just focus on your message.
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white/5 rounded-sm p-6 border border-white/10 hover:border-gray-500/30 transition-all duration-300">
-                <div className="text-5xl font-serif font-light text-gray-300 mb-2">{rows.length - postsWithMedia}</div>
-                <div className="text-xs uppercase tracking-widest text-gray-400 mb-1">Text Only</div>
-                <div className="text-[10px] text-gray-500 font-light">No media</div>
+              {/* The Philosophy */}
+              <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 text-white">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl">💼</div>
+                  <div>
+                    <h3 className="text-xl font-semibold mb-3">For Young Professionals in an AI World</h3>
+                    <p className="text-gray-300 leading-relaxed mb-4">
+                      This isn't just about lip balm. It's about the small, human rituals that keep us grounded 
+                      when everything from job applications to meetings feels automated. 
+                    </p>
+                    <p className="text-gray-300 leading-relaxed mb-4">
+                      <span className="font-semibold text-white">Stop. Breathe. Apply.</span> — It's a moment 
+                      of presence. A physical cue that no algorithm can replicate. And this portal helps you 
+                      share that message with the world.
+                    </p>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg border border-white/20 mt-2">
+                      <span className="text-sm italic text-gray-300">
+                        "The only business lip balm that keeps you human in an AI world."
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Refined Content Queue */}
-        <div className="bg-black/40 backdrop-blur-sm rounded-sm border border-[#d4af37]/20 shadow-2xl overflow-hidden">
-          <div className="p-10">
-            <div className="flex items-center justify-between mb-10">
+        {/* Stripe-style Content Queue */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+          <div className="p-8 md:p-12">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="text-3xl font-serif font-light text-white tracking-wide mb-2">Collection</h2>
-                <p className="text-sm text-gray-400 font-light tracking-wide">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Your content</h2>
+                <p className="text-gray-600">
                   Your curated content library
                 </p>
               </div>
-              <div className="px-6 py-2 bg-[#d4af37]/10 text-[#d4af37] rounded-sm text-sm font-light border border-[#d4af37]/30">
+              <div className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200">
                 {rows.length} {rows.length === 1 ? 'Post' : 'Posts'}
               </div>
             </div>
 
             {rows.length === 0 ? (
-              <div className="text-center py-24 px-6">
-                <div className="w-32 h-32 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10">
-                  <span className="text-6xl">✨</span>
+              <div className="text-center py-20 px-6">
+                <div 
+                  className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
+                  style={{
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  }}
+                >
+                  <span className="text-4xl">✨</span>
                 </div>
-                <h3 className="text-3xl font-serif font-light text-white mb-4 tracking-wide">Begin Your Journey</h3>
-                <p className="text-gray-400 font-light mb-10 max-w-md mx-auto leading-relaxed">
-                  Create your first post using our guided wizard with AI-generated imagery
+                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Create your first post</h3>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
+                  Use our guided wizard to create engaging LinkedIn content with AI-generated imagery
                 </p>
                 <Link
                   href="/wizard"
-                  className="inline-flex items-center gap-4 px-12 py-5 bg-gradient-to-br from-[#d4af37] to-[#b8941f] text-black rounded-sm font-light hover:shadow-2xl hover:shadow-[#d4af37]/20 transition-all duration-500 text-lg tracking-wide"
+                  className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
+                  style={{
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  }}
                 >
                   Start Creating
                 </Link>
@@ -378,38 +453,38 @@ export default function Dashboard() {
                   return (
                     <div
                       key={r.id}
-                      className="border border-white/10 rounded-sm p-8 bg-black/30 backdrop-blur-sm hover:border-[#d4af37]/30 transition-all duration-500"
+                      className="border border-gray-200 rounded-xl p-6 md:p-8 bg-white shadow-sm hover:shadow-md transition-all duration-300"
                     >
-                      {/* Refined Header */}
-                      <div className="flex gap-3 flex-wrap mb-6 text-xs items-center">
-                        <span className="px-4 py-1.5 bg-[#d4af37]/20 text-[#d4af37] rounded-sm font-light uppercase tracking-wider border border-[#d4af37]/30">
+                      {/* Header */}
+                      <div className="flex gap-2 flex-wrap mb-6 text-xs items-center">
+                        <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium">
                           {r.target_type}
                         </span>
-                        <span className="px-4 py-1.5 bg-white/10 text-gray-300 rounded-sm font-light uppercase tracking-wider border border-white/20">
+                        <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md font-medium">
                           {r.lifecycle}
                         </span>
                         {hasVideo && (
-                          <span className="px-4 py-1.5 bg-purple-500/20 text-purple-300 rounded-sm font-light uppercase tracking-wider border border-purple-500/30">
+                          <span className="px-3 py-1.5 bg-pink-100 text-pink-700 rounded-md font-medium">
                             Video
                           </span>
                         )}
                         {hasImage && (
-                          <span className="px-4 py-1.5 bg-blue-500/20 text-blue-300 rounded-sm font-light uppercase tracking-wider border border-blue-500/30">
+                          <span className="px-3 py-1.5 bg-cyan-100 text-cyan-700 rounded-md font-medium">
                             Image
                           </span>
                         )}
                         {r.media_provider === "huggingface" && (
-                          <span className="px-4 py-1.5 bg-emerald-500/20 text-emerald-300 rounded-sm font-light uppercase tracking-wider border border-emerald-500/30">
+                          <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
                             Free Tier
                           </span>
                         )}
                         {r.media_cost !== undefined && r.media_cost > 0 && (
-                          <span className="px-4 py-1.5 bg-amber-500/20 text-amber-300 rounded-sm font-light tracking-wider border border-amber-500/30">
+                          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-md font-medium">
                             ${r.media_cost.toFixed(3)}
                           </span>
                         )}
                         {r.created_at && (
-                          <span className="ml-auto text-gray-500 font-light text-[10px] uppercase tracking-widest">
+                          <span className="ml-auto text-gray-500 text-[10px] font-medium">
                             {new Date(r.created_at).toLocaleString()}
                           </span>
                         )}
@@ -417,7 +492,7 @@ export default function Dashboard() {
 
                       {/* Video Display */}
                       {hasVideo && videoUrl && (
-                        <div className="mb-6 rounded-sm overflow-hidden border border-white/20 bg-black shadow-2xl">
+                        <div className="mb-6 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
                           <video
                             controls
                             loop
@@ -430,15 +505,15 @@ export default function Dashboard() {
                             Your browser does not support the video tag.
                           </video>
                           {(r.video_description || r.video_generation_time) && (
-                            <div className="p-5 bg-black/80 backdrop-blur-sm text-gray-300 text-xs space-y-2 font-light">
+                            <div className="p-4 bg-white text-gray-700 text-xs space-y-2">
                               {r.video_description && (
-                                <div className="flex gap-3">
-                                  <span className="font-normal text-white">Description:</span>
-                                  <span className="text-gray-400">{r.video_description}</span>
+                                <div className="flex gap-2">
+                                  <span className="font-semibold text-gray-900">Description:</span>
+                                  <span className="text-gray-600">{r.video_description}</span>
                                 </div>
                               )}
                               {r.video_generation_time && (
-                                <div className="text-gray-500 flex flex-wrap gap-4">
+                                <div className="text-gray-500 flex flex-wrap gap-3">
                                   <span>⏱️ {r.video_generation_time}s</span>
                                   {r.video_size_mb && <span>💾 {r.video_size_mb}MB</span>}
                                   {r.media_cost !== undefined && (
@@ -453,7 +528,7 @@ export default function Dashboard() {
 
                       {/* Image Display */}
                       {hasImage && imageUrl && (
-                        <div className="mb-6 rounded-sm overflow-hidden border border-white/20 bg-black shadow-2xl">
+                        <div className="mb-6 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
                           <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
                             <img
                               src={imageUrl}
@@ -472,10 +547,10 @@ export default function Dashboard() {
                             />
                           </div>
                           {r.image_description && (
-                            <div className="p-5 bg-black/80 backdrop-blur-sm border-t border-white/10">
-                              <div className="flex gap-3 text-xs font-light">
-                                <span className="font-normal text-white">Description:</span>
-                                <span className="text-gray-400">{r.image_description}</span>
+                            <div className="p-4 bg-white border-t border-gray-200">
+                              <div className="flex gap-2 text-xs">
+                                <span className="font-semibold text-gray-900">Description:</span>
+                                <span className="text-gray-600">{r.image_description}</span>
                               </div>
                             </div>
                           )}
@@ -483,7 +558,7 @@ export default function Dashboard() {
                       )}
 
                       {/* Content */}
-                      <div className="whitespace-pre-wrap mb-6 leading-relaxed text-sm text-gray-200 bg-black/40 rounded-sm p-6 border border-white/5 font-light">
+                      <div className="whitespace-pre-wrap mb-6 leading-relaxed text-sm text-gray-800 bg-gray-50 rounded-lg p-6 border border-gray-200">
                         {displayContent}
                       </div>
 
@@ -493,7 +568,7 @@ export default function Dashboard() {
                           {r.hashtags.map((h, i) => (
                             <span
                               key={i}
-                              className="text-xs bg-[#d4af37]/10 text-[#d4af37] px-3 py-1.5 rounded-sm font-light border border-[#d4af37]/30"
+                              className="text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-md font-medium border border-purple-200"
                             >
                               #{h}
                             </span>
@@ -503,27 +578,27 @@ export default function Dashboard() {
 
                       {/* Status Messages */}
                       {r.li_post_id && (
-                        <div className="text-sm text-emerald-300 font-light mb-4 bg-emerald-900/20 p-4 rounded-sm border border-emerald-500/30">
+                        <div className="text-sm text-green-700 font-medium mb-4 bg-green-50 p-4 rounded-lg border border-green-200">
                           ✅ Published · Post ID: {r.li_post_id}
                         </div>
                       )}
                       {r.error_message && (
-                        <div className="text-sm text-red-300 bg-red-900/20 p-4 rounded-sm mb-4 border border-red-500/30 font-light">
+                        <div className="text-sm text-red-700 bg-red-50 p-4 rounded-lg mb-4 border border-red-200 font-medium">
                           ❌ Error: {r.error_message}
                         </div>
                       )}
 
                       {/* Actions */}
-                      <div className="flex gap-3 flex-wrap pt-6 border-t border-white/10">
+                      <div className="flex gap-2 flex-wrap pt-6 border-t border-gray-200">
                         <button
                           onClick={() => navigator.clipboard.writeText(displayContent)}
-                          className="px-4 py-2 text-xs font-light border border-white/10 rounded-sm hover:bg-white/5 hover:border-[#d4af37]/30 transition-all duration-300 uppercase tracking-wider"
+                          className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
                         >
                           Copy Text
                         </button>
                         <button
                           onClick={() => navigator.clipboard.writeText(full)}
-                          className="px-4 py-2 text-xs font-light border border-white/10 rounded-sm hover:bg-white/5 hover:border-[#d4af37]/30 transition-all duration-300 uppercase tracking-wider"
+                          className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
                         >
                           Copy Full
                         </button>
@@ -533,14 +608,14 @@ export default function Dashboard() {
                           <>
                             <button
                               onClick={() => window.open(videoUrl, "_blank")}
-                              className="px-4 py-2 text-xs font-light border border-purple-500/30 bg-purple-500/10 text-purple-300 rounded-sm hover:bg-purple-500/20 transition-all duration-300 uppercase tracking-wider"
+                              className="px-4 py-2 text-xs font-medium border border-pink-200 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-all duration-200"
                             >
                               Open Video
                             </button>
                             <a
                               href={videoUrl}
                               download={`video-${r.id}.mp4`}
-                              className="px-4 py-2 text-xs font-light border border-purple-500/30 bg-purple-500/10 text-purple-300 rounded-sm hover:bg-purple-500/20 transition-all duration-300 inline-flex items-center uppercase tracking-wider"
+                              className="px-4 py-2 text-xs font-medium border border-pink-200 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-all duration-200 inline-flex items-center"
                             >
                               Download
                             </a>
@@ -556,7 +631,7 @@ export default function Dashboard() {
                                   }\n\nCost: $${r.media_cost?.toFixed(2) || "0.00"}`;
                                   alert(info);
                                 }}
-                                className="px-4 py-2 text-xs font-light border border-white/10 rounded-sm hover:bg-white/5 transition-all duration-300 uppercase tracking-wider"
+                                className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
                               >
                                 Details
                               </button>
@@ -569,7 +644,7 @@ export default function Dashboard() {
                           <>
                             <button
                               onClick={() => window.open(imageUrl, "_blank")}
-                              className="px-4 py-2 text-xs font-light border border-blue-500/30 bg-blue-500/10 text-blue-300 rounded-sm hover:bg-blue-500/20 transition-all duration-300 uppercase tracking-wider"
+                              className="px-4 py-2 text-xs font-medium border border-cyan-200 bg-cyan-50 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-all duration-200"
                             >
                               Open Image
                             </button>
@@ -581,7 +656,7 @@ export default function Dashboard() {
                                   }\n\nDescription: ${r.image_description || "N/A"}`;
                                   alert(info);
                                 }}
-                                className="px-4 py-2 text-xs font-light border border-white/10 rounded-sm hover:bg-white/5 transition-all duration-300 uppercase tracking-wider"
+                                className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
                               >
                                 Details
                               </button>
