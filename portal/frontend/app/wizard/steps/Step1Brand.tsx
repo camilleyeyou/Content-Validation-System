@@ -98,35 +98,38 @@ export default function Step1Brand({ state, setState, onNext }: Props) {
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] uppercase tracking-wider">
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] uppercase tracking-wider">
                     Wacky
                   </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={state.brandSettings.tone}
-                    onChange={(e) => updateBrandSetting("tone", parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gradient-to-r from-yellow-200 via-blue-200 to-gray-300 rounded-full appearance-none cursor-pointer
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
-                      [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
-                      [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
-                      [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
-                      [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 
-                      [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #635BFF ${state.brandSettings.tone}%, #E5E7EB ${state.brandSettings.tone}%)`,
-                    }}
-                  />
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] text-right uppercase tracking-wider">
+                  <div className="flex-1 relative">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={state.brandSettings.tone}
+                      onChange={(e) => updateBrandSetting("tone", parseInt(e.target.value))}
+                      className="slider-purple w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 
+                        [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
+                        [&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-purple-600
+                        [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
+                        [&::-webkit-slider-thumb]:ring-4 [&::-webkit-slider-thumb]:ring-purple-100
+                        [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-white
+                        [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-4
+                        [&::-moz-range-thumb]:border-purple-600 [&::-moz-range-thumb]:cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #635BFF 0%, #635BFF ${state.brandSettings.tone}%, #E5E7EB ${state.brandSettings.tone}%, #E5E7EB 100%)`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] text-right uppercase tracking-wider">
                     Formal
                   </span>
                 </div>
-                <div className="mt-4 text-xs text-gray-600">
-                  {state.brandSettings.tone < 30 && "Playful, meme-friendly, irreverent"}
-                  {state.brandSettings.tone >= 30 && state.brandSettings.tone < 70 && "Conversational yet professional"}
-                  {state.brandSettings.tone >= 70 && "Executive-level formality"}
+                <div className="mt-4 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  {state.brandSettings.tone < 30 && "💬 Playful, meme-friendly, irreverent"}
+                  {state.brandSettings.tone >= 30 && state.brandSettings.tone < 70 && "🎯 Conversational yet professional"}
+                  {state.brandSettings.tone >= 70 && "👔 Executive-level formality"}
                 </div>
               </label>
             </div>
@@ -141,35 +144,38 @@ export default function Step1Brand({ state, setState, onNext }: Props) {
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] uppercase tracking-wider">
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] uppercase tracking-wider">
                     Punchy
                   </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={state.brandSettings.pithiness}
-                    onChange={(e) => updateBrandSetting("pithiness", parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gradient-to-r from-red-200 via-yellow-200 to-purple-300 rounded-full appearance-none cursor-pointer
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
-                      [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
-                      [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
-                      [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
-                      [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 
-                      [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #635BFF ${state.brandSettings.pithiness}%, #E5E7EB ${state.brandSettings.pithiness}%)`,
-                    }}
-                  />
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] text-right uppercase tracking-wider">
+                  <div className="flex-1 relative">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={state.brandSettings.pithiness}
+                      onChange={(e) => updateBrandSetting("pithiness", parseInt(e.target.value))}
+                      className="slider-blue w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 
+                        [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
+                        [&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-blue-600
+                        [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
+                        [&::-webkit-slider-thumb]:ring-4 [&::-webkit-slider-thumb]:ring-blue-100
+                        [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-white
+                        [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-4
+                        [&::-moz-range-thumb]:border-blue-600 [&::-moz-range-thumb]:cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${state.brandSettings.pithiness}%, #E5E7EB ${state.brandSettings.pithiness}%, #E5E7EB 100%)`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] text-right uppercase tracking-wider">
                     Baroque
                   </span>
                 </div>
-                <div className="mt-4 text-xs text-gray-600">
-                  {state.brandSettings.pithiness < 30 && "Short, punchy sentences"}
-                  {state.brandSettings.pithiness >= 30 && state.brandSettings.pithiness < 70 && "Balanced detail and brevity"}
-                  {state.brandSettings.pithiness >= 70 && "Rich, elaborate storytelling"}
+                <div className="mt-4 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  {state.brandSettings.pithiness < 30 && "⚡ Short, punchy sentences"}
+                  {state.brandSettings.pithiness >= 30 && state.brandSettings.pithiness < 70 && "⚖️ Balanced detail and brevity"}
+                  {state.brandSettings.pithiness >= 70 && "📚 Rich, elaborate storytelling"}
                 </div>
               </label>
             </div>
@@ -184,35 +190,38 @@ export default function Step1Brand({ state, setState, onNext }: Props) {
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] uppercase tracking-wider">
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] uppercase tracking-wider">
                     Plain
                   </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={state.brandSettings.jargon}
-                    onChange={(e) => updateBrandSetting("jargon", parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gradient-to-r from-green-200 via-blue-200 to-indigo-300 rounded-full appearance-none cursor-pointer
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
-                      [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
-                      [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
-                      [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
-                      [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 
-                      [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #635BFF ${state.brandSettings.jargon}%, #E5E7EB ${state.brandSettings.jargon}%)`,
-                    }}
-                  />
-                  <span className="text-xs text-gray-500 font-medium min-w-[70px] text-right uppercase tracking-wider">
+                  <div className="flex-1 relative">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={state.brandSettings.jargon}
+                      onChange={(e) => updateBrandSetting("jargon", parseInt(e.target.value))}
+                      className="slider-green w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 
+                        [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
+                        [&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-green-600
+                        [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform
+                        [&::-webkit-slider-thumb]:ring-4 [&::-webkit-slider-thumb]:ring-green-100
+                        [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:bg-white
+                        [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-4
+                        [&::-moz-range-thumb]:border-green-600 [&::-moz-range-thumb]:cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #10B981 0%, #10B981 ${state.brandSettings.jargon}%, #E5E7EB ${state.brandSettings.jargon}%, #E5E7EB 100%)`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium min-w-[80px] text-right uppercase tracking-wider">
                     VC-Speak
                   </span>
                 </div>
-                <div className="mt-4 text-xs text-gray-600">
-                  {state.brandSettings.jargon < 30 && "Simple, accessible language"}
-                  {state.brandSettings.jargon >= 30 && state.brandSettings.jargon < 70 && "Moderate business terminology"}
-                  {state.brandSettings.jargon >= 70 && "Heavy startup/VC buzzwords"}
+                <div className="mt-4 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  {state.brandSettings.jargon < 30 && "🗣️ Simple, accessible language"}
+                  {state.brandSettings.jargon >= 30 && state.brandSettings.jargon < 70 && "💼 Moderate business terminology"}
+                  {state.brandSettings.jargon >= 70 && "🚀 Heavy startup/VC buzzwords"}
                 </div>
               </label>
             </div>
