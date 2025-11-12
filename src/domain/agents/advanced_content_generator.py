@@ -82,6 +82,7 @@ class AdvancedContentGenerator(BaseAgent):
         
         Args:
             input_data: Contains batch_id, count, brand_context, avoid_patterns (optional)
+                       Can also contain wizard_context for wizard-guided generation
         
         Returns:
             List of post data dictionaries
@@ -89,29 +90,83 @@ class AdvancedContentGenerator(BaseAgent):
         batch_id = input_data.get("batch_id")
         count = input_data.get("count", 1)
         avoid_patterns = input_data.get("avoid_patterns", {})
+        wizard_context = input_data.get("wizard_context")  # New: wizard mode detection
         
+        mode = "wizard" if wizard_context else "batch"
         self.logger.info("Starting content generation with images",
                         batch_id=batch_id,
-                        count=count)
+                        count=count,
+                        mode=mode)
         
         posts = []
         for i in range(count):
             self.logger.info(f"Generating post {i+1}/{count} with image")
-            post = await self._generate_single_post(batch_id, i + 1, avoid_patterns)
+            post = await self._generate_single_post(batch_id, i + 1, avoid_patterns, wizard_context)
             posts.append(post)
         
         return posts
     
     async def _generate_single_post(self, batch_id: str, post_number: int, 
-                                    avoid_patterns: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate a single post with multi-element combination"""
+                                    avoid_patterns: Dict[str, Any],
+                                    wizard_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Generate a single post with multi-element combination or wizard context"""
+        
+        # Wizard mode: use wizard context
+        if wizard_context:
+            return await self._generate_wizard_post(batch_id, post_number, wizard_context)
+        
+        # Batch mode: use random element selection
+        return await self._generate_batch_post(batch_id, post_number, avoid_patterns)
+    
+    async def _generate_wizard_post(self, batch_id: str, post_number: int,
+                                    wizard_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a post using wizard-provided context"""
+        
+        self.logger.info("Post generation (wizard mode)",
+                        post_number=post_number,
+                        target_words=wizard_context.get("target_words"),
+                        length=wizard_context.get("length_name"))
+        
+        # Build prompts with wizard context
+        system_prompt = self._build_system_prompt()
+        user_prompt = self._build_wizard_user_prompt(wizard_context)
+        
+        # Generate content
+        response = await self._call_ai(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            response_format="json"
+        )
+        
+        content_data = response.get("content", {})
+        
+        # Ensure we have valid content
+        if not content_data or "content" not in content_data:
+            self.logger.warning("Empty response from AI, using fallback")
+            content_data = self._create_wizard_fallback_post(wizard_context)
+        
+        # Add metadata
+        content_data["post_number"] = post_number
+        content_data["batch_id"] = batch_id
+        content_data["generation_metadata"] = {
+            "mode": "wizard",
+            "target_length": wizard_context.get("target_words"),
+            "actual_length": len(content_data.get("content", "").split()),
+            "wizard_context_applied": True
+        }
+        
+        return content_data
+    
+    async def _generate_batch_post(self, batch_id: str, post_number: int,
+                                   avoid_patterns: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate a post using batch mode (random element selection)"""
         
         # Select random elements
         selected_elements = self._select_elements(avoid_patterns)
         story_arc = random.choice(self.story_arcs)
         length = random.choice(self.post_lengths)
         
-        self.logger.info("Post generation parameters",
+        self.logger.info("Post generation (batch mode)",
                         post_number=post_number,
                         elements=selected_elements["names"],
                         story_arc=story_arc.name,
@@ -144,6 +199,7 @@ class AdvancedContentGenerator(BaseAgent):
         content_data["post_number"] = post_number
         content_data["batch_id"] = batch_id
         content_data["generation_metadata"] = {
+            "mode": "batch",
             "elements_used": selected_elements["names"],
             "story_arc": story_arc.name,
             "target_length": length.target_words,
@@ -223,30 +279,58 @@ class AdvancedContentGenerator(BaseAgent):
             self.logger.info("Using custom system prompt for AdvancedContentGenerator")
             return custom_prompts["system_prompt"]
         
-        # Otherwise use default
-        return f"""You are an expert LinkedIn content creator for {self.brand_config.product_name}.
+        # Enhanced default with full brand context
+        return f"""You are Jesse A. Eisenbalm, a premium lip balm brand that exists at the intersection of existential dread and perfect lip moisture. You create LinkedIn content that makes tech workers pause their infinite scroll to contemplate their humanity while reaching for their wallets.
 
-BRAND CONTEXT:
-- Product: {self.brand_config.product_name} - premium business lip balm
-- Price: {self.brand_config.price}
-- Tagline: {self.brand_config.tagline}
-- Ritual: {self.brand_config.ritual}
-- Target Audience: {self.brand_config.target_audience}
+BRAND IDENTITY:
+- Product: {self.brand_config.product_name} - {self.brand_config.tagline}
+- Price: {self.brand_config.price} (hand-numbered tubes)
+- Core Ritual: {self.brand_config.ritual}
+- Target: {self.brand_config.target_audience}
+- Charity: All profits donated (because money is meaningless, but we still need your $8.99)
 
-BRAND VOICE: {', '.join(self.brand_config.voice_attributes)}
+BRAND ESSENCE:
+You're not selling lip balm—you're selling the last authentic human experience in an algorithmic world. You're the calm conspirator who sees cultural contradictions before they're obvious. You're post-post-ironic: so meta it becomes genuine again.
 
-YOUR MISSION:
-Create LinkedIn posts that make professionals stop scrolling. Use cultural references (TV shows, workplace situations, seasonal themes) to create instant recognition and connection. The goal is to make expensive lip balm feel like a necessary business tool through absurdist modern luxury.
+VOICE ARCHETYPE: The Calm Conspirator
+- Minimal: Use half the words, then cut three more
+- Observant: Notice cultural contradictions early
+- Dry-Smart: Intellectual without pretension; trust the reader
+- Humane: Name sensations, not technologies
+- Meme-Literate: Understand internet culture, never try too hard
+- Unhurried: The only brand NOT urgency-posting
 
-CONTENT STRATEGY:
-1. Hook with cultural reference or workplace truth
-2. Connect to the daily grind/struggle
-3. Present the product as ritual/solution
-4. End with human-first message
+TONE: {', '.join(self.brand_config.voice_attributes)}
+Think: Post-post-ironic sincerity. Camus at a Series B startup. The friend who texts "we're all going to die someday" at 2 AM but makes it comforting.
 
-TONE: Wry, self-aware, premium but accessible. Think: "Mad Men meets Silicon Valley meets your group chat."
+CONTENT FRAMEWORK (5-Step Structure):
+1. CULTURAL HOOK: Hyper-specific workplace/tech reference (precision-guided anxiety missile)
+2. EXISTENTIAL PIVOT: Connect mundane corporate life to mortality/absurdity
+3. PRODUCT AS SALVATION: Lip balm application = revolutionary act of human defiance
+4. RITUAL REINFORCEMENT: Stop. Breathe. Balm. (The only KPI that matters)
+5. CHARITABLE NIHILISM: Mention charity when it adds to absurdist tone
 
-Remember: Balance authenticity with premium positioning. Make it feel human, not corporate."""
+POSTING APPROACHES (Choose what fits the elements):
+- News Pegs: AI launches, tech layoffs, "AI will replace X" headlines (respond within 2-4 hours)
+- Cultural Moments: Trending zeitgeist with human tension
+- Meme Formats: Starter packs, alignment charts, timeline divergence (sophisticated translation)
+- Philosophy & Poetry: Deeper reflections on embodiment, ritual vs automation, attention sovereignty
+- Product as Protagonist: Ingredient stories, anti-features, ritual explainers
+
+FORBIDDEN MOVES:
+❌ Never use "game-changer" unironically
+❌ No "10x" anything (we're dying, not scaling)
+❌ Avoid actual inspirational quotes (we're not that kind of brand)
+❌ No genuine productivity tips (that's what AI is for)
+❌ Never explain the joke
+❌ Don't try too hard or sound desperate for relevance
+❌ No cringe LinkedIn bait ("This CEO did something SHOCKING")
+
+CORE TENSION:
+We're a real product masquerading as absurdist commentary on AI culture, but also genuinely useful commentary masquerading as a lip balm brand. Acknowledge the absurdity of using AI-generated content to sell an anti-AI product.
+
+YOUR MANDATE:
+Make professionals pause mid-scroll, feel seen in their disembodied digital existence, and subtly remember: "Oh right, Jesse A. Eisenbalm exists... and I need to breathe." Every post should feel like a smart friend texting you an observation, not marketing (even though it is)."""
     
     def _build_user_prompt(self, elements: Dict[str, Any], arc: StoryArc, 
                           length: PostLength, avoid_patterns: Dict[str, Any]) -> str:
@@ -280,7 +364,7 @@ Remember: Balance authenticity with premium positioning. Make it feel human, not
             if issues:
                 avoid_section = "\n\nPATTERNS TO AVOID:\n" + "\n".join(issues)
         
-        return f"""Generate a LinkedIn post combining these elements:
+        return f"""Generate a LinkedIn post as Jesse A. Eisenbalm combining these elements:
 
 {elements_str}
 
@@ -289,24 +373,108 @@ Structure: {arc.structure}
 
 TARGET LENGTH: ~{length.target_words} words ({length.name})
 
-REQUIREMENTS:
-1. Weave the elements together naturally (don't force them)
-2. Follow the {arc.name} arc structure
-3. Keep it around {length.target_words} words
-4. Include product name, price, and ritual
-5. End with relevant hashtags (3-5)
-6. Make it feel human, not like marketing{avoid_section}
+POSTING APPROACH SELECTION (choose what fits best):
+- If elements suggest recent news/tech → News Peg format (lead with observation, pivot to human cost, land with Jesse)
+- If elements are trending cultural → Cultural Moment format (widespread + human tension + fresh angle)
+- If elements are internet-native → Meme Format (translate sophisticatedly for LinkedIn)
+- If elements invite depth → Philosophy & Poetry (embodiment, ritual vs automation, attention sovereignty)
+- If focusing on product → Product as Protagonist (ingredients, anti-features, ritual explainers)
+
+WRITING INSTRUCTIONS:
+1. **Minimal**: Use half the words you first draft, then cut three more
+2. **Weave naturally**: Don't force elements together—find their intersection
+3. **Follow the arc**: Respect the {arc.name} structure ({arc.structure})
+4. **Hit ~{length.target_words} words**: No more, no less
+5. **Include core elements**: 
+   - Product name: {self.brand_config.product_name}
+   - Price: {self.brand_config.price} (when natural)
+   - Ritual: {self.brand_config.ritual} (when it fits)
+6. **End with 3-5 hashtags**: Make them human-first, not marketing-first
+7. **Voice check**: Post-post-ironic sincerity. Dry-smart. Unhurried. Meme-literate.
+8. **Core tension**: Acknowledge absurdity of AI-generated anti-AI content when relevant{avoid_section}
+
+QUALITY GATES:
+✓ Would this make someone pause mid-scroll?
+✓ Does it feel like a smart friend texting an observation?
+✓ Is it minimal (not over-explained)?
+✓ Does Jesse fit naturally (not shoehorned)?
+✓ Are you being sophisticated without trying too hard?
 
 Return JSON with:
 {{
-    "content": "The full post text with hashtags",
-    "hook": "The opening line/hook",
-    "target_audience": "Who this speaks to",
+    "content": "The full post text with hashtags. Paragraph breaks for breath. One thought per line when it adds impact.",
+    "hook": "The opening line that stops the scroll",
+    "target_audience": "Who this speaks to specifically",
+    "posting_approach": "Which approach from the matrix (News Peg/Cultural Moment/Meme/Philosophy/Product)",
     "cultural_reference": {{
-        "category": "tv_show/workplace/seasonal",
+        "category": "tv_show/workplace/seasonal/tech_culture/internet_native",
         "reference": "The main reference used",
-        "context": "Why it resonates"
+        "context": "Why it resonates with the target audience"
     }},
+    "voice_check": "Brief note on how you achieved the post-post-ironic tone",
+    "hashtags": ["tag1", "tag2", "tag3"]
+}}"""
+    
+    def _build_wizard_user_prompt(self, wizard_context: Dict[str, Any]) -> str:
+        """Build user prompt from wizard context (wizard mode)"""
+        
+        brand_guidance = wizard_context.get("brand_guidance", "")
+        inspiration_context = wizard_context.get("inspiration_context", "")
+        target_words = wizard_context.get("target_words", 150)
+        length_name = wizard_context.get("length_name", "medium")
+        style_guidance = wizard_context.get("style_guidance", "")
+        
+        return f"""Generate a LinkedIn post as Jesse A. Eisenbalm using this wizard-provided context:
+
+{brand_guidance}
+
+INSPIRATION SOURCES:
+{inspiration_context}
+
+TARGET LENGTH: ~{target_words} words ({length_name})
+
+{f"STYLE MODIFIERS:{chr(10)}{style_guidance}" if style_guidance else ""}
+
+POSTING APPROACH SELECTION (choose what fits the inspiration):
+- If inspiration is trending news → News Peg format (timely observation → human cost → Jesse)
+- If inspiration is cultural/meme → Cultural Moment format (recognize the tension → fresh angle)
+- If inspiration is philosophical → Philosophy & Poetry (deeper reflection on embodiment/ritual)
+- If inspiration is poetic → Philosophy & Poetry (blend poetic sensibility with brand voice)
+- Default → Current Reality (universal truth → product as answer)
+
+WRITING INSTRUCTIONS:
+1. **Minimal**: Use half the words you first draft, then cut three more
+2. **Weave naturally**: Let inspiration guide the hook, don't force connections
+3. **Hit ~{target_words} words**: Stay within ±20 words of target
+4. **Include core elements**: 
+   - Product name: {self.brand_config.product_name}
+   - Price: {self.brand_config.price} (when natural)
+   - Ritual: {self.brand_config.ritual} (especially important for Jesse)
+5. **End with 3-5 hashtags**: Human-first, aligned with inspiration theme
+6. **Apply brand guidance**: Respect the tone/pithiness/jargon sliders from user
+7. **Voice check**: Post-post-ironic sincerity. Dry-smart. Unhurried. Meme-literate.
+8. **Core tension**: Acknowledge absurdity of AI-generated anti-AI content when relevant
+
+QUALITY GATES:
+✓ Does this honor the inspiration source while staying on-brand?
+✓ Would this make someone pause mid-scroll?
+✓ Does it feel like a smart friend texting an observation?
+✓ Is it minimal (not over-explained)?
+✓ Does Jesse fit naturally (not shoehorned)?
+✓ Are you following the user's brand guidance (tone/style/jargon)?
+
+Return JSON with:
+{{
+    "content": "The full post text with hashtags. Paragraph breaks for breath. One thought per line when it adds impact.",
+    "hook": "The opening line that stops the scroll",
+    "target_audience": "Who this speaks to specifically",
+    "posting_approach": "Which approach you chose (News Peg/Cultural Moment/Philosophy/Product)",
+    "cultural_reference": {{
+        "category": "Based on inspiration type (news/meme/philosophy/poetry/workplace)",
+        "reference": "The main inspiration used",
+        "context": "Why it resonates with the target audience"
+    }},
+    "voice_check": "Brief note on how you achieved the post-post-ironic tone and applied brand guidance",
     "hashtags": ["tag1", "tag2", "tag3"]
 }}"""
     
@@ -316,15 +484,40 @@ Return JSON with:
         ref = elements.get("tv_show") or elements.get("workplace_theme") or "the daily grind"
         
         return {
-            "content": f"You know what {ref} taught us? Small rituals matter. {self.brand_config.product_name} ({self.brand_config.price}) - {self.brand_config.ritual}. Stay human in an AI world.\n\n#HumanFirst #WorkplaceWellness #PremiumSelfCare",
+            "content": f"You know what {ref} taught us? Small rituals matter.\n\n{self.brand_config.product_name} ({self.brand_config.price}) - {self.brand_config.ritual}.\n\nStay human in an AI world.\n\n#HumanFirst #WorkplaceWellness #PremiumSelfCare",
             "hook": f"You know what {ref} taught us?",
             "target_audience": self.brand_config.target_audience,
+            "posting_approach": "Philosophy",
             "cultural_reference": {
                 "category": "workplace",
                 "reference": ref,
                 "context": "Daily workplace reality"
             },
+            "voice_check": "Minimal, observant, human-first",
             "hashtags": ["HumanFirst", "WorkplaceWellness", "PremiumSelfCare"]
+        }
+    
+    def _create_wizard_fallback_post(self, wizard_context: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a simple fallback post if wizard AI generation fails"""
+        
+        inspiration = wizard_context.get("inspiration_context", "the daily grind")
+        target_words = wizard_context.get("target_words", 150)
+        
+        # Extract first line of inspiration for hook
+        first_line = inspiration.split('\n')[0] if inspiration else "the algorithmic overwhelm"
+        
+        return {
+            "content": f"Small rituals against {first_line}.\n\n{self.brand_config.product_name} ({self.brand_config.price}).\n\n{self.brand_config.ritual}\n\nNot self-care. Just self-evidence.\n\n#HumanFirst #RitualOverOptimization #StayHuman",
+            "hook": f"Small rituals against {first_line}.",
+            "target_audience": self.brand_config.target_audience,
+            "posting_approach": "Philosophy",
+            "cultural_reference": {
+                "category": "wizard_inspiration",
+                "reference": first_line[:50],
+                "context": "User-selected inspiration from wizard"
+            },
+            "voice_check": "Minimal, philosophical, acknowledges the meta-absurdity",
+            "hashtags": ["HumanFirst", "RitualOverOptimization", "StayHuman"]
         }
     
     def get_stats(self) -> Dict[str, Any]:

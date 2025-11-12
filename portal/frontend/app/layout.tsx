@@ -44,13 +44,7 @@ export default function RootLayout({
                   <span>📝</span>
                   <span>Dashboard</span>
                 </Link>
-                <Link
-                  href="/prompts"
-                  className="text-gray-600 hover:text-purple-600 transition-colors duration-300 text-sm font-medium uppercase tracking-wider flex items-center gap-2"
-                >
-                  <span>🤖</span>
-                  <span>Agent Prompts</span>
-                </Link>
+                
               </div>
             </div>
             <div className="text-xs text-gray-500 font-medium uppercase tracking-widest">
