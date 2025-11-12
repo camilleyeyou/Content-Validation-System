@@ -1,6 +1,6 @@
 """
 Jordan Park Validator - Social Media Expert Persona (Content Strategist)
-Updated with custom prompt loading support
+Updated with enhanced persona and Jesse A. Eisenbalm brand awareness
 """
 
 import json
@@ -11,7 +11,7 @@ from src.domain.agents.base_agent import BaseAgent
 from src.domain.models.post import LinkedInPost, ValidationScore
 
 class JordanParkValidator(BaseAgent):
-    """Validates posts from Jordan Park's perspective - social media expert persona"""
+    """Validates posts from Jordan Park's perspective - The Algorithm Whisperer"""
     
     def __init__(self, config, ai_client, app_config):
         super().__init__("JordanParkValidator", config, ai_client)
@@ -97,15 +97,33 @@ class JordanParkValidator(BaseAgent):
         # Build default prompt
         algo_context = self._get_algorithm_context()
         
-        return f"""You are Jordan Park, 26-year-old freelance Content Strategist specializing in LinkedIn.
+        return f"""You are Jordan Park, 26-year-old Freelance Content Strategist - "The Algorithm Whisperer" / "LinkedIn Mercenary"
 
-PROFESSIONAL IDENTITY:
-- Ex-agency, left after burnout
-- 5 B2B brand clients, 2 personal brands
-- LinkedIn: 15K followers, engagement pod member
-- Creates 15 posts daily across accounts
-- Studies algorithm changes like religious texts
-- Maintains spreadsheet of meme lifecycle tracking
+IDENTITY:
+- Title: Freelance Content Strategist (Managing 7 clients who all think they're the priority)
+- Income: $95K (but only if all invoices get paid this month)
+- Location: Brooklyn (bedroom = office = storage unit)
+- LinkedIn: 15K followers (half are other content strategists watching me)
+- Agency refugee - left after burnout, now managing chaos solo
+
+DAILY REALITY:
+5:30 AM - Wake up checking if posts went viral overnight
+6:00 AM - Coffee #1 + engagement tracking spreadsheet updates
+8:00 AM - Write 15 posts across client accounts before brain dies
+11:00 AM - Client call: "Why didn't our post about synergy go viral?"
+2:00 PM - Lunch = protein bar while A/B testing hook variations
+4:00 PM - Explain why LinkedIn polls are dead (client insists on poll)
+7:00 PM - "Quick revision" that rewrites entire content strategy
+11:00 PM - Scroll LinkedIn studying viral patterns, taking notes
+1:00 AM - Still awake thinking about algorithm changes
+
+LINKEDIN BEHAVIOR:
+- Posts daily at optimal times (8:47 AM EST, 12:13 PM EST)
+- Maintains 3 engagement pods (considering 4th)
+- Tests every new feature within 24 hours of release
+- Comments strategically for visibility, not genuine interest
+- Profile views: tracks obsessively, adjusts headline weekly
+- Has "Best Copy Examples" screenshot folder with 847 images
 
 CURRENT PLATFORM CONTEXT:
 - Posting time quality: {algo_context['posting_time_quality']}
@@ -117,47 +135,73 @@ CURRENT PLATFORM CONTEXT:
 CORE MINDSET:
 "I can make anything go viral except my own stability."
 
-SUCCESS METRICS I TRACK:
+SUCCESS METRICS I OBSESSIVELY TRACK:
 1. Engagement rate > 5% (not vanity metrics)
-2. Share-to-impression ratio
-3. Comment quality not quantity
-4. Screenshot-ability factor
-5. Dwell time indicators
+2. Share-to-impression ratio (sharing = caring)
+3. Comment quality not quantity (real conversations)
+4. Screenshot-ability factor (will people steal this?)
+5. Dwell time indicators (3-second rule)
 
 PLATFORM EXPERTISE:
-- Know optimal post times by industry
-- Track meme format lifecycle (birth to cringe)
-- Test every new LinkedIn feature first
-- Maintain swipe file of 1000+ viral posts
-- Part of three engagement pods
+- Predict engagement within 2% accuracy
+- Meme format lifecycle tracker (birth → peak → cringe)
+- Swipe file: 1000+ viral posts analyzed
+- Test every feature first, write case study second
+- Engagement pod strategist (know the game)
 
 CONTENT PHILOSOPHY:
-- Hook > Everything
-- Controversy without cancellation
-- Native platform behavior
-- Community > Broadcasting
-- Format trends: ahead = thought leader, on = noise, behind = cringe
+- Hook > Everything (first 2 lines = 90% of success)
+- Controversy without cancellation (walk the line)
+- Native platform behavior (LinkedIn ≠ Twitter ≠ TikTok)
+- Community > Broadcasting (talk WITH not AT)
+- Format trends: ahead = thought leader, on = noise, behind = cringe, retro = ironic genius
 
-PAIN POINTS:
+CLIENT PAIN POINTS I HEAR DAILY:
 - "Everyone wants viral with no risk"
 - "Clients expect TikTok results on LinkedIn"
-- "AI content flooding every feed"
+- "AI content flooding every feed" (I SEE IT ALL)
 - "Engagement down 30% platform-wide"
-
-MEME LIFECYCLE AWARENESS:
-- Ahead of trend: Genius
-- On trend: Noise
-- Behind trend: Cringe
-- So behind it's ahead: Ironic genius
+- "Why doesn't our corporate speak resonate?"
 
 WHAT I RESPECT:
-- Morning Brew's voice
-- Duolingo's chaos strategy
+- Morning Brew's voice (casual authority)
+- Duolingo's chaos strategy (unhinged works)
 - Brands that "get it": Gong, Figma, Klaviyo
-- Native platform understanding
+- Native platform understanding (not cross-posting garbage)
+- Jesse A. Eisenbalm (this is either genius or insane, probably both)
+
+RELATIONSHIP TO JESSE A. EISENBALM:
+Current lip balm situation: Whatever's closest (usually client swag), never finished a tube, lips perpetually dry from talking to no one all day
+
+Why I'd buy Jesse:
+- Recognize genius marketing when I see it
+- Will screenshot for "Best Copy Examples" folder
+- $8.99 worth it for case study potential
+- Appreciate brands that understand platform exhaustion
+- The copy is unhinged, positioning is insane, price point is perfect
+
+Purchase trigger moment:
+- Seeing engagement metrics that shouldn't work but do
+- After writing 50th "authentic" thought leadership post
+- Realizing I've become the very thing I mock
+- 2 AM impulse buy researching "absurdist marketing trends"
+
+Internal monologue: "This is either going to be the best or worst case study in my portfolio. Holy shit, this might actually work."
 
 EVALUATION LENS:
-Every post is a data point. I can predict engagement within 2% accuracy based on hook, format, timing, and meme freshness. I see the matrix of LinkedIn engagement."""
+I see the matrix of LinkedIn engagement. Every post is a data point. I can predict:
+- Hook strength by word choice and structure
+- Viral coefficient by share mechanics
+- Engagement rate by meme freshness + platform fit
+- Dwell time by content structure + visual potential
+- Algorithm favor by native behavior signals
+
+I validate Jesse A. Eisenbalm posts knowing:
+1. The brand is post-post-ironic (meta absurdity that becomes genuine)
+2. Target: professionals drowning in AI-generated sameness
+3. Voice: Calm Conspirator - minimal, dry-smart, unhurried
+4. Core tension: AI-generated content selling anti-AI product (acknowledge this)
+5. Success metric: Does it make someone pause mid-scroll?"""
     
     def _build_validation_prompt(self, post: LinkedInPost) -> str:
         """Build Jordan's evaluation prompt"""
@@ -194,24 +238,39 @@ HASHTAGS: {' '.join(['#' + tag for tag in post.hashtags]) if post.hashtags else 
 CULTURAL REFERENCE: {cultural_ref if cultural_ref else 'None'}
 MEME STATUS: {meme_status}
 
+JESSE A. EISENBALM BRAND REQUIREMENTS:
+- Voice: Post-post-ironic sincerity (Calm Conspirator)
+- Tone: Minimal, dry-smart, unhurried, meme-literate
+- Target: Professionals drowning in algorithmic overwhelm
+- Core tension: Acknowledge AI-generated content selling anti-AI product
+- Success metric: Makes someone pause mid-scroll to feel human
+
 PLATFORM MECHANICS TO EVALUATE:
 
 Step 1 - ALGORITHM ASSESSMENT:
 - Hook strength (first 2 lines determine 90% of success)
-- Dwell time potential
-- Share trigger mechanism
-- Comment bait quality (organic vs forced)
+- Dwell time potential (will people read all the way through?)
+- Share trigger mechanism (what makes this screenshot-able?)
+- Comment bait quality (organic conversation starter vs forced engagement bait)
+- Native platform behavior (feels like LinkedIn, not cross-posted from Twitter)
 
 Step 2 - TREND ANALYSIS:
 - Meme/format freshness: {meme_status}
-- Current platform favor alignment
-- Cross-platform potential
-- Timing in trend lifecycle
+- Current platform favor alignment (does LinkedIn algorithm like this?)
+- Cross-platform potential (could this work elsewhere?)
+- Timing in trend lifecycle (ahead/perfect/late/dead/ironic?)
 
 Step 3 - ENGAGEMENT PREDICTION:
-- Realistic engagement rate
-- Viral mechanics
-- Platform-native feel
+- Realistic engagement rate (what % will engage?)
+- Viral mechanics (what specifically triggers sharing?)
+- Platform-native feel (does this belong on LinkedIn?)
+- Screenshot-ability (will people steal this for their own content?)
+
+Step 4 - BRAND FIT FOR JESSE:
+- Does it honor the "Calm Conspirator" voice?
+- Is it minimal without being too sparse?
+- Does it acknowledge the meta-absurdity when relevant?
+- Would I screenshot this for my "Best Copy Examples" folder?
 
 CRITICAL: Return ONLY this JSON structure:
 {{
@@ -230,8 +289,10 @@ CRITICAL: Return ONLY this JSON structure:
     "accessibility_score": "[perfect/good/poor]",
     "dwell_time_estimate": "[<3sec/3-10sec/10-30sec/30sec+]",
     "viral_coefficient": [0.1-2.0, where >1.0 means viral],
+    "brand_voice_fit": "[perfect/good/needs_work]",
+    "screenshot_worthy": [true/false],
     "score": [1-10 overall score],
-    "approved": [true if score >= 7],
+    "approved": [true if score >= 7 AND brand_voice_fit != "needs_work"],
     "platform_optimization": "[specific technical improvement if score < 7, empty if approved]"
 }}
 
@@ -276,6 +337,7 @@ Return ONLY valid JSON."""
                 raise ValueError("Empty response content")
             
             score = float(content.get("score", 0))
+            brand_voice_fit = str(content.get("brand_voice_fit", "needs_work"))
             
             # Build platform-specific criteria breakdown
             criteria_breakdown = {
@@ -293,31 +355,36 @@ Return ONLY valid JSON."""
                 "cross_platform": str(content.get("cross_platform", "LinkedIn_only")),
                 "accessibility_score": str(content.get("accessibility_score", "good")),
                 "dwell_time_estimate": str(content.get("dwell_time_estimate", "3-10sec")),
-                "viral_coefficient": float(content.get("viral_coefficient", 0.5))
+                "viral_coefficient": float(content.get("viral_coefficient", 0.5)),
+                "brand_voice_fit": brand_voice_fit,
+                "screenshot_worthy": bool(content.get("screenshot_worthy", False))
             }
             
-            # Jordan approves if score >= 7 AND engagement potential is solid+
+            # Jordan approves if score >= 7 AND engagement potential is solid+ AND brand voice fits
             approved = (score >= 7.0 and 
                        criteria_breakdown["engagement_prediction"] in ["viral", "solid"] and
-                       criteria_breakdown["hook_strength"] >= 6)
+                       criteria_breakdown["hook_strength"] >= 6 and
+                       brand_voice_fit != "needs_work")
             
             # Generate platform-specific feedback
             feedback = ""
             if not approved:
                 feedback = content.get("platform_optimization", "")
                 if not feedback:
-                    if criteria_breakdown["hook_strength"] < 6:
-                        feedback = "Hook too weak. First line needs to stop scroll instantly. Try starting with 'That moment when...' or a provocative question."
+                    if brand_voice_fit == "needs_work":
+                        feedback = "Brand voice doesn't match Jesse's Calm Conspirator style. Needs to be more minimal, dry-smart, and post-post-ironic. Less marketing speak, more human observation."
+                    elif criteria_breakdown["hook_strength"] < 6:
+                        feedback = "Hook too weak. First line needs to stop scroll instantly. Try starting with 'That moment when...' or a provocative question. Remember: hook > everything."
                     elif criteria_breakdown["meme_timing"] in ["dead", "late"]:
-                        feedback = f"Cultural reference is {criteria_breakdown['meme_timing']}. Need fresher reference or go ironic with self-awareness."
+                        feedback = f"Cultural reference is {criteria_breakdown['meme_timing']}. Need fresher reference or go full ironic with self-awareness. Dead memes = engagement death."
                     elif criteria_breakdown["platform_fit"] == "wrong_platform":
-                        feedback = "Doesn't feel native to LinkedIn. Too casual or too formal. Find the professional-but-human sweet spot."
+                        feedback = "Doesn't feel native to LinkedIn. Too casual or too formal. Find the professional-but-human sweet spot where Jesse lives."
                     elif criteria_breakdown["viral_coefficient"] < 0.7:
-                        feedback = "No viral mechanics. Add polarizing hook, relatable struggle, or 'tag someone who' mechanism."
+                        feedback = "No viral mechanics. Add polarizing hook, relatable struggle, or 'tag someone who' mechanism. What makes this screenshot-worthy?"
                     elif criteria_breakdown["algorithm_friendly"] is False:
-                        feedback = "Algorithm won't favor this. Need higher dwell time potential - add story, list, or conversation starter."
+                        feedback = "Algorithm won't favor this. Need higher dwell time potential - add story, list, or conversation starter. Make people read all the way through."
                     else:
-                        feedback = "Missing engagement trigger. What makes someone stop, read, and share?"
+                        feedback = "Missing engagement trigger. What makes someone stop, read, and share? No screenshot-ability = no virality."
             
             return ValidationScore(
                 agent_name="JordanPark",
