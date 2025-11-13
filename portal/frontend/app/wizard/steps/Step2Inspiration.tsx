@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function Step2Inspiration({ state, setState, onNext, onBack, loading, setLoading, setError }: Props) {
-  const [activeTab, setActiveTab] = useState<"news" | "memes" | "philosophers" | "poets">("news");
+  const [activeTab, setActiveTab] = useState<"news" | "philosophers" | "poets">("news");
   const [sources, setSources] = useState<any>(null);
 
   useEffect(() => {
@@ -141,7 +141,6 @@ export default function Step2Inspiration({ state, setState, onNext, onBack, load
                 >
                   <span className="text-lg">
                     {sel.type === "news" && "📰"}
-                    {sel.type === "memes" && "😄"}
                     {sel.type === "philosopher" && "🧠"}
                     {sel.type === "poet" && "✍️"}
                   </span>
@@ -167,7 +166,6 @@ export default function Step2Inspiration({ state, setState, onNext, onBack, load
           <div className="flex flex-wrap gap-3">
             {[
               { key: "news", label: "News", icon: "📰", count: sources?.news?.length || 0 },
-              { key: "memes", label: "Memes", icon: "😄", count: sources?.memes?.length || 0 },
               { key: "philosophers", label: "Philosophy", icon: "🧠", count: sources?.philosophers?.length || 0 },
               { key: "poets", label: "Poetry", icon: "✍️", count: sources?.poets?.length || 0 },
             ].map(tab => (
@@ -201,20 +199,6 @@ export default function Step2Inspiration({ state, setState, onNext, onBack, load
                   item={item}
                   isSelected={isSelected("news", item.id)}
                   onToggle={() => toggleSelection("news", item.id, item)}
-                />
-              ))}
-            </div>
-          )}
-
-          {activeTab === "memes" && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              {sources?.memes?.map((item: any) => (
-                <InspirationCard
-                  key={item.id}
-                  type="memes"
-                  item={item}
-                  isSelected={isSelected("memes", item.id)}
-                  onToggle={() => toggleSelection("memes", item.id, item)}
                 />
               ))}
             </div>
@@ -303,20 +287,6 @@ function InspirationCard({ type, item, isSelected, onToggle }: any) {
               </h4>
               <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
                 {item.description}
-              </p>
-            </>
-          )}
-
-          {type === "memes" && (
-            <>
-              <h4 className="text-gray-900 mb-3 text-lg font-semibold">
-                {item.name}
-              </h4>
-              <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                {item.context}
-              </p>
-              <p className="text-xs text-purple-700 bg-purple-100 px-3 py-1.5 rounded-md inline-block uppercase tracking-wider border border-purple-200 font-medium">
-                {item.usage}
               </p>
             </>
           )}
