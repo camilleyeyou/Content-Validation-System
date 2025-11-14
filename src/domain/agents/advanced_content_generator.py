@@ -1,6 +1,7 @@
 """
 Advanced Content Generator - Multi-element combination with story arcs
 Generates LinkedIn posts using layered cultural references and workplace themes
+NOW WITH: Cost tracking context setting
 """
 
 import random
@@ -34,10 +35,10 @@ class PostLength:
     target_words: int
     
     # Predefined lengths
-    HAIKU = ("HAIKU", 50)  # Ultra-short, punchy
-    TWEET = ("TWEET", 100)  # Twitter-length
-    STANDARD = ("STANDARD", 150)  # LinkedIn sweet spot
-    ESSAY = ("ESSAY", 250)  # Longer form
+    HAIKU = ("HAIKU", 50)
+    TWEET = ("TWEET", 100)
+    STANDARD = ("STANDARD", 150)
+    ESSAY = ("ESSAY", 250)
 
 
 class AdvancedContentGenerator(BaseAgent):
@@ -52,6 +53,10 @@ class AdvancedContentGenerator(BaseAgent):
         
         self.brand_config = app_config.brand
         self.cultural_refs = app_config.cultural_references
+        
+        # ⭐ ADDED: Set agent name for cost tracking (safe - checks if method exists)
+        if hasattr(self.ai_client, 'set_agent_name'):
+            self.ai_client.set_agent_name("AdvancedContentGenerator")
         
         # Import and initialize prompt manager
         from src.infrastructure.prompts.prompt_manager import get_prompt_manager
@@ -90,7 +95,7 @@ class AdvancedContentGenerator(BaseAgent):
         batch_id = input_data.get("batch_id")
         count = input_data.get("count", 1)
         avoid_patterns = input_data.get("avoid_patterns", {})
-        wizard_context = input_data.get("wizard_context")  # New: wizard mode detection
+        wizard_context = input_data.get("wizard_context")
         
         mode = "wizard" if wizard_context else "batch"
         self.logger.info("Starting content generation with images",
@@ -110,6 +115,10 @@ class AdvancedContentGenerator(BaseAgent):
                                     avoid_patterns: Dict[str, Any],
                                     wizard_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Generate a single post with multi-element combination or wizard context"""
+        
+        # ⭐ ADDED: Set context for cost tracking (safe - checks if method exists)
+        if hasattr(self.ai_client, 'set_context'):
+            self.ai_client.set_context(batch_id=batch_id, post_number=post_number)
         
         # Wizard mode: use wizard context
         if wizard_context:
@@ -230,10 +239,10 @@ class AdvancedContentGenerator(BaseAgent):
         
         # Randomly select combination approach
         combo_type = random.choice([
-            "tv_workplace",      # TV show + workplace theme
-            "tv_seasonal",       # TV show + seasonal theme
-            "workplace_seasonal", # Workplace + seasonal
-            "triple"             # All three (rare)
+            "tv_workplace",
+            "tv_seasonal",
+            "workplace_seasonal",
+            "triple"
         ])
         
         elements = {}
@@ -340,7 +349,6 @@ Make professionals pause mid-scroll, feel seen in their disembodied digital exis
         custom_prompts = self.prompt_manager.get_agent_prompts("AdvancedContentGenerator")
         if custom_prompts.get("user_prompt_template"):
             self.logger.info("Using custom user prompt template for AdvancedContentGenerator")
-            # Use custom template (will need to format it with the variables)
             return custom_prompts["user_prompt_template"]
         
         # Build element description
@@ -503,7 +511,6 @@ Return JSON with:
         inspiration = wizard_context.get("inspiration_context", "the daily grind")
         target_words = wizard_context.get("target_words", 150)
         
-        # Extract first line of inspiration for hook
         first_line = inspiration.split('\n')[0] if inspiration else "the algorithmic overwhelm"
         
         return {

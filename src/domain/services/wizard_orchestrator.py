@@ -19,6 +19,7 @@ from src.domain.agents.validators.jordan_park_validator import JordanParkValidat
 from src.domain.agents.feedback_aggregator import FeedbackAggregator
 from src.domain.agents.revision_generator import RevisionGenerator
 from src.infrastructure.config.config_manager import AppConfig
+from src.infrastructure.cost_tracking.cost_tracker import get_cost_tracker  # ⭐ ADDED FOR COST TRACKING
 
 logger = structlog.get_logger()
 
@@ -252,6 +253,39 @@ class WizardOrchestrator:
                            generation_time=generation_time,
                            has_image=bool(post.image_url),
                            validation_approved=validation_result["approved"])
+            
+            # ⭐⭐⭐ ADDED: Finalize post cost for dashboard tracking ⭐⭐⭐
+            try:
+                cost_tracker = get_cost_tracker()
+                post_summary = cost_tracker.finalize_post_cost(
+                    batch_id=session_id,
+                    post_number=1
+                )
+                
+                if post_summary:
+                    self.logger.info(
+                        "wizard_post_cost_finalized",
+                        session_id=session_id,
+                        total_cost=f"${post_summary.total_cost:.4f}",
+                        content_cost=f"${post_summary.content_generation_cost:.4f}",
+                        image_cost=f"${post_summary.image_generation_cost:.4f}",
+                        validation_cost=f"${post_summary.validation_cost:.4f}",
+                        api_calls=post_summary.api_calls
+                    )
+                else:
+                    self.logger.warning(
+                        "wizard_post_cost_not_found",
+                        session_id=session_id,
+                        message="No API calls found for this post - check batch_id/post_number matching"
+                    )
+            except Exception as e:
+                # Don't let cost tracking break the workflow
+                self.logger.warning(
+                    "wizard_post_cost_finalization_failed",
+                    session_id=session_id,
+                    error=str(e)
+                )
+            # ⭐⭐⭐ END OF COST TRACKING CODE ⭐⭐⭐
             
             return result
         

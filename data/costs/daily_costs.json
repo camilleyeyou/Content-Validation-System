@@ -1,0 +1,28 @@
+{
+  "2025-11-13": {
+    "date": "2025-11-13",
+    "openai_cost": 0.034678,
+    "gemini_cost": 0.5459999999999999,
+    "total_cost": 0.5806780000000001,
+    "text_generation_cost": 0.034678,
+    "image_generation_cost": 0.5459999999999999,
+    "posts_generated": 0,
+    "images_generated": 14,
+    "api_calls": 99,
+    "total_input_tokens": 150875,
+    "total_output_tokens": 20082
+  },
+  "2025-11-14": {
+    "date": "2025-11-14",
+    "openai_cost": 0.036322,
+    "gemini_cost": 0.663,
+    "total_cost": 0.6993220000000001,
+    "text_generation_cost": 0.036322,
+    "image_generation_cost": 0.663,
+    "posts_generated": 5,
+    "images_generated": 17,
+    "api_calls": 107,
+    "total_input_tokens": 158958,
+    "total_output_tokens": 20800
+  }
+}

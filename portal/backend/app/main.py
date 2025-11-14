@@ -44,6 +44,8 @@ from fastapi.staticfiles import StaticFiles
 # Import routers using relative import
 from .prompts_routes import router as prompts_router
 from .wizard_routes import router as wizard_router
+from .cost_routes import router as cost_router  # COST TRACKING
+
 
 # --------------------------------------------------------------------------------------
 # Env / Config
@@ -99,6 +101,8 @@ app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
 # --------------------------------------------------------------------------------------
 app.include_router(prompts_router)
 app.include_router(wizard_router, prefix="/api/wizard", tags=["wizard"])  # FIXED: Added prefix!
+app.include_router(cost_router)  # COST TRACKING
+
 
 # --------------------------------------------------------------------------------------
 # In-memory global queue
