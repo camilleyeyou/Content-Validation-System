@@ -254,6 +254,11 @@ class CostTracker:
         except Exception as e:
             logger.error(f"Failed to save cost data: {e}")
     
+    def reload_data(self):
+        """Reload cost data from files (for API endpoints to get fresh data)"""
+        self.logger.info("Reloading cost data from files")
+        self._load_data()
+    
     def calculate_text_cost(self, model: str, input_tokens: int, output_tokens: int, 
                            provider: str = "openai") -> Dict[str, float]:
         """Calculate cost for text generation"""

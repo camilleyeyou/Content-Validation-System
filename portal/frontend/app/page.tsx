@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import CostDashboard from "@/components/CostDashboard";  // ⭐ ADDED
+import CostDashboard from "@/components/CostDashboard";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8001";
@@ -223,13 +223,6 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* ⭐ ADDED: Cost Dashboard */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
-          <div className="p-8 md:p-12">
-            <CostDashboard />
           </div>
         </div>
 
@@ -505,6 +498,13 @@ export default function Dashboard() {
                 })}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Cost Dashboard - Moved to Bottom */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+          <div className="p-8 md:p-12">
+            <CostDashboard />
           </div>
         </div>
       </div>
