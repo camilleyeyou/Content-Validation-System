@@ -11,6 +11,7 @@ import uuid
 import time
 import asyncio
 import random
+import json
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from src.domain.agents.base_agent import BaseAgent, AgentConfig
@@ -67,7 +68,8 @@ class ImageGenerationAgent(BaseAgent):
             has_api_key=bool(self.google_api_key),
             output_dir=str(self.output_dir),
             visual_philosophy="what if Apple sold mortality?",
-            has_custom_prompts=self.prompt_manager.has_custom_prompts("ImageGenerationAgent")
+            has_custom_prompts=self.prompt_manager.has_custom_prompts("ImageGenerationAgent"),
+            product_spec_loaded=True
         )
         
         if not self.google_api_key:
@@ -79,6 +81,46 @@ class ImageGenerationAgent(BaseAgent):
     def _initialize_visual_language(self):
         """Initialize Jesse A. Eisenbalm visual language components"""
         
+        # ACTUAL PRODUCT SPECIFICATION (from real product photos)
+        # This ensures the product always looks like the actual Jesse A. Eisenbalm tube
+        self.product_spec = {
+            "tube_body": {
+                "color": "cream/ivory white with slight warm undertone",
+                "finish": "matte, smooth, non-reflective surface",
+                "material_appearance": "professional plastic/polymer tube",
+                "shape": "cylindrical lip balm tube, standard size approximately 0.15 oz / 4.25g",
+                "length": "approximately 2.5-3 inches",
+                "diameter": "approximately 0.5 inches"
+            },
+            "cap": {
+                "color": "white",
+                "style": "ribbed/grooved screw-on cap",
+                "finish": "matte white plastic",
+                "texture": "horizontal ridges for grip"
+            },
+            "branding": {
+                "brand_name": "JESSE A. EISENBALM",
+                "text_placement": "vertical orientation on tube body",
+                "text_color": "black",
+                "text_style": "uppercase, clean sans-serif font, professional spacing",
+                "text_size": "prominent but elegant"
+            },
+            "honeycomb_pattern": {
+                "structure": "geometric hexagonal honeycomb pattern",
+                "outline_color": "gold/bronze metallic outline",
+                "outline_style": "thin, precise lines forming interconnected hexagons",
+                "hexagon_contents": "small embedded photographs/images of Jesse within some hexagons",
+                "pattern_placement": "positioned below the brand name on tube body",
+                "hexagon_count": "cluster of approximately 7-9 hexagons in honeycomb arrangement",
+                "color_scheme": "gold outlines with cream background and small sepia-toned photos inside select hexagons"
+            },
+            "overall_aesthetic": {
+                "style": "clean, minimal, professional, premium",
+                "mood": "sophisticated simplicity with subtle personality",
+                "photography_notes": "product floats/levitates slightly with soft shadow beneath, suggesting lightness and premium quality"
+            }
+        }
+        
         # Brand color palette
         self.color_palette = {
             "navy": "deep navy blue (the color of 3 AM anxiety)",
@@ -86,201 +128,6 @@ class ImageGenerationAgent(BaseAgent):
             "cream": "soft cream tones (the void)",
             "error_red": "occasional error message red (corporate alarm)"
         }
-        
-        # Lighting moods (10 options for variety)
-        self.lighting_options = [
-            "harsh fluorescent lighting (office reality)",
-            "golden hour glow (what we're missing while working)",
-            "soft diffused natural light through office blinds",
-            "dramatic side lighting creating existential shadows)",
-            "clean studio lighting with subtle wrongness",
-            "blue-hour twilight filtering through glass",
-            "overhead pendant lamp creating intimate pool of light",
-            "backlit silhouette with rim lighting",
-            "multiple light sources creating complex shadows",
-            "soft box lighting with intentional lens flare"
-        ]
-        
-        # Scene categories (12 unique scenarios)
-        self.scene_categories = {
-            "boardroom_mortality": "Conference tables as meditation spaces on mortality",
-            "desk_shrine": "Lip balm as sacred object among corporate debris",
-            "human_machine": "Hands applying balm while screens glow with AI content",
-            "time_death": "Calendars, clocks, countdown timers, the passage of time",
-            "sacred_mundane": "Elevating the lip balm to religious icon status",
-            "inbox_zen": "Notification chaos surrounding the calm product",
-            "floating_workspace": "Minimalist desk suspended in void-like space",
-            "calendar_graveyard": "Expired meetings and cancelled syncs memorial",
-            "coffee_ring_mandala": "Stains and spills creating sacred geometry",
-            "zoom_fatigue_altar": "Camera-off sanctuary with product as centerpiece",
-            "ai_confession_booth": "Product positioned between human and screen",
-            "burnout_still_life": "Classical still life but with modern exhaustion elements"
-        }
-        
-        # Style references
-        self.aesthetic_references = [
-            "Kinfolk magazine meets Black Mirror",
-            "Medical diagram precision with Wes Anderson color stories",
-            "Corporate stock photos but make them surreal",
-            "LinkedIn screenshots as fine art",
-            "Expensive therapy office aesthetic",
-            "Apple product launch meets existential crisis",
-            "Minimalist brutalism with soft edges"
-        ]
-        
-        # Background variations (12 options)
-        self.background_options = [
-            "matte navy gradient fading to cream",
-            "soft focus office environment out of focus",
-            "geometric honeycomb pattern (subtle, background)",
-            "clean white surface with subtle texture",
-            "brushed metal desk surface with reflections",
-            "soft fabric texture (linen or cotton)",
-            "blurred cityscape through office window",
-            "abstract navy and gold watercolor wash",
-            "minimalist concrete texture",
-            "soft gradient from navy to gold to cream",
-            "frosted glass with soft bokeh lights",
-            "paper texture with coffee ring stains"
-        ]
-        
-        # Compositional styles (10 options)
-        self.composition_styles = [
-            "rule of thirds with product off-center left",
-            "centered symmetry with breathing room",
-            "diagonal composition creating dynamic tension",
-            "product in foreground, context blurred behind",
-            "overhead flat lay with surrounding elements",
-            "low angle looking up at product (hero shot)",
-            "close-up macro with selective focus",
-            "negative space dominant with product small",
-            "layered depth with foreground and background",
-            "golden ratio spiral composition"
-        ]
-        
-        # Camera angles (8 options)
-        self.camera_angles = [
-            "straight-on eye level (honest, direct)",
-            "slight overhead 45-degree angle",
-            "low angle hero shot (aspirational)",
-            "extreme close-up macro detail",
-            "three-quarter view showing depth",
-            "overhead flat lay (editorial style)",
-            "side profile with dramatic shadows",
-            "Dutch angle (subtle unease)"
-        ]
-        
-        # Texture variations (10 options)
-        self.texture_elements = [
-            "smooth matte finish with no reflection",
-            "subtle sheen catching light beautifully",
-            "soft fabric texture in background",
-            "hard surface with soft object contrast",
-            "paper texture with organic feel",
-            "glass surface with subtle reflections",
-            "wood grain adding warmth",
-            "metal surface adding premium feel",
-            "concrete adding brutalist edge",
-            "mixed textures creating layered depth"
-        ]
-        
-        # Color mood variations (8 options)
-        self.color_moods = [
-            "dominant navy with gold accents",
-            "cream base with navy and gold highlights",
-            "moody darks with single gold spotlight",
-            "high key bright with navy shadows",
-            "monochromatic navy variations",
-            "complementary navy and warm gold",
-            "desaturated with single color pop",
-            "rich navy fading to ethereal cream"
-        ]
-        
-        # Props with meaning
-        self.symbolic_props = [
-            "dying succulent (corporate life)",
-            "coffee ring stains (time passing)",
-            "unread notification badges (digital overwhelm)",
-            "expired calendar entries (mortality)",
-            "half-written resignation letter",
-            "laptop with 47 open tabs",
-            "empty inbox zero screenshot (false achievement)",
-            "performance review document",
-            "motivational poster (ironic)",
-            "wellness app notification (ignored)"
-        ]
-    
-    def _analyze_post_mood(self, post: LinkedInPost) -> str:
-        """Analyze post content to determine mood for intelligent image matching"""
-        content_lower = post.content.lower()
-        
-        # Detect themes in content
-        if any(word in content_lower for word in ['ai', 'automated', 'algorithm', 'chatgpt']):
-            return "tech_anxiety"
-        elif any(word in content_lower for word in ['meeting', 'calendar', 'zoom', 'sync']):
-            return "meeting_exhaustion"
-        elif any(word in content_lower for word in ['email', 'slack', 'notification']):
-            return "digital_overwhelm"
-        elif any(word in content_lower for word in ['burnout', 'exhausted', 'tired']):
-            return "burnout"
-        elif any(word in content_lower for word in ['deadline', 'quarter', 'review']):
-            return "time_pressure"
-        elif any(word in content_lower for word in ['human', 'real', 'authentic']):
-            return "humanity_seeking"
-        else:
-            return "existential_general"
-    
-    def _get_mood_appropriate_elements(self, mood: str) -> Dict[str, List[str]]:
-        """Get elements that match the post mood for more coherent images"""
-        
-        mood_mappings = {
-            "tech_anxiety": {
-                "scenes": ["ai_confession_booth", "human_machine", "desk_shrine"],
-                "props": ["laptop with 47 open tabs", "wellness app notification (ignored)", 
-                         "unread notification badges (digital overwhelm)"],
-                "compositions": ["product in foreground, context blurred behind",
-                               "layered depth with foreground and background"]
-            },
-            "meeting_exhaustion": {
-                "scenes": ["zoom_fatigue_altar", "calendar_graveyard", "boardroom_mortality"],
-                "props": ["expired calendar entries (mortality)", "coffee ring stains (time passing)"],
-                "compositions": ["overhead flat lay with surrounding elements",
-                               "centered symmetry with breathing room"]
-            },
-            "digital_overwhelm": {
-                "scenes": ["inbox_zen", "desk_shrine", "floating_workspace"],
-                "props": ["unread notification badges (digital overwhelm)", 
-                         "empty inbox zero screenshot (false achievement)"],
-                "compositions": ["negative space dominant with product small",
-                               "rule of thirds with product off-center left"]
-            },
-            "burnout": {
-                "scenes": ["burnout_still_life", "zoom_fatigue_altar", "sacred_mundane"],
-                "props": ["dying succulent (corporate life)", "coffee ring stains (time passing)",
-                         "half-written resignation letter"],
-                "compositions": ["close-up macro with selective focus",
-                               "side profile with dramatic shadows"]
-            },
-            "time_pressure": {
-                "scenes": ["time_death", "calendar_graveyard", "coffee_ring_mandala"],
-                "props": ["expired calendar entries (mortality)", "performance review document"],
-                "compositions": ["diagonal composition creating dynamic tension",
-                               "Dutch angle (subtle unease)"]
-            },
-            "humanity_seeking": {
-                "scenes": ["sacred_mundane", "desk_shrine", "floating_workspace"],
-                "props": ["motivational poster (ironic)", "dying succulent (corporate life)"],
-                "compositions": ["golden ratio spiral composition",
-                               "low angle looking up at product (hero shot)"]
-            },
-            "existential_general": {
-                "scenes": list(self.scene_categories.keys()),
-                "props": self.symbolic_props,
-                "compositions": self.composition_styles
-            }
-        }
-        
-        return mood_mappings.get(mood, mood_mappings["existential_general"])
         
         # Lighting moods (10 options for variety)
         self.lighting_options = [
@@ -405,6 +252,122 @@ class ImageGenerationAgent(BaseAgent):
             "wellness app notification (ignored)"
         ]
     
+    def _get_product_description(self) -> str:
+        """Generate detailed product description from spec JSON"""
+        spec = self.product_spec
+        
+        description = f"""PRODUCT SPECIFICATION - Jesse A. Eisenbalm Lip Balm Tube:
+
+TUBE BODY:
+- Color: {spec['tube_body']['color']}
+- Finish: {spec['tube_body']['finish']}
+- Material: {spec['tube_body']['material_appearance']}
+- Shape: {spec['tube_body']['shape']}
+- Dimensions: {spec['tube_body']['length']} long, {spec['tube_body']['diameter']} diameter
+
+CAP:
+- Color: {spec['cap']['color']}
+- Style: {spec['cap']['style']}
+- Finish: {spec['cap']['finish']}
+- Texture: {spec['cap']['texture']}
+
+BRANDING & TEXT:
+- Brand Name: {spec['branding']['brand_name']}
+- Text Placement: {spec['branding']['text_placement']}
+- Text Color: {spec['branding']['text_color']}
+- Text Style: {spec['branding']['text_style']}
+- Text Size: {spec['branding']['text_size']}
+
+HONEYCOMB PATTERN:
+- Structure: {spec['honeycomb_pattern']['structure']}
+- Outline Color: {spec['honeycomb_pattern']['outline_color']}
+- Outline Style: {spec['honeycomb_pattern']['outline_style']}
+- Contents: {spec['honeycomb_pattern']['hexagon_contents']}
+- Placement: {spec['honeycomb_pattern']['pattern_placement']}
+- Pattern Size: {spec['honeycomb_pattern']['hexagon_count']}
+- Color Scheme: {spec['honeycomb_pattern']['color_scheme']}
+
+OVERALL AESTHETIC:
+- Style: {spec['overall_aesthetic']['style']}
+- Mood: {spec['overall_aesthetic']['mood']}
+- Photography Note: {spec['overall_aesthetic']['photography_notes']}
+
+CRITICAL: The product MUST look exactly as described above. This is the actual Jesse A. Eisenbalm product."""
+        
+        return description
+    
+    def _analyze_post_mood(self, post: LinkedInPost) -> str:
+        """Analyze post content to determine mood for intelligent image matching"""
+        content_lower = post.content.lower()
+        
+        # Detect themes in content
+        if any(word in content_lower for word in ['ai', 'automated', 'algorithm', 'chatgpt']):
+            return "tech_anxiety"
+        elif any(word in content_lower for word in ['meeting', 'calendar', 'zoom', 'sync']):
+            return "meeting_exhaustion"
+        elif any(word in content_lower for word in ['email', 'slack', 'notification']):
+            return "digital_overwhelm"
+        elif any(word in content_lower for word in ['burnout', 'exhausted', 'tired']):
+            return "burnout"
+        elif any(word in content_lower for word in ['deadline', 'quarter', 'review']):
+            return "time_pressure"
+        elif any(word in content_lower for word in ['human', 'real', 'authentic']):
+            return "humanity_seeking"
+        else:
+            return "existential_general"
+    
+    def _get_mood_appropriate_elements(self, mood: str) -> Dict[str, List[str]]:
+        """Get elements that match the post mood for more coherent images"""
+        
+        mood_mappings = {
+            "tech_anxiety": {
+                "scenes": ["ai_confession_booth", "human_machine", "desk_shrine"],
+                "props": ["laptop with 47 open tabs", "wellness app notification (ignored)", 
+                         "unread notification badges (digital overwhelm)"],
+                "compositions": ["product in foreground, context blurred behind",
+                               "layered depth with foreground and background"]
+            },
+            "meeting_exhaustion": {
+                "scenes": ["zoom_fatigue_altar", "calendar_graveyard", "boardroom_mortality"],
+                "props": ["expired calendar entries (mortality)", "coffee ring stains (time passing)"],
+                "compositions": ["overhead flat lay with surrounding elements",
+                               "centered symmetry with breathing room"]
+            },
+            "digital_overwhelm": {
+                "scenes": ["inbox_zen", "desk_shrine", "floating_workspace"],
+                "props": ["unread notification badges (digital overwhelm)", 
+                         "empty inbox zero screenshot (false achievement)"],
+                "compositions": ["negative space dominant with product small",
+                               "rule of thirds with product off-center left"]
+            },
+            "burnout": {
+                "scenes": ["burnout_still_life", "zoom_fatigue_altar", "sacred_mundane"],
+                "props": ["dying succulent (corporate life)", "coffee ring stains (time passing)",
+                         "half-written resignation letter"],
+                "compositions": ["close-up macro with selective focus",
+                               "side profile with dramatic shadows"]
+            },
+            "time_pressure": {
+                "scenes": ["time_death", "calendar_graveyard", "coffee_ring_mandala"],
+                "props": ["expired calendar entries (mortality)", "performance review document"],
+                "compositions": ["diagonal composition creating dynamic tension",
+                               "Dutch angle (subtle unease)"]
+            },
+            "humanity_seeking": {
+                "scenes": ["sacred_mundane", "desk_shrine", "floating_workspace"],
+                "props": ["motivational poster (ironic)", "dying succulent (corporate life)"],
+                "compositions": ["golden ratio spiral composition",
+                               "low angle looking up at product (hero shot)"]
+            },
+            "existential_general": {
+                "scenes": list(self.scene_categories.keys()),
+                "props": self.symbolic_props,
+                "compositions": self.composition_styles
+            }
+        }
+        
+        return mood_mappings.get(mood, mood_mappings["existential_general"])
+    
     async def process(self, post: LinkedInPost) -> LinkedInPost:
         """
         Main process method - generate image for a LinkedIn post
@@ -479,14 +442,15 @@ class ImageGenerationAgent(BaseAgent):
         start_time = time.time()
         
         try:
-            # Enhance prompt with Jesse visual language
+            # Enhance prompt with Jesse visual language AND actual product specification
             enhanced_prompt = self._enhance_prompt_with_brand_language(prompt)
             
             self.logger.info(
                 "Generating image with Jesse A. Eisenbalm visual language",
                 model=self.image_model,
                 prompt_length=len(enhanced_prompt),
-                brand_aesthetic="what if Apple sold mortality?"
+                brand_aesthetic="what if Apple sold mortality?",
+                product_spec_included=True
             )
             
             # Generate image using base agent's _generate_image method
@@ -590,8 +554,13 @@ class ImageGenerationAgent(BaseAgent):
             self.logger.info("Using custom system prompt for ImageGenerationAgent")
             return custom_prompts["system_prompt"]
         
-        # Default system prompt with full Jesse visual identity
-        return """You are the Visual Creative Director for Jesse A. Eisenbalm, responsible for creating image prompts that capture our brand's unique position: premium minimalism meets existential dread meets corporate satire.
+        # Get actual product description
+        product_description = self._get_product_description()
+        
+        # Default system prompt with full Jesse visual identity AND actual product spec
+        return f"""You are the Visual Creative Director for Jesse A. Eisenbalm, responsible for creating image prompts that capture our brand's unique position: premium minimalism meets existential dread meets corporate satire.
+
+{product_description}
 
 VISUAL PHILOSOPHY:
 "What if Apple sold mortality?"
@@ -607,7 +576,7 @@ BRAND VISUAL LANGUAGE:
 
 PROMPT CONSTRUCTION FRAMEWORK:
 1. SETTING: Specify exact environment with psychological weight
-2. PRODUCT PLACEMENT: Tube positioned as hero, savior, or ironic commentary
+2. PRODUCT PLACEMENT: Tube positioned as hero, savior, or ironic commentary - MUST match exact specification above
 3. LIGHTING: Describe quality, direction, and emotional impact
 4. PROPS: Minimal but loaded with meaning (dying succulents, error messages, coffee stains)
 5. MOOD: The feeling between "everything is fine" and "nothing is fine"
@@ -633,6 +602,8 @@ AVOID:
 - Natural/organic clichés
 - Typical beauty product shots
 - Any suggestion that everything will be okay
+
+CRITICAL: The product tube MUST exactly match the specification provided above. Every detail matters - the cream color, white ribbed cap, vertical black text "JESSE A. EISENBALM", gold honeycomb pattern with photos of Jesse.
 
 Create prompts that are 150-200 words with precise visual detail, emotional subtext, and that perfect tension between "premium product" and "we're all slowly dying."
 """
@@ -690,12 +661,17 @@ Create prompts that are 150-200 words with precise visual detail, emotional subt
                 composition=composition[:30]
             )
             
+            # Get the actual product description
+            product_desc = self._get_product_description()
+            
             user_prompt = f"""Create a detailed image prompt for Jesse A. Eisenbalm product photography.
 
 POST CONTENT CONTEXT:
 {post.content[:300]}
 
 POST MOOD DETECTED: {post_mood}
+
+{product_desc}
 
 UNIQUE VISUAL DIRECTION FOR THIS IMAGE:
 
@@ -718,17 +694,19 @@ AESTHETIC REFERENCE: {aesthetic_ref}
 SYMBOLIC PROP: {symbolic_prop}
 
 BRAND REQUIREMENTS:
-- Product: Jesse A. Eisenbalm lip balm tube (navy blue with gold honeycomb, pictures of Jesse)
+- Product: Jesse A. Eisenbalm lip balm tube - MUST match exact specification provided above
 - Color Palette: Deep navy, gold accents, cream tones, optional error red
 - Mood: Between "everything is fine" and "nothing is fine"
 - Style: Premium minimalism meets existential dread
 - Design Element: Consider subtle lip balm smear as texture
 
-CRITICAL: Create a UNIQUE image that has NEVER been created before by combining these elements in an unexpected way.
+CRITICAL: 
+1. The product MUST look EXACTLY as specified in the product specification above
+2. Create a UNIQUE image that has NEVER been created before by combining these elements in an unexpected way
 
 Generate a DETAILED image prompt (150-200 words) for professional product photography that captures:
 1. Exact setting with psychological weight
-2. Product positioned using the specified composition and camera angle
+2. Product positioned using the specified composition and camera angle (matching exact product spec)
 3. Specific lighting quality and emotional impact
 4. Background that enhances without distracting
 5. Textures that add depth and premium feel
@@ -786,9 +764,12 @@ Make this image DISTINCTLY DIFFERENT from any other Jesse A. Eisenbalm image by 
         texture = random.choice(self.texture_elements)
         color_mood = random.choice(self.color_moods)
         
+        # Get actual product description
+        product_desc = self._get_product_description()
+        
         return f"""Professional product photograph of Jesse A. Eisenbalm premium lip balm tube.
 
-PRODUCT DETAILS: Navy blue tube with gold honeycomb pattern featuring pictures of Jesse. Premium matte finish suggesting "expensive minimalism meets mortality awareness."
+{product_desc}
 
 SCENE: {scene_category}
 
@@ -798,7 +779,7 @@ CAMERA ANGLE: {camera_angle}
 
 BACKGROUND: {background}
 
-PRODUCT PLACEMENT: Jesse A. Eisenbalm tube positioned as the hero object. {prop} visible in scene, creating narrative tension.
+PRODUCT PLACEMENT: Jesse A. Eisenbalm tube (exactly as specified above) positioned as the hero object. {prop} visible in scene, creating narrative tension.
 
 LIGHTING: {lighting}. Soft shadows creating depth. Subtle vignette drawing eye to product.
 
@@ -814,32 +795,36 @@ TECHNICAL: 8K, ultra-detailed, commercial photography, professional studio quali
 
 EMOTIONAL TONE: Calm surface tension. Expensive but honest. "What if Apple sold mortality?"
 
+CRITICAL: Product tube MUST match the exact specification provided - cream/ivory tube, white ribbed cap, vertical black "JESSE A. EISENBALM" text, gold honeycomb pattern with photos of Jesse.
+
 UNIQUENESS: This specific combination of composition ({composition}), camera angle ({camera_angle}), and background ({background}) creates a NEVER-BEFORE-SEEN image.
         """
     
     def _enhance_prompt_with_brand_language(self, prompt: str) -> str:
-        """Enhance prompt with Jesse A. Eisenbalm brand visual language"""
+        """Enhance prompt with Jesse A. Eisenbalm brand visual language and actual product spec"""
+        
+        # Get actual product description
+        product_description = self._get_product_description()
         
         # Essential brand elements to ensure
         brand_elements = {
             "product_identity": "Jesse A. Eisenbalm premium lip balm",
             "brand_colors": "deep navy blue, rich gold accents, soft cream tones",
-            "motif": "honeycomb pattern with pictures of Jesse",
-            "texture": "premium matte finish",
             "philosophy": "what if Apple sold mortality? - clean, minimal, expensive with subtle wrongness"
         }
         
         # Check if essential elements are present
         has_product = any(term in prompt.lower() for term in ['jesse', 'lip balm', 'tube'])
+        has_product_spec = "PRODUCT SPECIFICATION" in prompt
         has_colors = any(color in prompt.lower() for color in ['navy', 'gold', 'cream'])
         has_mood = any(term in prompt.lower() for term in ['mortality', 'existential', 'corporate', 'anxiety'])
         
         # Add missing essential elements
         enhancements = []
         
-        if not has_product:
+        if not has_product_spec:
             enhancements.append(
-                f"Product: {brand_elements['product_identity']} tube with {brand_elements['motif']}"
+                f"ACTUAL PRODUCT SPECIFICATION:\n{product_description}"
             )
         
         if not has_colors:
@@ -870,6 +855,9 @@ UNIQUENESS: This specific combination of composition ({composition}), camera ang
         
         # Add technical specifications
         enhanced += "\n\nTECHNICAL SPECIFICATIONS:\n" + "\n".join(quality_specs)
+        
+        # Always add critical reminder about product accuracy
+        enhanced += f"\n\nCRITICAL REMINDER: The Jesse A. Eisenbalm product tube MUST look exactly as specified in the product specification. Every detail matters - the cream/ivory color, white ribbed cap, vertical black 'JESSE A. EISENBALM' text, gold honeycomb pattern with photos of Jesse embedded in the hexagons."
         
         return enhanced
     
@@ -1009,7 +997,8 @@ UNIQUENESS: This specific combination of composition ({composition}), camera ang
                     "original_prompt": image_result.get("original_prompt"),
                     "brand_aesthetic": "what if Apple sold mortality?",
                     "scene_category": image_result.get("scene_category"),
-                    "visual_philosophy": "premium minimalism meets existential dread"
+                    "visual_philosophy": "premium minimalism meets existential dread",
+                    "product_spec_version": "actual_product_v1"
                 }
                 if isinstance(post.image_metadata, dict):
                     post.image_metadata.update(meta)
@@ -1044,6 +1033,8 @@ UNIQUENESS: This specific combination of composition ({composition}), camera ang
             "image_cost_per_generation": 0.039,
             "output_directory": str(self.output_dir),
             "brand_visual_philosophy": "what if Apple sold mortality?",
+            "product_spec_version": "actual_product_v1",
+            "product_spec_loaded": bool(self.product_spec),
             "variety_systems": {
                 "scene_categories": len(self.scene_categories),
                 "lighting_options": len(self.lighting_options),
@@ -1060,7 +1051,8 @@ UNIQUENESS: This specific combination of composition ({composition}), camera ang
                 "mood_detection": True,
                 "content_aware_selection": True,
                 "mood_matching_rate": "70%",
-                "surprise_variation_rate": "30%"
+                "surprise_variation_rate": "30%",
+                "actual_product_spec_enforcement": True
             },
             "using_custom_prompts": self.prompt_manager.has_custom_prompts("ImageGenerationAgent")
         })

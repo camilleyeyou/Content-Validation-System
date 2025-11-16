@@ -24,5 +24,18 @@
     "api_calls": 137,
     "total_input_tokens": 203116,
     "total_output_tokens": 26652
+  },
+  "2025-11-16": {
+    "date": "2025-11-16",
+    "openai_cost": 0.010563,
+    "gemini_cost": 0.195,
+    "total_cost": 0.20556300000000002,
+    "text_generation_cost": 0.010563,
+    "image_generation_cost": 0.195,
+    "posts_generated": 5,
+    "images_generated": 5,
+    "api_calls": 30,
+    "total_input_tokens": 48104,
+    "total_output_tokens": 5578
   }
 }
