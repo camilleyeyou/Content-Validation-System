@@ -226,282 +226,129 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stripe-style Content Queue */}
+        {/* Campaign Examples Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
           <div className="p-8 md:p-12">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Your content</h2>
-                <p className="text-gray-600">
-                  Your curated content library
-                </p>
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                Inspiration Gallery
+              </h2>
+              <p className="text-gray-600">
+                See what our AI-powered system can create for you
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* The Zeitgeist Post */}
+              <div className="border border-gray-200 rounded-xl p-6 bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-all duration-300">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-purple-600 mb-1">The Zeitgeist Post</h3>
+                    <p className="text-sm font-medium text-gray-500">News-Hook Driven</p>
+                  </div>
+                  <div className="text-3xl">📰</div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4 min-h-[180px]">
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    Everyone's talking about the new AI regulations, but they're missing the point.{'\n\n'}
+                    It's not about restriction; it's about intention. This is a moment to pause, reflect on our 'why', and build more mindful tech. That's the real ritual.{'\n\n'}
+                    #AI #TechEthics #MindfulProductivity
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium">
+                    60% Formal Tone
+                  </span>
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md font-medium">
+                    Medium Length
+                  </span>
+                  <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
+                    News Inspired
+                  </span>
+                </div>
               </div>
-              <div className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200">
-                {rows.length} {rows.length === 1 ? 'Post' : 'Posts'}
+
+              {/* The Humanist Post */}
+              <div className="border border-gray-200 rounded-xl p-6 bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-all duration-300">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-purple-600 mb-1">The Humanist Post</h3>
+                    <p className="text-sm font-medium text-gray-500">Poetic & Evocative</p>
+                  </div>
+                  <div className="text-3xl">✒️</div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4 min-h-[180px]">
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    The space between tasks is not emptiness to be filled, but a canvas for intention.{'\n\n'}
+                    A simple pause, a mindful breath. This is where the work truly happens.{'\n\n'}
+                    It's not about doing more; it's about being more present in what you do. Stop. Breathe. Balm.{'\n\n'}
+                    #Productivity #Wellness #WorkLifeBalance
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium">
+                    40% Formal Tone
+                  </span>
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md font-medium">
+                    Short Length
+                  </span>
+                  <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
+                    Mary Oliver Inspired
+                  </span>
+                </div>
+              </div>
+
+              {/* The Sage Post */}
+              <div className="border border-gray-200 rounded-xl p-6 bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-all duration-300">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-purple-600 mb-1">The Sage Post</h3>
+                    <p className="text-sm font-medium text-gray-500">Philosophical & Insightful</p>
+                  </div>
+                  <div className="text-3xl">🏛️</div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4 min-h-[180px]">
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    Seneca wrote, 'It is not that we have a short time to live, but that we waste a lot of it.'{'\n\n'}
+                    In our rush to optimize every minute, have we forgotten the value of the minute itself? The greatest productivity hack isn't a tool; it's a philosophy. A deliberate intention to reclaim your focus.{'\n\n'}
+                    #Stoicism #Productivity #DeepWork
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium">
+                    75% Formal Tone
+                  </span>
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md font-medium">
+                    Medium Length
+                  </span>
+                  <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
+                    Seneca Inspired
+                  </span>
+                </div>
               </div>
             </div>
 
-            {rows.length === 0 ? (
-              <div className="text-center py-20 px-6">
-                <div 
-                  className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
-                  style={{
-                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
-                  }}
-                >
-                  <span className="text-4xl">✨</span>
-                </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-3">Create your first post</h3>
-                <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                  Use our guided wizard to create engaging LinkedIn content with AI-generated imagery
-                </p>
-                <Link
-                  href="/wizard"
-                  className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
-                  style={{
-                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
-                  }}
-                >
-                  Start Creating
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {rows.map((r) => {
-                  const displayContent = r.content || r.commentary || "";
-                  const full = [r.commentary, r.content].filter(Boolean).join("\n\n");
-
-                  const rawImageUrl = r.image_url;
-                  const imageUrl = resolveMediaUrl(rawImageUrl);
-                  const rawVideoUrl = r.video_url;
-                  const videoUrl = resolveMediaUrl(rawVideoUrl);
-
-                  const hasVideo = !!videoUrl && (r.has_video || !!r.video_url);
-                  const hasImage = !!imageUrl && !hasVideo;
-
-                  return (
-                    <div
-                      key={r.id}
-                      className="border border-gray-200 rounded-xl p-6 md:p-8 bg-white shadow-sm hover:shadow-md transition-all duration-300"
-                    >
-                      {/* Header */}
-                      <div className="flex gap-2 flex-wrap mb-6 text-xs items-center">
-                        <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium">
-                          {r.target_type}
-                        </span>
-                        <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md font-medium">
-                          {r.lifecycle}
-                        </span>
-                        {hasVideo && (
-                          <span className="px-3 py-1.5 bg-pink-100 text-pink-700 rounded-md font-medium">
-                            Video
-                          </span>
-                        )}
-                        {hasImage && (
-                          <span className="px-3 py-1.5 bg-cyan-100 text-cyan-700 rounded-md font-medium">
-                            Image
-                          </span>
-                        )}
-                        {r.media_provider === "huggingface" && (
-                          <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
-                            Free Tier
-                          </span>
-                        )}
-                        {r.media_cost !== undefined && r.media_cost > 0 && (
-                          <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-md font-medium">
-                            ${r.media_cost.toFixed(3)}
-                          </span>
-                        )}
-                        {r.created_at && (
-                          <span className="ml-auto text-gray-500 text-[10px] font-medium">
-                            {new Date(r.created_at).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Video Display */}
-                      {hasVideo && videoUrl && (
-                        <div className="mb-6 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
-                          <video
-                            controls
-                            loop
-                            muted
-                            playsInline
-                            className="w-full h-auto"
-                            style={{ maxHeight: "520px" }}
-                          >
-                            <source src={videoUrl} type="video/mp4" />
-                            Your browser does not support the video tag.
-                          </video>
-                          {(r.video_description || r.video_generation_time) && (
-                            <div className="p-4 bg-white text-gray-700 text-xs space-y-2">
-                              {r.video_description && (
-                                <div className="flex gap-2">
-                                  <span className="font-semibold text-gray-900">Description:</span>
-                                  <span className="text-gray-600">{r.video_description}</span>
-                                </div>
-                              )}
-                              {r.video_generation_time && (
-                                <div className="text-gray-500 flex flex-wrap gap-3">
-                                  <span>⏱️ {r.video_generation_time}s</span>
-                                  {r.video_size_mb && <span>💾 {r.video_size_mb}MB</span>}
-                                  {r.media_cost !== undefined && (
-                                    <span>💰 ${r.media_cost.toFixed(2)}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Image Display */}
-                      {hasImage && imageUrl && (
-                        <div className="mb-6 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm">
-                          <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-                            <img
-                              src={imageUrl}
-                              alt={r.image_description || "Generated image"}
-                              className="absolute inset-0 w-full h-full object-cover"
-                              loading="lazy"
-                              decoding="async"
-                              onError={(e) => {
-                                const el = e.currentTarget as HTMLImageElement & { dataset: any };
-                                const fname = (rawImageUrl?.split("/").pop() || "") as string;
-                                if (fname && !el.dataset.fallback) {
-                                  el.dataset.fallback = "1";
-                                  el.src = `/images/${fname}`;
-                                }
-                              }}
-                            />
-                          </div>
-                          {r.image_description && (
-                            <div className="p-4 bg-white border-t border-gray-200">
-                              <div className="flex gap-2 text-xs">
-                                <span className="font-semibold text-gray-900">Description:</span>
-                                <span className="text-gray-600">{r.image_description}</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Content */}
-                      <div className="whitespace-pre-wrap mb-6 leading-relaxed text-sm text-gray-800 bg-gray-50 rounded-lg p-6 border border-gray-200">
-                        {displayContent}
-                      </div>
-
-                      {/* Hashtags */}
-                      {r.hashtags?.length ? (
-                        <div className="mb-6 flex gap-2 flex-wrap">
-                          {r.hashtags.map((h, i) => (
-                            <span
-                              key={i}
-                              className="text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-md font-medium border border-purple-200"
-                            >
-                              #{h}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {/* Status Messages */}
-                      {r.li_post_id && (
-                        <div className="text-sm text-green-700 font-medium mb-4 bg-green-50 p-4 rounded-lg border border-green-200">
-                          ✅ Published · Post ID: {r.li_post_id}
-                        </div>
-                      )}
-                      {r.error_message && (
-                        <div className="text-sm text-red-700 bg-red-50 p-4 rounded-lg mb-4 border border-red-200 font-medium">
-                          ❌ Error: {r.error_message}
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex gap-2 flex-wrap pt-6 border-t border-gray-200">
-                        <button
-                          onClick={() => navigator.clipboard.writeText(displayContent)}
-                          className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
-                        >
-                          Copy Text
-                        </button>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(full)}
-                          className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
-                        >
-                          Copy Full
-                        </button>
-
-                        {/* Video Actions */}
-                        {hasVideo && videoUrl && (
-                          <>
-                            <button
-                              onClick={() => window.open(videoUrl, "_blank")}
-                              className="px-4 py-2 text-xs font-medium border border-pink-200 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-all duration-200"
-                            >
-                              Open Video
-                            </button>
-                            <a
-                              href={videoUrl}
-                              download={`video-${r.id}.mp4`}
-                              className="px-4 py-2 text-xs font-medium border border-pink-200 bg-pink-50 text-pink-700 rounded-lg hover:bg-pink-100 transition-all duration-200 inline-flex items-center"
-                            >
-                              Download
-                            </a>
-                            {r.video_prompt && (
-                              <button
-                                onClick={() => {
-                                  const info = `Video Generation Details\n${"=".repeat(40)}\n\nPrompt: ${
-                                    r.video_prompt
-                                  }\n\nDescription: ${r.video_description || "N/A"}\n\nGeneration Time: ${
-                                    r.video_generation_time || "N/A"
-                                  }s\n\nFile Size: ${r.video_size_mb || "N/A"}MB\n\nProvider: ${
-                                    r.media_provider || "N/A"
-                                  }\n\nCost: $${r.media_cost?.toFixed(2) || "0.00"}`;
-                                  alert(info);
-                                }}
-                                className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
-                              >
-                                Details
-                              </button>
-                            )}
-                          </>
-                        )}
-
-                        {/* Image Actions */}
-                        {hasImage && imageUrl && (
-                          <>
-                            <button
-                              onClick={() => window.open(imageUrl, "_blank")}
-                              className="px-4 py-2 text-xs font-medium border border-cyan-200 bg-cyan-50 text-cyan-700 rounded-lg hover:bg-cyan-100 transition-all duration-200"
-                            >
-                              Open Image
-                            </button>
-                            {r.image_prompt && (
-                              <button
-                                onClick={() => {
-                                  const info = `Image Generation Details\n${"=".repeat(40)}\n\nPrompt: ${
-                                    r.image_prompt
-                                  }\n\nDescription: ${r.image_description || "N/A"}`;
-                                  alert(info);
-                                }}
-                                className="px-4 py-2 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 text-gray-700"
-                              >
-                                Details
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="text-center mt-8 pt-8 border-t border-gray-200">
+              <Link
+                href="/wizard"
+                className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
+                style={{
+                  background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                }}
+              >
+                Create Your Own Content
+              </Link>
+            </div>
           </div>
         </div>
 
-        {/* Cost Dashboard - Moved to Bottom */}
+        {/* Cost Dashboard */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
           <div className="p-8 md:p-12">
             <CostDashboard />
