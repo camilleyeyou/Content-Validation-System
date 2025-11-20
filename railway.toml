@@ -2,8 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-workingDirectory = "portal/backend"
+startCommand = "cd portal/backend && PYTHONPATH=/app:$PYTHONPATH uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 
 [build]
-buildCommand = "cd portal/backend && pip install -r requirements.txt"
+buildCommand = "pip install -r portal/backend/requirements.txt"
