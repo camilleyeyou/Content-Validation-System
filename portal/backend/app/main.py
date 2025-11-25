@@ -2,7 +2,7 @@
 """
 Complete Content Portal API with Prompt Management, Image Support, and Wizard
 Fixed for both local development and deployment
-NOW WITH: Guided wizard for single-post creation
+NOW WITH: Guided wizard for single-post creation + Showcase Gallery
 """
 
 import os
@@ -45,6 +45,7 @@ from fastapi.staticfiles import StaticFiles
 from .prompts_routes import router as prompts_router
 from .wizard_routes import router as wizard_router
 from .cost_routes import router as cost_router  # COST TRACKING
+from .showcase_routes import router as showcase_router  # SHOWCASE GALLERY
 
 
 # --------------------------------------------------------------------------------------
@@ -81,7 +82,7 @@ ALLOW_ALL = _cors == ["*"]
 # --------------------------------------------------------------------------------------
 # App
 # --------------------------------------------------------------------------------------
-app = FastAPI(title="Content Portal API with Wizard", version="2.0.0")
+app = FastAPI(title="Content Portal API with Wizard + Showcase", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,8 +101,9 @@ app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
 # Register routers
 # --------------------------------------------------------------------------------------
 app.include_router(prompts_router)
-app.include_router(wizard_router, prefix="/api/wizard", tags=["wizard"])  # FIXED: Added prefix!
+app.include_router(wizard_router, prefix="/api/wizard", tags=["wizard"])
 app.include_router(cost_router)  # COST TRACKING
+app.include_router(showcase_router, tags=["showcase"])  # SHOWCASE GALLERY
 
 
 # --------------------------------------------------------------------------------------
@@ -209,7 +211,7 @@ def _approved_from_batch(batch) -> List[Dict[str, Any]]:
 def root():
     return {
         "ok": True,
-        "message": "Content Portal API with Google Gemini Image Generation + Wizard",
+        "message": "Content Portal API with Google Gemini Image Generation + Wizard + Showcase",
         "portal_base_url": PORTAL_BASE_URL,
         "backend_base_url": BACKEND_BASE_URL or "(relative)",
         "images_route": IMAGES_ROUTE,
@@ -222,7 +224,8 @@ def root():
             "image_provider": "google_gemini_2.5_flash",
             "prompt_management": True,
             "batch_processing": True,
-            "wizard_mode": True  # NEW
+            "wizard_mode": True,
+            "showcase_gallery": True  # NEW
         }
     }
 
@@ -278,6 +281,11 @@ async def run_batch():
         # Count posts with images
         posts_with_images = sum(1 for p in newly_approved if p.get("has_image"))
 
+        # Auto-refresh showcase if new posts with images were added
+        if posts_with_images > 0:
+            from .showcase_routes import refresh_showcase
+            refresh_showcase(APPROVED_QUEUE)
+
         return {
             "ok": True,
             "batch_id": getattr(batch, "id", None),
@@ -285,6 +293,7 @@ async def run_batch():
             "posts_with_images": posts_with_images,
             "image_provider": "google_gemini",
             "total_in_queue": len(APPROVED_QUEUE),
+            "showcase_refreshed": posts_with_images > 0
         }
     except ModuleNotFoundError as e:
         return JSONResponse(
@@ -362,6 +371,11 @@ async def create_post(payload: Dict[str, Any]):
 
         APPROVED_QUEUE.append(new_post)
 
+        # Refresh showcase if this post has an image
+        if public_image_url:
+            from .showcase_routes import refresh_showcase
+            refresh_showcase(APPROVED_QUEUE)
+
         return {
             "ok": True,
             "post": new_post,
@@ -397,6 +411,7 @@ async def startup_event():
     print(f"  - Prompt Management: ✅")
     print(f"  - Batch Processing: ✅")
     print(f"  - Wizard Mode (Guided Creation): ✅")
+    print(f"  - Showcase Gallery: ✅")
     print("="*60)
 
     # Ensure config directory exists at project root

@@ -38,6 +38,8 @@ type Props = {
 
 export default function Step5Finalize({ state, setState, onBack, loading, setLoading, setError }: Props) {
   const [copySuccess, setCopySuccess] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [savedPostId, setSavedPostId] = useState<string | null>(null);
 
   // Auto-generate on mount if not already generated
   useEffect(() => {
@@ -46,10 +48,18 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
     }
   }, []);
 
+  // Auto-save after generation
+  useEffect(() => {
+    if (state.generatedPost?.post && saveStatus === "idle") {
+      savePostToDashboard();
+    }
+  }, [state.generatedPost]);
+
   async function generatePost() {
     setLoading(true);
     setError("");
     setCopySuccess("");
+    setSaveStatus("idle");
 
     try {
       // Build request payload
@@ -88,6 +98,86 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
       setError(e.message || "Failed to generate post");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function savePostToDashboard() {
+    const post = state.generatedPost?.post;
+    if (!post) return;
+
+    setSaveStatus("saving");
+
+    try {
+      // Build the payload with only the fields the backend expects
+      // Backend requires commentary, but wizard generates content
+      // Use content for both fields
+      const payload: any = {
+        target_type: post.target_type || "MEMBER",
+        commentary: post.content || "", // Backend requires this field
+        content: post.content || "",
+        hashtags: post.hashtags || []
+      };
+
+      // Add optional fields only if they exist
+      if (post.image_url) {
+        payload.image_url = post.image_url;
+      }
+      if (post.image_description) {
+        payload.image_description = post.image_description;
+      }
+      if (post.image_prompt) {
+        payload.image_prompt = post.image_prompt;
+      }
+
+      console.log("Saving post with payload:", payload);
+
+      // 1. Save the post
+      const saveResponse = await fetch(`${API_BASE}/api/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!saveResponse.ok) {
+        const errorText = await saveResponse.text();
+        console.error("Save failed:", saveResponse.status, errorText);
+        throw new Error(`Save failed: ${saveResponse.status} - ${errorText}`);
+      }
+
+      const saveData = await saveResponse.json();
+      console.log("Save response:", saveData);
+      
+      if (!saveData.ok) {
+        throw new Error("Failed to save post");
+      }
+
+      const postId = saveData.post?.id;
+      setSavedPostId(postId);
+
+      // 2. Approve the post (backend saves as draft by default)
+      if (postId) {
+        const approveResponse = await fetch(`${API_BASE}/api/posts/${postId}/approve`, {
+          method: "POST"
+        });
+        
+        if (approveResponse.ok) {
+          console.log("Post approved successfully");
+        }
+
+        // 3. Refresh showcase
+        const refreshResponse = await fetch(`${API_BASE}/api/showcase/refresh`, {
+          method: "POST"
+        });
+        
+        if (refreshResponse.ok) {
+          console.log("Showcase refreshed successfully");
+        }
+      }
+
+      setSaveStatus("saved");
+    } catch (e: any) {
+      console.error("Save error:", e);
+      setSaveStatus("error");
     }
   }
 
@@ -174,12 +264,36 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
       {/* Header Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
         <div className="p-8 md:p-10">
-          <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-3">
-            Your Generated Post
-          </h2>
-          <p className="text-sm md:text-base text-gray-600 leading-relaxed">
-            Review, copy, and publish your AI-crafted LinkedIn content
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-3">
+                Your Generated Post
+              </h2>
+              <p className="text-sm md:text-base text-gray-600 leading-relaxed">
+                Review, copy, and publish your AI-crafted LinkedIn content
+              </p>
+            </div>
+            
+            {/* Save Status Badge */}
+            {saveStatus === "saving" && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </div>
+            )}
+            {saveStatus === "saved" && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium border border-green-200">
+                <span className="text-lg">✅</span>
+                Saved to Dashboard
+              </div>
+            )}
+            {saveStatus === "error" && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg text-sm font-medium border border-red-200">
+                <span className="text-lg">❌</span>
+                Save Failed
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -380,6 +494,8 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
           <button
             onClick={() => {
               setState(prev => ({ ...prev, generatedPost: undefined, currentStep: 1 }));
+              setSaveStatus("idle");
+              setSavedPostId(null);
             }}
             className="px-8 py-4 bg-gray-50 hover:bg-gray-100 text-gray-900 rounded-lg font-medium tracking-wider uppercase text-sm border border-purple-300 hover:border-purple-400 transition-all duration-300 flex items-center justify-center gap-2"
           >
@@ -395,7 +511,7 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
             }}
           >
             <span className="text-lg">✅</span>
-            Done
+            View Dashboard
           </a>
         </div>
       </div>
