@@ -6,12 +6,26 @@ NOW WITH: Guided wizard for single-post creation + Showcase Gallery
 """
 
 import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+
+# Load .env from project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+env_path = PROJECT_ROOT / ".env"
+load_dotenv(env_path)
+
+# Verify it loaded
+if os.getenv("NEWS_API_KEY"):
+    print(f"✅ NEWS_API_KEY loaded successfully")
+else:
+    print(f"⚠️  NEWS_API_KEY not found in {env_path}")
+
 import sys
 import json
 import time
 import uuid
 import asyncio
-from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
@@ -44,8 +58,10 @@ from fastapi.staticfiles import StaticFiles
 # Import routers using relative import
 from .prompts_routes import router as prompts_router
 from .wizard_routes import router as wizard_router
-from .cost_routes import router as cost_router  # COST TRACKING
-from .showcase_routes import router as showcase_router  # SHOWCASE GALLERY
+from .cost_routes import router as cost_router  
+from .showcase_routes import router as showcase_router
+from .news_routes import router as news_router
+
 
 
 # --------------------------------------------------------------------------------------
@@ -102,8 +118,9 @@ app.mount(IMAGES_ROUTE, StaticFiles(directory=IMAGE_DIR), name="images")
 # --------------------------------------------------------------------------------------
 app.include_router(prompts_router)
 app.include_router(wizard_router, prefix="/api/wizard", tags=["wizard"])
-app.include_router(cost_router)  # COST TRACKING
-app.include_router(showcase_router, tags=["showcase"])  # SHOWCASE GALLERY
+app.include_router(cost_router)  
+app.include_router(showcase_router, tags=["showcase"])
+app.include_router(news_router)
 
 
 # --------------------------------------------------------------------------------------
@@ -412,6 +429,8 @@ async def startup_event():
     print(f"  - Batch Processing: ✅")
     print(f"  - Wizard Mode (Guided Creation): ✅")
     print(f"  - Showcase Gallery: ✅")
+    print(f"  - News Inspiration (NewsAPI): ✅")  # ← ADD THIS
+
     print("="*60)
 
     # Ensure config directory exists at project root

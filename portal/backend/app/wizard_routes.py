@@ -1,6 +1,7 @@
 """
 Wizard API Routes - Guided content creation endpoints
 Provides progressive disclosure wizard for single-post generation
+UPDATED: Now uses NewsAPI for real news headlines
 """
 
 from fastapi import APIRouter, HTTPException
@@ -9,10 +10,14 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import structlog
 
+# Import news service
+from src.infrastructure.news import get_news_service, format_news_for_wizard_display
+
 logger = structlog.get_logger()
 
 # Create router
 router = APIRouter(tags=["wizard"])
+
 # ==================================================================================
 # Pydantic Models for Request/Response
 # ==================================================================================
@@ -27,8 +32,9 @@ class BrandSettingsRequest(BaseModel):
 
 class InspirationSelection(BaseModel):
     """Step 2: User-selected inspiration base"""
-    type: str = Field(..., description="news, meme, philosopher, or poet")
+    type: str = Field(..., description="news, philosopher, or poet")
     selected_id: str = Field(..., description="ID of the selected item")
+    preview: Optional[Dict[str, Any]] = Field(default=None, description="Preview data from frontend")
 
 
 class StylePreferences(BaseModel):
@@ -131,77 +137,49 @@ def _initialize_wizard_components():
 
 async def _fetch_inspiration_content(selections: List[InspirationSelection]) -> List[Any]:
     """Fetch actual content for selected inspiration bases"""
-    from src.infrastructure.external.trending_fetcher import (
-        TrendingNewsFetcher,
-        TrendingMemeFetcher,
-        PhilosophyDatabase,
-        PoetryDatabase
-    )
     from src.domain.services.wizard_orchestrator import InspirationBase
-    
-    news_fetcher = TrendingNewsFetcher()
-    meme_fetcher = TrendingMemeFetcher()
-    philosophy_db = PhilosophyDatabase()
-    poetry_db = PoetryDatabase()
     
     inspiration_bases = []
     
     for selection in selections:
         try:
-            if selection.type == "news":
-                # Fetch all news and find the selected one
-                all_news = await news_fetcher.fetch_trending()
-                selected_news = next((n for n in all_news if n["id"] == selection.selected_id), None)
-                
-                if selected_news:
+            # If frontend provided preview data, use it
+            if selection.preview:
+                if selection.type == "news":
                     inspiration_bases.append(InspirationBase(
                         type="news",
-                        content=selected_news["title"],
-                        source=selected_news["source"],
-                        context=selected_news.get("description", "")
+                        content=selection.preview.get("title", ""),
+                        source=selection.preview.get("source", ""),
+                        context=selection.preview.get("description", "")
                     ))
-            
-            elif selection.type == "meme":
-                all_memes = await meme_fetcher.fetch_trending()
-                selected_meme = next((m for m in all_memes if m["id"] == selection.selected_id), None)
                 
-                if selected_meme:
-                    inspiration_bases.append(InspirationBase(
-                        type="meme",
-                        content=selected_meme["content"],
-                        source=selected_meme["name"],
-                        context=selected_meme["usage"]
-                    ))
-            
-            elif selection.type == "philosopher":
-                # Extract philosopher name from ID
-                philosopher_name = selection.selected_id.replace("philosopher_", "").replace("_", " ").title()
-                quotes = philosophy_db.get_philosopher_quotes(philosopher_name)
-                
-                if quotes:
-                    # Use first quote or random
-                    quote = quotes[0]
+                elif selection.type == "philosopher":
+                    # Use philosopher data from preview
                     inspiration_bases.append(InspirationBase(
                         type="philosopher",
-                        content=quote["text"],
-                        source=philosopher_name,
-                        context=quote["context"]
+                        content=f"Philosophical wisdom from {selection.preview.get('name', 'ancient thinker')}",
+                        source=selection.preview.get("name", selection.selected_id),
+                        context=selection.preview.get("bio", "")
                     ))
-            
-            elif selection.type == "poet":
-                # Extract poet name from ID
-                poet_name = selection.selected_id.replace("poet_", "").replace("_", " ").title()
-                excerpts = poetry_db.get_poet_excerpts(poet_name)
                 
-                if excerpts:
-                    # Use first excerpt or random
-                    excerpt = excerpts[0]
+                elif selection.type == "poet":
+                    # Use poet data from preview
                     inspiration_bases.append(InspirationBase(
                         type="poet",
-                        content=excerpt["text"],
-                        source=poet_name,
-                        context=excerpt["context"]
+                        content=f"Poetic inspiration from {selection.preview.get('name', 'renowned poet')}",
+                        source=selection.preview.get("name", selection.selected_id),
+                        context=selection.preview.get("style", "")
                     ))
+            
+            else:
+                # Fallback: Try to fetch from databases (if they exist)
+                logger.warning("No preview data provided", selection=selection.dict())
+                inspiration_bases.append(InspirationBase(
+                    type=selection.type,
+                    content=f"Selected {selection.type}: {selection.selected_id}",
+                    source=selection.selected_id,
+                    context=""
+                ))
         
         except Exception as e:
             logger.error(f"Failed to fetch inspiration content: {e}", selection=selection.dict())
@@ -218,33 +196,123 @@ async def _fetch_inspiration_content(selections: List[InspirationSelection]) -> 
 async def get_inspiration_sources():
     """
     Get all available inspiration sources for Step 2
-    Returns: News, Memes, Philosophers, Poets
+    Returns: News (from NewsAPI), Philosophers, Poets
     """
     try:
-        from src.infrastructure.external.trending_fetcher import (
-            TrendingNewsFetcher,
-            TrendingMemeFetcher,
-            PhilosophyDatabase,
-            PoetryDatabase
-        )
+        # Get news from NewsService (cached for 24 hours)
+        news_service = get_news_service()
         
-        # Initialize fetchers
-        news_fetcher = TrendingNewsFetcher()
-        meme_fetcher = TrendingMemeFetcher()
-        philosophy_db = PhilosophyDatabase()
-        poetry_db = PoetryDatabase()
+        # Fetch recent tech and AI news
+        tech_news = await news_service.get_tech_headlines(limit=10)
+        ai_news = await news_service.get_ai_news(limit=5)
         
-        # Fetch all sources
-        news = await news_fetcher.fetch_trending(category="business", count=5)
-        memes = await meme_fetcher.fetch_trending(count=8)
-        philosophers = philosophy_db.get_all_philosophers()
-        poets = poetry_db.get_all_poets()
+        # Combine and remove duplicates
+        all_news = tech_news + ai_news
+        seen_titles = set()
+        unique_news = []
+        for article in all_news:
+            if article["title"] not in seen_titles:
+                seen_titles.add(article["title"])
+                unique_news.append(article)
+        
+        # Format for wizard display
+        news_items = format_news_for_wizard_display(unique_news[:12])
+        
+        # Philosophers (static data)
+        philosophers = [
+            {
+                "id": "seneca",
+                "name": "Seneca",
+                "era": "4 BC - 65 AD",
+                "bio": "Roman Stoic philosopher, statesman. Wisdom on resilience, virtue, and self-mastery.",
+                "quote_count": 8
+            },
+            {
+                "id": "epictetus",
+                "name": "Epictetus",
+                "era": "50-135 AD",
+                "bio": "Stoic philosopher. Taught that philosophy is a way of life, not just theory.",
+                "quote_count": 6
+            },
+            {
+                "id": "marcus",
+                "name": "Marcus Aurelius",
+                "era": "121-180 AD",
+                "bio": "Roman Emperor and Stoic philosopher. Meditations on leadership and duty.",
+                "quote_count": 10
+            },
+            {
+                "id": "nietzsche",
+                "name": "Friedrich Nietzsche",
+                "era": "1844-1900",
+                "bio": "German philosopher. Explored power, morality, and human potential.",
+                "quote_count": 7
+            },
+            {
+                "id": "kierkegaard",
+                "name": "Søren Kierkegaard",
+                "era": "1813-1855",
+                "bio": "Danish philosopher. Father of existentialism, focus on individual choice.",
+                "quote_count": 5
+            },
+            {
+                "id": "aristotle",
+                "name": "Aristotle",
+                "era": "384-322 BC",
+                "bio": "Greek philosopher. Ethics, logic, and the pursuit of excellence.",
+                "quote_count": 9
+            }
+        ]
+        
+        # Poets (static data)
+        poets = [
+            {
+                "id": "oliver",
+                "name": "Mary Oliver",
+                "bio": "American poet. Nature, mindfulness, and attention to the present moment.",
+                "style": "Contemplative, accessible, nature-focused"
+            },
+            {
+                "id": "rumi",
+                "name": "Rumi",
+                "bio": "13th-century Persian poet. Love, spirituality, and human connection.",
+                "style": "Mystical, passionate, transcendent"
+            },
+            {
+                "id": "dickinson",
+                "name": "Emily Dickinson",
+                "bio": "American poet. Brief, powerful verses on life, death, and nature.",
+                "style": "Concise, introspective, unconventional"
+            },
+            {
+                "id": "frost",
+                "name": "Robert Frost",
+                "bio": "American poet. Rural life, choices, and the human condition.",
+                "style": "Accessible, metaphorical, conversational"
+            },
+            {
+                "id": "angelou",
+                "name": "Maya Angelou",
+                "bio": "American poet. Resilience, identity, and the human spirit.",
+                "style": "Powerful, uplifting, rhythmic"
+            },
+            {
+                "id": "neruda",
+                "name": "Pablo Neruda",
+                "bio": "Chilean poet. Passion, politics, and the beauty of everyday life.",
+                "style": "Sensual, political, celebratory"
+            }
+        ]
+        
+        logger.info("inspiration_sources_served",
+                   news_count=len(news_items),
+                   philosopher_count=len(philosophers),
+                   poet_count=len(poets))
         
         return {
             "ok": True,
             "sources": {
-                "news": news,
-                "memes": memes,
+                "news": news_items,
                 "philosophers": philosophers,
                 "poets": poets
             },
@@ -256,58 +324,17 @@ async def get_inspiration_sources():
     
     except Exception as e:
         logger.error(f"Failed to fetch inspiration sources: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to fetch inspiration sources: {str(e)}")
-
-
-@router.get("/inspiration/{type}/{id}")
-async def get_inspiration_detail(type: str, id: str):
-    """
-    Get detailed information about a specific inspiration source
-    Useful for preview/expansion in the UI
-    """
-    try:
-        from src.infrastructure.external.trending_fetcher import (
-            TrendingNewsFetcher,
-            TrendingMemeFetcher,
-            PhilosophyDatabase,
-            PoetryDatabase
-        )
         
-        if type == "news":
-            fetcher = TrendingNewsFetcher()
-            all_news = await fetcher.fetch_trending()
-            item = next((n for n in all_news if n["id"] == id), None)
-        
-        elif type == "meme":
-            fetcher = TrendingMemeFetcher()
-            all_memes = await fetcher.fetch_trending()
-            item = next((m for m in all_memes if m["id"] == id), None)
-        
-        elif type == "philosopher":
-            db = PhilosophyDatabase()
-            philosopher_name = id.replace("philosopher_", "").replace("_", " ").title()
-            quotes = db.get_philosopher_quotes(philosopher_name)
-            item = {"quotes": quotes, "name": philosopher_name} if quotes else None
-        
-        elif type == "poet":
-            db = PoetryDatabase()
-            poet_name = id.replace("poet_", "").replace("_", " ").title()
-            excerpts = db.get_poet_excerpts(poet_name)
-            item = {"excerpts": excerpts, "name": poet_name} if excerpts else None
-        
-        else:
-            raise HTTPException(status_code=400, detail=f"Invalid inspiration type: {type}")
-        
-        if not item:
-            raise HTTPException(status_code=404, detail=f"Inspiration source not found: {type}/{id}")
-        
-        return {"ok": True, "item": item}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to fetch inspiration detail: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Graceful fallback - return static sources only
+        return {
+            "ok": True,
+            "sources": {
+                "news": [],  # Empty if news fails
+                "philosophers": [],
+                "poets": []
+            },
+            "warning": f"News unavailable: {str(e)}"
+        }
 
 
 @router.post("/generate")
@@ -411,7 +438,6 @@ async def get_wizard_stats():
                 "average_generation_time": 0.0,
                 "popular_inspiration_types": {
                     "news": 0,
-                    "memes": 0,
                     "philosophers": 0,
                     "poets": 0
                 }
