@@ -1,9 +1,7 @@
-// portal/frontend/app/page.tsx
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import CostDashboard from "@/components/CostDashboard";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:8001";
@@ -60,7 +58,6 @@ export default function Dashboard() {
   const [rows, setRows] = useState<PostRow[]>([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showWorkflowGuide, setShowWorkflowGuide] = useState(false);
   const [showcasePosts, setShowcasePosts] = useState<PostRow[]>([]);
   const [selectedPost, setSelectedPost] = useState<PostRow | null>(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -196,50 +193,55 @@ export default function Dashboard() {
         }}
       >
         <div className="relative max-w-7xl mx-auto px-6 py-12 space-y-8">
-        {/* Stripe-style Header */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
-          <div className="p-8 md:p-12">
-            <div className="flex items-start justify-between gap-8 mb-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-3">
-                  <div 
-                    className="w-12 h-12 rounded-lg flex items-center justify-center shadow-sm"
-                    style={{
-                      background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
-                    }}
-                  >
-                    <span className="text-white text-xl font-semibold">JE</span>
+          {/* Stripe-style Header with Workflow Guide Always Visible */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+            <div className="p-8 md:p-12">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-8 mb-8">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div 
+                      className="w-12 h-12 rounded-lg flex items-center justify-center shadow-sm"
+                      style={{
+                        background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                      }}
+                    >
+                      <span className="text-white text-xl font-semibold">JE</span>
+                    </div>
+                    <div>
+                      <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-1">
+                        Content Studio
+                      </h1>
+                      <p className="text-sm text-gray-500">
+                        Jesse A. Eisenbalm · LinkedIn Content Creation
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-1">
-                      Content Studio
-                    </h1>
-                    <p className="text-sm text-gray-500">
-                      Jesse A. Eisenbalm · LinkedIn Content Creation
-                    </p>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mt-4 ml-16">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-md border border-gray-200">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>
+                        {me?.name || me?.sub || "Loading..."}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600 mt-4 ml-16">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-md border border-gray-200">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span>
-                      {me?.name || me?.sub || "Loading..."}
-                    </span>
-                  </div>
-                </div>
+
+                {/* CTA Button */}
+                <Link
+                  href="/wizard"
+                  className="px-6 py-3 text-white rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                  }}
+                >
+                  <span>✨</span>
+                  Create New Post
+                </Link>
               </div>
 
-              <button
-                onClick={() => setShowWorkflowGuide(!showWorkflowGuide)}
-                className="px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium border border-gray-300 transition-all duration-200"
-              >
-                {showWorkflowGuide ? "Hide" : "Show"} Workflow
-              </button>
-            </div>
-
-            {/* Stripe-style Workflow Guide */}
-            {showWorkflowGuide && (
-              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-8 border border-purple-100 mt-6">
+              {/* Workflow Guide - Always Visible */}
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-8 border border-purple-100">
                 <h3 className="text-2xl font-semibold text-gray-900 mb-6">
                   How it works
                 </h3>
@@ -316,164 +318,64 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Campaign Examples Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
-          <div className="p-8 md:p-12">
-            <div className="flex items-start justify-between mb-8">
-              <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                  Inspiration Gallery
-                </h2>
-                <p className="text-gray-600">
-                  Fresh picks daily · Click any post to view details
-                </p>
-              </div>
-              {showcasePosts.length > 0 && (
-                <div className="flex flex-col items-end gap-2">
-                  <div className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200">
-                    {showcasePosts.length} {showcasePosts.length === 1 ? 'Post' : 'Posts'}
-                  </div>
-                  <div className="text-xs text-gray-500 flex items-center gap-1">
-                    <span>🔄</span>
-                    <span>Rotates daily</span>
-                  </div>
+                {/* Start Creating CTA */}
+                <div className="mt-8 text-center">
+                  <Link
+                    href="/wizard"
+                    className="inline-flex items-center gap-3 px-10 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
+                    style={{
+                      background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                    }}
+                  >
+                    <span className="text-xl">✨</span>
+                    Start Creating Content
+                    <ChevronRight size={18} className="ml-1" />
+                  </Link>
                 </div>
-              )}
+              </div>
             </div>
+          </div>
 
-            {showcasePosts.length === 0 ? (
-              <div className="text-center py-20 px-6">
-                <div 
-                  className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
-                  style={{
-                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
-                  }}
-                >
-                  <span className="text-4xl">🎨</span>
+          {/* Campaign Examples Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
+            <div className="p-8 md:p-12">
+              <div className="flex items-start justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                    Inspiration Gallery
+                  </h2>
+                  <p className="text-gray-600">
+                    Fresh picks daily · Click any post to view details
+                  </p>
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-3">No posts yet</h3>
-                <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                  Generate your first post with AI-powered content and images
-                </p>
-                <Link
-                  href="/wizard"
-                  className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
-                  style={{
-                    background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
-                  }}
-                >
-                  Start Creating
-                </Link>
+                {showcasePosts.length > 0 && (
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200">
+                      {showcasePosts.length} {showcasePosts.length === 1 ? 'Post' : 'Posts'}
+                    </div>
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                      <span>🔄</span>
+                      <span>Rotates daily</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {showcasePosts.map((post) => {
-                    const imageUrl = resolveMediaUrl(post.image_url);
-                    const displayContent = post.content || post.commentary || "";
-                    
-                    return (
-                      <div 
-                        key={post.id} 
-                        onClick={() => setSelectedPost(post)}
-                        className="border border-gray-200 rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-white hover:shadow-lg hover:border-purple-300 transition-all duration-300 cursor-pointer"
-                      >
-                        {/* Thumbnail Image */}
-                        {imageUrl && (
-                          <div className="relative w-full h-48 bg-gray-100">
-                            <img
-                              src={imageUrl}
-                              alt={post.image_description || "Generated image"}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                const el = e.currentTarget as HTMLImageElement & { dataset: any };
-                                const fname = (post.image_url?.split("/").pop() || "") as string;
-                                if (fname && !el.dataset.fallback) {
-                                  el.dataset.fallback = "1";
-                                  el.src = `/images/${fname}`;
-                                }
-                              }}
-                            />
-                          </div>
-                        )}
 
-                        <div className="p-6">
-                          {/* Post Type Badge */}
-                          <div className="flex items-center gap-2 mb-4">
-                            <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium text-xs">
-                              {post.target_type}
-                            </span>
-                            <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md font-medium text-xs">
-                              {post.lifecycle}
-                            </span>
-                          </div>
-
-                          {/* Content Preview */}
-                          <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4 min-h-[140px]">
-                            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed line-clamp-6">
-                              {displayContent}
-                            </p>
-                          </div>
-
-                          {/* Hashtags */}
-                          {post.hashtags && post.hashtags.length > 0 && (
-                            <div className="flex flex-wrap gap-2 text-xs mb-4">
-                              {post.hashtags.slice(0, 3).map((tag, i) => (
-                                <span
-                                  key={i}
-                                  className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md font-medium"
-                                >
-                                  #{tag}
-                                </span>
-                              ))}
-                              {post.hashtags.length > 3 && (
-                                <span className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md font-medium">
-                                  +{post.hashtags.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Metadata */}
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {post.media_provider === "huggingface" && (
-                              <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md font-medium">
-                                Free Tier
-                              </span>
-                            )}
-                            {post.media_cost !== undefined && post.media_cost > 0 && (
-                              <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-md font-medium">
-                                ${post.media_cost.toFixed(3)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* View Details Button */}
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPost(post);
-                              }}
-                              className="w-full px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-medium border border-purple-200 hover:border-purple-300 transition-all duration-200 flex items-center justify-center gap-2"
-                            >
-                              <span>View Details</span>
-                              <span>→</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="text-center mt-8 pt-8 border-t border-gray-200">
+              {showcasePosts.length === 0 ? (
+                <div className="text-center py-20 px-6">
+                  <div 
+                    className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
+                    style={{
+                      background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                    }}
+                  >
+                    <span className="text-4xl">🎨</span>
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-3">No posts yet</h3>
+                  <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
+                    Generate your first post with AI-powered content and images
+                  </p>
                   <Link
                     href="/wizard"
                     className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
@@ -481,21 +383,114 @@ export default function Dashboard() {
                       background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
                     }}
                   >
-                    Create Your Own Content
+                    Start Creating
                   </Link>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {showcasePosts.map((post) => {
+                      const imageUrl = resolveMediaUrl(post.image_url);
+                      const displayContent = post.content || post.commentary || "";
+                      
+                      return (
+                        <div 
+                          key={post.id} 
+                          onClick={() => setSelectedPost(post)}
+                          className="border border-gray-200 rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-white hover:shadow-lg hover:border-purple-300 transition-all duration-300 cursor-pointer"
+                        >
+                          {/* Thumbnail Image */}
+                          {imageUrl && (
+                            <div className="relative w-full h-48 bg-gray-100">
+                              <img
+                                src={imageUrl}
+                                alt={post.image_description || "Generated image"}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const el = e.currentTarget as HTMLImageElement & { dataset: any };
+                                  const fname = (post.image_url?.split("/").pop() || "") as string;
+                                  if (fname && !el.dataset.fallback) {
+                                    el.dataset.fallback = "1";
+                                    el.src = `/images/${fname}`;
+                                  }
+                                }}
+                              />
+                            </div>
+                          )}
 
-        {/* Cost Dashboard */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200/50 overflow-hidden">
-          <div className="p-8 md:p-12">
-            <CostDashboard />
+                          <div className="p-6">
+                            {/* Post Type Badge */}
+                            <div className="flex items-center gap-2 mb-4">
+                              <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md font-medium text-xs">
+                                {post.target_type}
+                              </span>
+                              <span className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md font-medium text-xs">
+                                {post.lifecycle}
+                              </span>
+                            </div>
+
+                            {/* Content Preview */}
+                            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4 min-h-[140px]">
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed line-clamp-6">
+                                {displayContent}
+                              </p>
+                            </div>
+
+                            {/* Hashtags */}
+                            {post.hashtags && post.hashtags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 text-xs mb-4">
+                                {post.hashtags.slice(0, 3).map((tag, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-md font-medium"
+                                  >
+                                    #{tag}
+                                  </span>
+                                ))}
+                                {post.hashtags.length > 3 && (
+                                  <span className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md font-medium">
+                                    +{post.hashtags.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* View Details Button */}
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPost(post);
+                                }}
+                                className="w-full px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-medium border border-purple-200 hover:border-purple-300 transition-all duration-200 flex items-center justify-center gap-2"
+                              >
+                                <span>View Details</span>
+                                <span>→</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="text-center mt-8 pt-8 border-t border-gray-200">
+                    <Link
+                      href="/wizard"
+                      className="inline-flex items-center gap-3 px-8 py-4 text-white rounded-lg font-medium shadow-lg hover:shadow-xl transition-all duration-300 text-base"
+                      style={{
+                        background: 'linear-gradient(135deg, #635BFF 0%, #4F46E5 100%)',
+                      }}
+                    >
+                      Create Your Own Content
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       </div>
 
       {/* Post Detail Modal */}
