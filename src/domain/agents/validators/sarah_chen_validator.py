@@ -1,6 +1,7 @@
 """
 Sarah Chen Validator - The Reluctant Tech Survivor
 Updated with enhanced persona and Jesse A. Eisenbalm brand awareness
+NOW WITH: Enhanced feedback for frontend display
 """
 
 import json
@@ -259,7 +260,7 @@ CRITICAL: Return ONLY this JSON structure:
     "survivor_perspective": "[gets_the_anxiety/observes_from_outside/toxic_positivity]",
     "would_screenshot": [true/false - for Work is Hell group],
     "share_action": "[none/save_privately/whatsapp_group/public_like]",
-    "specific_thought": "[actual internal monologue, like 'God yes, finally' or 'another brand pretending to get it']",
+    "specific_thought": "[actual internal monologue, 2-3 sentences like 'God yes, finally someone who gets that...' or 'another brand pretending to understand my life...']",
     "pain_point_match": "[which specific pain point this addresses: video_call_lips/ai_anxiety/survivor_guilt/pretending/none]",
     "purchase_psychology": "[didnt_cry_today_reward/secret_club_membership/mortality_comfort/not_worth_it]",
     "honest_vs_performative": "[honest/trying_to_be_relatable/corporate_speak]",
@@ -267,6 +268,9 @@ CRITICAL: Return ONLY this JSON structure:
     "brand_voice_fit": "[perfect/good/needs_work]",
     "score": [1-10 overall score],
     "approved": [true if score >= 7 AND secret_club_worthy=true AND honest_vs_performative='honest'],
+    "comment": "[Your honest assessment as Sarah - 2-3 sentences explaining your reaction to this post. Be specific about what works or doesn't work from your survivor perspective.]",
+    "strengths": ["list of 2-4 specific things this post does well from your perspective"],
+    "weaknesses": ["list of 1-3 things that could be improved, or empty array if approved"],
     "improvement": "[specific fix from survivor perspective, if not approved]"
 }}
 
@@ -292,7 +296,7 @@ Return ONLY valid JSON."""
             secret_club_worthy = bool(content.get("secret_club_worthy", False))
             honest_vs_performative = str(content.get("honest_vs_performative", "corporate_speak"))
             
-            # Build detailed criteria breakdown
+            # Build detailed criteria breakdown including new comment/strengths/weaknesses
             criteria_breakdown = {
                 "scroll_stop": bool(content.get("scroll_stop", False)),
                 "authenticity_score": float(content.get("authenticity_score", 0)),
@@ -306,7 +310,11 @@ Return ONLY valid JSON."""
                 "purchase_psychology": str(content.get("purchase_psychology", "not_worth_it")),
                 "honest_vs_performative": honest_vs_performative,
                 "price_perception": str(content.get("price_perception", "too_much")),
-                "brand_voice_fit": str(content.get("brand_voice_fit", "needs_work"))
+                "brand_voice_fit": str(content.get("brand_voice_fit", "needs_work")),
+                # NEW: Include comment, strengths, weaknesses for frontend display
+                "comment": str(content.get("comment", "")),
+                "strengths": content.get("strengths", []),
+                "weaknesses": content.get("weaknesses", [])
             }
             
             # Sarah approves if: score >= 7 AND secret club worthy AND actually honest
@@ -314,8 +322,10 @@ Return ONLY valid JSON."""
                        secret_club_worthy and 
                        honest_vs_performative == "honest")
             
-            # Create survivor-focused feedback
-            feedback = str(content.get("improvement", "")) if not approved else ""
+            # Use the AI-generated comment as primary feedback, fall back to improvement
+            feedback = str(content.get("comment", "")) or str(content.get("improvement", ""))
+            
+            # If no feedback yet and not approved, generate one
             if not feedback and not approved:
                 if not secret_club_worthy:
                     feedback = "Wouldn't screenshot this for my 'Work is Hell' group. Not authentic enough to share with people who actually get it."

@@ -1,6 +1,7 @@
 """
 Marcus Williams Validator - The Creative Who Sold Out (And Knows It)
 Updated with enhanced persona and Jesse A. Eisenbalm brand awareness
+NOW WITH: Enhanced feedback for frontend display
 """
 
 import json
@@ -247,6 +248,9 @@ CRITICAL: Return ONLY this JSON structure:
     "screenshot_worthy": "[group_chat/portfolio/delete]",
     "score": [1-10 overall score],
     "approved": [true if score >= 7 AND would_portfolio=true AND brand_voice_fit != "needs_work"],
+    "comment": "[Your honest creative director assessment - 2-3 sentences on the conceptual and craft quality. Be specific about what works or fails from a creative perspective.]",
+    "strengths": ["list of 2-4 specific creative strengths - what does this do well?"],
+    "weaknesses": ["list of 1-3 creative weaknesses or areas to improve, or empty array if approved"],
     "creative_fix": "[what would make this actually good, if not approved]"
 }}
 
@@ -272,7 +276,7 @@ Return ONLY valid JSON."""
             brand_voice_fit = str(content.get("brand_voice_fit", "needs_work"))
             would_portfolio = bool(content.get("would_portfolio", False))
             
-            # Build detailed criteria breakdown
+            # Build detailed criteria breakdown including new comment/strengths/weaknesses
             criteria_breakdown = {
                 "concept_strength": float(content.get("concept_strength", 0)),
                 "copy_quality": str(content.get("copy_quality", "trying_too_hard")),
@@ -287,7 +291,11 @@ Return ONLY valid JSON."""
                 "ai_paradox_handling": str(content.get("ai_paradox_handling", "ignored")),
                 "sellout_score": float(content.get("sellout_score", 10)),
                 "rebellion_value": str(content.get("rebellion_value", "low")),
-                "screenshot_worthy": str(content.get("screenshot_worthy", "delete"))
+                "screenshot_worthy": str(content.get("screenshot_worthy", "delete")),
+                # NEW: Include comment, strengths, weaknesses for frontend display
+                "comment": str(content.get("comment", "")),
+                "strengths": content.get("strengths", []),
+                "weaknesses": content.get("weaknesses", [])
             }
             
             # Marcus approves if: score >= 7 AND would put in portfolio AND brand voice fits
@@ -295,25 +303,25 @@ Return ONLY valid JSON."""
                        would_portfolio and 
                        brand_voice_fit != "needs_work")
             
-            # Generate creative-focused feedback
-            feedback = ""
-            if not approved:
-                feedback = content.get("creative_fix", "")
-                if not feedback:
-                    if not would_portfolio:
-                        feedback = "Wouldn't go in my portfolio (when I still kept one). The concept doesn't commit hard enough. Either go all in on the bit or don't bother."
-                    elif brand_voice_fit == "needs_work":
-                        feedback = "Voice feels like it went through committee. Jesse is singular, minimal, committed. This is hedging. Pick a lane and floor it."
-                    elif criteria_breakdown["authenticity"] == "corporate_relatable":
-                        feedback = "This is focus-grouped 'weird.' I can smell the inauthenticity. Be genuinely absurd or be traditionally corporate, but don't pretend."
-                    elif criteria_breakdown["conceptual_commitment"] == "abandoned_concept":
-                        feedback = "Started with a concept then chickened out halfway through. Commit to the bit. That's what makes Jesse work."
-                    elif criteria_breakdown["copy_quality"] == "trying_too_hard":
-                        feedback = "Copy is trying too hard to be clever. Jesse's voice is effortless - minimal, dry-smart. This is exhausting."
-                    elif criteria_breakdown["self_awareness"] == "none":
-                        feedback = "No self-awareness about the AI paradox. Jesse acknowledges the absurdity. This ignores it. That's the whole point."
-                    else:
-                        feedback = "Missing what makes Jesse work: conceptual commitment + minimal execution + acknowledging the absurdity. Pick one thing and do it perfectly."
+            # Use the AI-generated comment as primary feedback, fall back to creative_fix
+            feedback = str(content.get("comment", "")) or str(content.get("creative_fix", ""))
+            
+            # If no feedback yet and not approved, generate one
+            if not feedback and not approved:
+                if not would_portfolio:
+                    feedback = "Wouldn't go in my portfolio (when I still kept one). The concept doesn't commit hard enough. Either go all in on the bit or don't bother."
+                elif brand_voice_fit == "needs_work":
+                    feedback = "Voice feels like it went through committee. Jesse is singular, minimal, committed. This is hedging. Pick a lane and floor it."
+                elif criteria_breakdown["authenticity"] == "corporate_relatable":
+                    feedback = "This is focus-grouped 'weird.' I can smell the inauthenticity. Be genuinely absurd or be traditionally corporate, but don't pretend."
+                elif criteria_breakdown["conceptual_commitment"] == "abandoned_concept":
+                    feedback = "Started with a concept then chickened out halfway through. Commit to the bit. That's what makes Jesse work."
+                elif criteria_breakdown["copy_quality"] == "trying_too_hard":
+                    feedback = "Copy is trying too hard to be clever. Jesse's voice is effortless - minimal, dry-smart. This is exhausting."
+                elif criteria_breakdown["self_awareness"] == "none":
+                    feedback = "No self-awareness about the AI paradox. Jesse acknowledges the absurdity. This ignores it. That's the whole point."
+                else:
+                    feedback = "Missing what makes Jesse work: conceptual commitment + minimal execution + acknowledging the absurdity. Pick one thing and do it perfectly."
             
             return ValidationScore(
                 agent_name="MarcusWilliams",

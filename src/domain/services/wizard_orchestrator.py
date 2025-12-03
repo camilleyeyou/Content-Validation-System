@@ -1,6 +1,7 @@
 """
 Wizard Orchestrator - Guided single-post generation from wizard inputs
 Reuses existing agents (content, image, validation) but with wizard-specific context building
+UPDATED: Now passes through full validator feedback with comments, strengths, and weaknesses
 """
 
 import uuid
@@ -19,7 +20,7 @@ from src.domain.agents.validators.jordan_park_validator import JordanParkValidat
 from src.domain.agents.feedback_aggregator import FeedbackAggregator
 from src.domain.agents.revision_generator import RevisionGenerator
 from src.infrastructure.config.config_manager import AppConfig
-from src.infrastructure.cost_tracking.cost_tracker import get_cost_tracker  # ⭐ ADDED FOR COST TRACKING
+from src.infrastructure.cost_tracking.cost_tracker import get_cost_tracker
 
 logger = structlog.get_logger()
 
@@ -254,7 +255,7 @@ class WizardOrchestrator:
                            has_image=bool(post.image_url),
                            validation_approved=validation_result["approved"])
             
-            # ⭐⭐⭐ ADDED: Finalize post cost for dashboard tracking ⭐⭐⭐
+            # Finalize post cost for dashboard tracking
             try:
                 cost_tracker = get_cost_tracker()
                 post_summary = cost_tracker.finalize_post_cost(
@@ -285,7 +286,6 @@ class WizardOrchestrator:
                     session_id=session_id,
                     error=str(e)
                 )
-            # ⭐⭐⭐ END OF COST TRACKING CODE ⭐⭐⭐
             
             return result
         
@@ -417,20 +417,206 @@ class WizardOrchestrator:
             if not persona_feedback["resonates"]:
                 approved = False
         
+        # Build rich validator scores for frontend display
+        rich_validator_scores = []
+        for score in validation_scores:
+            # Extract criteria breakdown for additional context
+            criteria = getattr(score, 'criteria_breakdown', {}) or {}
+            
+            # Build the rich score object
+            rich_score = {
+                "agent": score.agent_name,
+                "score": score.score,
+                "approved": score.approved,
+                "feedback": score.feedback,
+                # New fields for enhanced frontend display
+                "comment": self._build_validator_comment(score),
+                "strengths": self._extract_strengths(score, criteria),
+                "weaknesses": self._extract_weaknesses(score, criteria),
+                "criteria": self._get_key_criteria(criteria),
+            }
+            
+            rich_validator_scores.append(rich_score)
+        
         return {
             "approved": approved,
-            "validator_scores": [
-                {
-                    "agent": score.agent_name,
-                    "score": score.score,
-                    "approved": score.approved,
-                    "feedback": score.feedback
-                }
-                for score in validation_scores
-            ],
+            "validator_scores": rich_validator_scores,
             "buyer_persona_feedback": persona_feedback,
             "feedback": " | ".join(feedback_summary) if feedback_summary else "All validators approved"
         }
+    
+    def _build_validator_comment(self, score) -> str:
+        """Build a detailed comment from the validator's assessment"""
+        criteria = getattr(score, 'criteria_breakdown', {}) or {}
+        agent = score.agent_name.lower()
+        
+        # If there's already feedback, use it as the base
+        if score.feedback:
+            return score.feedback
+        
+        # Build comment based on agent type and criteria
+        if "sarah" in agent:
+            # Sarah Chen - Survivor perspective
+            authenticity = criteria.get('authenticity_score', 0)
+            secret_club = criteria.get('secret_club_worthy', False)
+            thought = criteria.get('specific_thought', '')
+            
+            if score.approved:
+                comment = thought if thought else f"This gets the survivor experience. Authenticity score: {authenticity}/10."
+                if secret_club:
+                    comment += " Would screenshot for the 'Work is Hell' group."
+            else:
+                comment = thought if thought else "Doesn't capture the real struggle of tech survival."
+            return comment
+            
+        elif "marcus" in agent:
+            # Marcus Williams - Creative perspective
+            concept = criteria.get('concept_strength', 0)
+            authenticity = criteria.get('authenticity', '')
+            portfolio = criteria.get('would_portfolio', False)
+            
+            if score.approved:
+                comment = f"Concept strength: {concept}/10. "
+                if portfolio:
+                    comment += "Would actually put this in my portfolio (if I still kept one)."
+                comment += f" {authenticity.replace('_', ' ').title()} energy."
+            else:
+                comment = f"Concept only hits {concept}/10. " + criteria.get('screenshot_worthy', 'delete').replace('_', ' ').title() + " territory."
+            return comment
+            
+        elif "jordan" in agent:
+            # Jordan Park - Platform/Algorithm perspective
+            hook = criteria.get('hook_strength', 0)
+            engagement = criteria.get('engagement_prediction', 'moderate')
+            viral = criteria.get('viral_coefficient', 0)
+            
+            if score.approved:
+                comment = f"Hook strength: {hook}/10. Predicting {engagement} engagement with {viral:.1f}x viral coefficient."
+                if criteria.get('screenshot_worthy', False):
+                    comment += " Screenshot-worthy for the swipe file."
+            else:
+                comment = f"Hook only scores {hook}/10. Algorithm won't favor this - {engagement} engagement expected at best."
+            return comment
+        
+        return score.feedback or "Validation complete."
+    
+    def _extract_strengths(self, score, criteria: Dict) -> List[str]:
+        """Extract strengths from validator criteria"""
+        strengths = []
+        agent = score.agent_name.lower()
+        
+        if "sarah" in agent:
+            if criteria.get('scroll_stop'):
+                strengths.append("Stops the scroll - immediate attention grabber")
+            if criteria.get('secret_club_worthy'):
+                strengths.append("Secret club worthy - would share with people who 'get it'")
+            if criteria.get('authenticity_score', 0) >= 7:
+                strengths.append(f"High authenticity ({criteria.get('authenticity_score')}/10) - feels genuine")
+            if criteria.get('survivor_perspective') == 'gets_the_anxiety':
+                strengths.append("Captures the real survivor anxiety")
+            if criteria.get('pain_point_match') and criteria.get('pain_point_match') != 'none':
+                pain = criteria.get('pain_point_match', '').replace('_', ' ')
+                strengths.append(f"Addresses real pain point: {pain}")
+                
+        elif "marcus" in agent:
+            if criteria.get('concept_strength', 0) >= 7:
+                strengths.append(f"Strong concept ({criteria.get('concept_strength')}/10)")
+            if criteria.get('copy_quality') == 'tight':
+                strengths.append("Copy is tight and well-crafted")
+            if criteria.get('voice_consistency') == 'singular':
+                strengths.append("Voice feels singular, not committee-written")
+            if criteria.get('self_awareness') in ['high', 'medium']:
+                strengths.append("Good self-awareness about the brand's absurdity")
+            if criteria.get('would_portfolio'):
+                strengths.append("Portfolio-worthy work")
+            if criteria.get('conceptual_commitment') == 'all_in':
+                strengths.append("Fully commits to the conceptual bit")
+                
+        elif "jordan" in agent:
+            if criteria.get('hook_strength', 0) >= 7:
+                strengths.append(f"Strong hook ({criteria.get('hook_strength')}/10) - scroll stopper")
+            if criteria.get('algorithm_friendly'):
+                strengths.append("Algorithm-friendly format")
+            if criteria.get('viral_coefficient', 0) >= 1.0:
+                strengths.append(f"High viral potential ({criteria.get('viral_coefficient'):.1f}x)")
+            if criteria.get('engagement_prediction') in ['viral', 'solid']:
+                strengths.append(f"Predicting {criteria.get('engagement_prediction')} engagement")
+            if criteria.get('screenshot_worthy'):
+                strengths.append("Screenshot-worthy content")
+            if criteria.get('platform_fit') == 'native':
+                strengths.append("Feels native to LinkedIn")
+            if criteria.get('dwell_time_estimate') in ['10-30sec', '30sec+']:
+                strengths.append(f"Good dwell time expected ({criteria.get('dwell_time_estimate')})")
+        
+        return strengths if strengths else ["Meets basic requirements"]
+    
+    def _extract_weaknesses(self, score, criteria: Dict) -> List[str]:
+        """Extract weaknesses/areas for improvement from validator criteria"""
+        weaknesses = []
+        agent = score.agent_name.lower()
+        
+        # Only extract weaknesses if not approved
+        if score.approved:
+            return []
+        
+        if "sarah" in agent:
+            if not criteria.get('scroll_stop'):
+                weaknesses.append("Doesn't stop the scroll - blends in with other content")
+            if not criteria.get('secret_club_worthy'):
+                weaknesses.append("Not 'secret club' worthy - wouldn't share with close colleagues")
+            if criteria.get('authenticity_score', 0) < 6:
+                weaknesses.append(f"Low authenticity score ({criteria.get('authenticity_score')}/10)")
+            if criteria.get('honest_vs_performative') != 'honest':
+                weaknesses.append(f"Feels {criteria.get('honest_vs_performative', 'performative').replace('_', ' ')}")
+            if criteria.get('survivor_perspective') == 'toxic_positivity':
+                weaknesses.append("Has toxic positivity vibes")
+            if criteria.get('survivor_perspective') == 'observes_from_outside':
+                weaknesses.append("Observes from outside rather than speaking from experience")
+                
+        elif "marcus" in agent:
+            if criteria.get('concept_strength', 0) < 6:
+                weaknesses.append(f"Weak concept ({criteria.get('concept_strength')}/10)")
+            if criteria.get('copy_quality') == 'trying_too_hard':
+                weaknesses.append("Copy is trying too hard")
+            if criteria.get('copy_quality') == 'loose':
+                weaknesses.append("Copy feels loose and unfocused")
+            if criteria.get('voice_consistency') == 'committee':
+                weaknesses.append("Sounds like it was written by committee")
+            if criteria.get('authenticity') == 'corporate_relatable':
+                weaknesses.append("Corporate 'relatable' energy - not genuine")
+            if criteria.get('conceptual_commitment') == 'hedging':
+                weaknesses.append("Hedges on the concept instead of committing")
+            if criteria.get('self_awareness') in ['low', 'none']:
+                weaknesses.append("Missing self-awareness about the brand's absurdity")
+                
+        elif "jordan" in agent:
+            if criteria.get('hook_strength', 0) < 6:
+                weaknesses.append(f"Weak hook ({criteria.get('hook_strength')}/10) - won't stop scrolls")
+            if not criteria.get('algorithm_friendly'):
+                weaknesses.append("Not algorithm-friendly")
+            if criteria.get('viral_coefficient', 0) < 0.7:
+                weaknesses.append(f"Low viral potential ({criteria.get('viral_coefficient'):.1f}x)")
+            if criteria.get('engagement_prediction') in ['moderate', 'flop']:
+                weaknesses.append(f"Predicting only {criteria.get('engagement_prediction')} engagement")
+            if criteria.get('meme_timing') in ['dead', 'late']:
+                weaknesses.append(f"Cultural reference is {criteria.get('meme_timing')} - needs fresher content")
+            if criteria.get('platform_fit') == 'wrong_platform':
+                weaknesses.append("Doesn't feel native to LinkedIn")
+            if criteria.get('comment_bait_quality') == 'forced':
+                weaknesses.append("Engagement bait feels forced")
+        
+        return weaknesses if weaknesses else [score.feedback] if score.feedback else ["Needs improvement"]
+    
+    def _get_key_criteria(self, criteria: Dict) -> Dict[str, Any]:
+        """Extract key criteria for frontend display"""
+        # Return a subset of the most important criteria
+        key_fields = [
+            'authenticity_score', 'concept_strength', 'hook_strength',
+            'viral_coefficient', 'engagement_prediction', 'brand_voice_fit',
+            'scroll_stop', 'secret_club_worthy', 'would_portfolio', 'screenshot_worthy'
+        ]
+        
+        return {k: v for k, v in criteria.items() if k in key_fields}
     
     async def _validate_against_buyer_persona(
         self,

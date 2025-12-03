@@ -1,6 +1,7 @@
 """
 Jordan Park Validator - Social Media Expert Persona (Content Strategist)
 Updated with enhanced persona and Jesse A. Eisenbalm brand awareness
+NOW WITH: Enhanced feedback for frontend display
 """
 
 import json
@@ -293,6 +294,9 @@ CRITICAL: Return ONLY this JSON structure:
     "screenshot_worthy": [true/false],
     "score": [1-10 overall score],
     "approved": [true if score >= 7 AND brand_voice_fit != "needs_work"],
+    "comment": "[Your platform strategist assessment - 2-3 sentences on the engagement potential and algorithm fit. Be specific about what works or needs work from a platform mechanics perspective.]",
+    "strengths": ["list of 2-4 specific platform/engagement strengths - what will drive performance?"],
+    "weaknesses": ["list of 1-3 platform weaknesses or optimizations needed, or empty array if approved"],
     "platform_optimization": "[specific technical improvement if score < 7, empty if approved]"
 }}
 
@@ -339,7 +343,7 @@ Return ONLY valid JSON."""
             score = float(content.get("score", 0))
             brand_voice_fit = str(content.get("brand_voice_fit", "needs_work"))
             
-            # Build platform-specific criteria breakdown
+            # Build platform-specific criteria breakdown including new comment/strengths/weaknesses
             criteria_breakdown = {
                 "algorithm_friendly": bool(content.get("algorithm_friendly", False)),
                 "hook_strength": float(content.get("hook_strength", 0)),
@@ -357,7 +361,11 @@ Return ONLY valid JSON."""
                 "dwell_time_estimate": str(content.get("dwell_time_estimate", "3-10sec")),
                 "viral_coefficient": float(content.get("viral_coefficient", 0.5)),
                 "brand_voice_fit": brand_voice_fit,
-                "screenshot_worthy": bool(content.get("screenshot_worthy", False))
+                "screenshot_worthy": bool(content.get("screenshot_worthy", False)),
+                # NEW: Include comment, strengths, weaknesses for frontend display
+                "comment": str(content.get("comment", "")),
+                "strengths": content.get("strengths", []),
+                "weaknesses": content.get("weaknesses", [])
             }
             
             # Jordan approves if score >= 7 AND engagement potential is solid+ AND brand voice fits
@@ -366,25 +374,25 @@ Return ONLY valid JSON."""
                        criteria_breakdown["hook_strength"] >= 6 and
                        brand_voice_fit != "needs_work")
             
-            # Generate platform-specific feedback
-            feedback = ""
-            if not approved:
-                feedback = content.get("platform_optimization", "")
-                if not feedback:
-                    if brand_voice_fit == "needs_work":
-                        feedback = "Brand voice doesn't match Jesse's Calm Conspirator style. Needs to be more minimal, dry-smart, and post-post-ironic. Less marketing speak, more human observation."
-                    elif criteria_breakdown["hook_strength"] < 6:
-                        feedback = "Hook too weak. First line needs to stop scroll instantly. Try starting with 'That moment when...' or a provocative question. Remember: hook > everything."
-                    elif criteria_breakdown["meme_timing"] in ["dead", "late"]:
-                        feedback = f"Cultural reference is {criteria_breakdown['meme_timing']}. Need fresher reference or go full ironic with self-awareness. Dead memes = engagement death."
-                    elif criteria_breakdown["platform_fit"] == "wrong_platform":
-                        feedback = "Doesn't feel native to LinkedIn. Too casual or too formal. Find the professional-but-human sweet spot where Jesse lives."
-                    elif criteria_breakdown["viral_coefficient"] < 0.7:
-                        feedback = "No viral mechanics. Add polarizing hook, relatable struggle, or 'tag someone who' mechanism. What makes this screenshot-worthy?"
-                    elif criteria_breakdown["algorithm_friendly"] is False:
-                        feedback = "Algorithm won't favor this. Need higher dwell time potential - add story, list, or conversation starter. Make people read all the way through."
-                    else:
-                        feedback = "Missing engagement trigger. What makes someone stop, read, and share? No screenshot-ability = no virality."
+            # Use the AI-generated comment as primary feedback, fall back to platform_optimization
+            feedback = str(content.get("comment", "")) or str(content.get("platform_optimization", ""))
+            
+            # Generate platform-specific feedback if not provided
+            if not feedback and not approved:
+                if brand_voice_fit == "needs_work":
+                    feedback = "Brand voice doesn't match Jesse's Calm Conspirator style. Needs to be more minimal, dry-smart, and post-post-ironic. Less marketing speak, more human observation."
+                elif criteria_breakdown["hook_strength"] < 6:
+                    feedback = "Hook too weak. First line needs to stop scroll instantly. Try starting with 'That moment when...' or a provocative question. Remember: hook > everything."
+                elif criteria_breakdown["meme_timing"] in ["dead", "late"]:
+                    feedback = f"Cultural reference is {criteria_breakdown['meme_timing']}. Need fresher reference or go full ironic with self-awareness. Dead memes = engagement death."
+                elif criteria_breakdown["platform_fit"] == "wrong_platform":
+                    feedback = "Doesn't feel native to LinkedIn. Too casual or too formal. Find the professional-but-human sweet spot where Jesse lives."
+                elif criteria_breakdown["viral_coefficient"] < 0.7:
+                    feedback = "No viral mechanics. Add polarizing hook, relatable struggle, or 'tag someone who' mechanism. What makes this screenshot-worthy?"
+                elif criteria_breakdown["algorithm_friendly"] is False:
+                    feedback = "Algorithm won't favor this. Need higher dwell time potential - add story, list, or conversation starter. Make people read all the way through."
+                else:
+                    feedback = "Missing engagement trigger. What makes someone stop, read, and share? No screenshot-ability = no virality."
             
             return ValidationScore(
                 agent_name="JordanPark",

@@ -40,6 +40,7 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
   const [copySuccess, setCopySuccess] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [savedPostId, setSavedPostId] = useState<string | null>(null);
+  const [expandedValidators, setExpandedValidators] = useState<Set<number>>(new Set([0, 1, 2])); // All expanded by default
 
   // Auto-generate on mount if not already generated
   useEffect(() => {
@@ -191,6 +192,33 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
     }
   }
 
+  function toggleValidator(idx: number) {
+    setExpandedValidators(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+  }
+
+  // Helper to get validator persona details
+  function getValidatorInfo(agentName: string): { title: string; emoji: string; color: string } {
+    const name = agentName.toLowerCase();
+    if (name.includes("sarah") || name.includes("chen") || name.includes("customer")) {
+      return { title: "Customer Perspective", emoji: "👩‍💼", color: "purple" };
+    }
+    if (name.includes("marcus") || name.includes("williams") || name.includes("business")) {
+      return { title: "Business Strategy", emoji: "👨‍💼", color: "blue" };
+    }
+    if (name.includes("jordan") || name.includes("park") || name.includes("social")) {
+      return { title: "Social Engagement", emoji: "🎯", color: "teal" };
+    }
+    return { title: "Validator", emoji: "🤖", color: "gray" };
+  }
+
   const post = state.generatedPost?.post;
   const validation = state.generatedPost?.validation;
   const metadata = state.generatedPost?.metadata;
@@ -297,7 +325,7 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
         </div>
       </div>
 
-      {/* Validation Status Card */}
+      {/* Validation Status Card - Enhanced with Comments */}
       {validation && (
         <div className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
           validation.approved
@@ -305,6 +333,7 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
             : "border-yellow-300"
         }`}>
           <div className="p-8 md:p-10">
+            {/* Overall Status Header */}
             <div className="flex items-start gap-4 mb-6">
               <span className="text-3xl">{validation.approved ? "✅" : "⚠️"}</span>
               <div className="flex-1">
@@ -313,33 +342,207 @@ export default function Step5Finalize({ state, setState, onBack, loading, setLoa
                 </div>
                 <div className="text-sm text-gray-600 leading-relaxed">
                   {validation.approved
-                    ? "This post passed all validation criteria"
-                    : validation.feedback || "Some validators had concerns"}
+                    ? "This post passed all validation criteria from our expert panel"
+                    : validation.feedback || "Some validators had concerns - see their feedback below"}
                 </div>
               </div>
             </div>
 
-            {/* Validator Scores */}
+            {/* Validator Feedback Cards - Enhanced with Comments */}
             {validation.validator_scores && validation.validator_scores.length > 0 && (
-              <div className="grid sm:grid-cols-3 gap-4">
-                {validation.validator_scores.map((score: any, idx: number) => (
-                  <div 
-                    key={idx} 
-                    className="bg-gray-50 p-5 rounded-lg border border-gray-200 hover:border-purple-300 transition-all duration-300"
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    Expert Validator Feedback
+                  </h4>
+                  <button
+                    onClick={() => {
+                      if (expandedValidators.size === validation.validator_scores.length) {
+                        setExpandedValidators(new Set());
+                      } else {
+                        setExpandedValidators(new Set(validation.validator_scores.map((_: any, i: number) => i)));
+                      }
+                    }}
+                    className="text-xs text-purple-600 hover:text-purple-700 font-medium"
                   >
-                    <div className="text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider">
-                      {score.agent}
+                    {expandedValidators.size === validation.validator_scores.length ? "Collapse All" : "Expand All"}
+                  </button>
+                </div>
+
+                {validation.validator_scores.map((score: any, idx: number) => {
+                  const validatorInfo = getValidatorInfo(score.agent);
+                  const isExpanded = expandedValidators.has(idx);
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`rounded-xl border transition-all duration-300 overflow-hidden ${
+                        score.approved 
+                          ? "border-green-200 bg-gradient-to-br from-green-50/50 to-white" 
+                          : "border-amber-200 bg-gradient-to-br from-amber-50/50 to-white"
+                      }`}
+                    >
+                      {/* Validator Header - Always Visible */}
+                      <button
+                        onClick={() => toggleValidator(idx)}
+                        className="w-full p-5 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${
+                            score.approved ? "bg-green-100" : "bg-amber-100"
+                          }`}>
+                            {validatorInfo.emoji}
+                          </div>
+                          <div className="text-left">
+                            <div className="font-semibold text-gray-900 text-lg">
+                              {score.agent.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {validatorInfo.title}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                          {/* Score Badge */}
+                          <div className={`px-4 py-2 rounded-lg font-bold text-lg ${
+                            score.approved 
+                              ? "bg-green-100 text-green-700" 
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {score.score.toFixed(1)}<span className="text-sm font-normal opacity-70">/10</span>
+                          </div>
+                          
+                          {/* Approval Icon */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            score.approved ? "bg-green-500" : "bg-amber-500"
+                          }`}>
+                            <span className="text-white text-sm font-bold">
+                              {score.approved ? "✓" : "!"}
+                            </span>
+                          </div>
+                          
+                          {/* Expand/Collapse Arrow */}
+                          <div className={`transform transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Expanded Content - Validator's Detailed Feedback */}
+                      {isExpanded && (
+                        <div className="px-5 pb-5 pt-0 border-t border-gray-100">
+                          <div className="pt-4 space-y-4">
+                            
+                            {/* Main Comment/Feedback */}
+                            {(score.comment || score.feedback || score.reasoning || score.rationale) && (
+                              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                <div className="flex items-start gap-3">
+                                  <div className="text-xl mt-0.5">💬</div>
+                                  <div>
+                                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                      Validator's Assessment
+                                    </div>
+                                    <p className="text-gray-800 leading-relaxed">
+                                      {score.comment || score.feedback || score.reasoning || score.rationale}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Strengths */}
+                            {score.strengths && (
+                              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                                <div className="flex items-start gap-3">
+                                  <div className="text-xl mt-0.5">💪</div>
+                                  <div className="flex-1">
+                                    <div className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">
+                                      Strengths
+                                    </div>
+                                    {Array.isArray(score.strengths) ? (
+                                      <ul className="space-y-1">
+                                        {score.strengths.map((s: string, i: number) => (
+                                          <li key={i} className="text-green-800 text-sm flex items-start gap-2">
+                                            <span className="text-green-500 mt-1">•</span>
+                                            <span>{s}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <p className="text-green-800 text-sm">{score.strengths}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Weaknesses / Areas for Improvement */}
+                            {(score.weaknesses || score.improvements || score.suggestions) && (
+                              <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                                <div className="flex items-start gap-3">
+                                  <div className="text-xl mt-0.5">🎯</div>
+                                  <div className="flex-1">
+                                    <div className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">
+                                      Areas for Improvement
+                                    </div>
+                                    {Array.isArray(score.weaknesses || score.improvements || score.suggestions) ? (
+                                      <ul className="space-y-1">
+                                        {(score.weaknesses || score.improvements || score.suggestions).map((w: string, i: number) => (
+                                          <li key={i} className="text-amber-800 text-sm flex items-start gap-2">
+                                            <span className="text-amber-500 mt-1">•</span>
+                                            <span>{w}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <p className="text-amber-800 text-sm">
+                                        {score.weaknesses || score.improvements || score.suggestions}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Criteria Breakdown (if provided) */}
+                            {score.criteria && Object.keys(score.criteria).length > 0 && (
+                              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                                  📊 Criteria Breakdown
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                  {Object.entries(score.criteria).map(([key, value]: [string, any]) => (
+                                    <div key={key} className="text-center p-2 bg-white rounded-lg border border-gray-200">
+                                      <div className="text-xs text-gray-500 capitalize mb-1">
+                                        {key.replace(/_/g, ' ')}
+                                      </div>
+                                      <div className="text-lg font-semibold text-purple-600">
+                                        {typeof value === 'number' ? value.toFixed(1) : value}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Fallback if no detailed feedback available */}
+                            {!score.comment && !score.feedback && !score.reasoning && !score.rationale && 
+                             !score.strengths && !score.weaknesses && !score.improvements && !score.suggestions && (
+                              <div className="text-center py-4 text-gray-500 text-sm italic">
+                                {score.approved 
+                                  ? "This validator approved the content without additional comments."
+                                  : "No detailed feedback provided by this validator."}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xl ${score.approved ? "text-green-500" : "text-red-500"}`}>
-                        {score.approved ? "✓" : "✗"}
-                      </span>
-                      <span className="text-gray-900 text-lg font-semibold">
-                        {score.score.toFixed(1)}<span className="text-gray-500">/10</span>
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
